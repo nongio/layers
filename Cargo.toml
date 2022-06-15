@@ -1,0 +1,27 @@
+[package]
+name = "hello"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[features]
+gpu = [ "skia-safe/gpu" ]
+metal = [ "gpu", "skia-safe/metal" ]
+
+
+[dependencies]
+legion = "0.4"
+skia-safe = {version = "0", features = ["metal"]}
+metal-rs = { package = "metal", version = "0.23.1" }
+winit = "0.26.1"
+objc = "0.2.7"
+cocoa = "0.24.0"
+core-graphics-types = "0.1.1"
+foreign-types-shared = "0.1.1"
+
+[dev-dependencies]
+criterion = "0.3"
+
+[[bench]]
+name = "my_benchmark"
+harness = false
