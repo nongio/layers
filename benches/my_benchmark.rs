@@ -1,60 +1,59 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
-use legion::*;
-use hello::ecs::animations::{AnimatedValue, Transition, Easing};
+use hello::ecs::{setup_ecs, Entities};
+use hello::layer::{Point, PaintColor, Color, BorderRadius};
+use hello::ecs::animations::{Transition, Easing, ValueChanges};
 
 pub struct Timestamp(f64);
 
-struct State {
-    ecs: World,
-    resources: Resources,
-    systems: Schedule,
-}
 
-#[system(for_each)]
-pub fn update_props(
-    animation: &mut AnimatedValue<f64>,
-    #[resource] timestamp: &Timestamp
-) {
-   animation.update_at(timestamp.0);
-}
-
-impl State {
-    fn new() -> Self {
-        let ecs = World::default();
-        let mut resources = Resources::default();
-
-        resources.insert(Timestamp(0.));
-        
-        let systems = Schedule::builder()
-        .add_system(update_props_system())
-        .build();
-
-        State {
-            ecs,
-            systems,
-            resources,
-        }
-    }
-    fn update(&mut self, dt: f64) {
-        self.resources.get_mut::<Timestamp>().map(|mut d| d.0 += dt);
-        self.systems.execute(&mut self.ecs, &mut self.resources);
-    }
-}
 
 
 fn criterion_benchmark(c: &mut Criterion) {
-    let mut state = State::new();
-    let transition = Transition {
-        duration: 1.0,
-        delay: 0.0,
-        timing: Easing{x1:0.0, y1:0.0, x2:1.0, y2:1.0},
-    };
-    for frame in 1..=5000 {
-        state.ecs.push((AnimatedValue::new(frame as f64).to_animated(100.0, Some(transition)),));
+    let mut state = setup_ecs();
+
+    let mut changes = Vec::<ValueChanges>::new();
+    for (_, entity) in state.get_entities().read().unwrap().iter() {
+        match entity {
+            Entities::Layer(layer, _, _) => {
+                changes.push(
+                    layer.position().to(
+                        Point{
+                            x: rand::random::<f64>() * 1000.0,
+                            y: rand::random::<f64>() * 1000.0,
+                        },
+                        None)
+                );
+                changes.push(
+                    layer.background_color().to(
+                        PaintColor::Solid { color: Color {r: rand::random::<f64>(), g: rand::random::<f64>(), b: rand::random::<f64>(), a: 1.0} },
+                        None)
+                );
+
+                changes.push(
+                    layer.size().to(
+                        Point{
+                            x: rand::random::<f64>() * 200.0,
+                            y: rand::random::<f64>() * 200.0,
+                        },
+                        None)
+                );
+                changes.push(
+                    layer.border_corner_radius().to(
+                        BorderRadius::new_single(rand::random::<f64>() * 200.0),
+                        None)
+                );
+            },
+        }
     }
 
-    c.bench_function("update", |b| b.iter(|| state.update(black_box(0.01))));
+    state.add_changes(changes, Some(Transition {
+        duration: 20000.0,
+        delay: 0.0,
+        timing: Easing::default(),
+    }));
+
+    c.bench_function("update", |b| b.iter(|| state.update(black_box(0.001))));
 }
 
 criterion_group!(benches, criterion_benchmark);

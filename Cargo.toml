@@ -10,7 +10,6 @@ metal = [ "gpu", "skia-safe/metal" ]
 
 
 [dependencies]
-legion = "0.4"
 skia-safe = {version = "0", features = ["metal"]}
 metal-rs = { package = "metal", version = "0.23.1" }
 winit = "0.26.1"
@@ -18,6 +17,10 @@ objc = "0.2.7"
 cocoa = "0.24.0"
 core-graphics-types = "0.1.1"
 foreign-types-shared = "0.1.1"
+# bevy_ecs = "0.8.0-dev"
+indexmap = {version = "1.9.1", features = ["rayon"]}
+rand = "0.8.5"
+rayon = "1.5.3"
 
 [dev-dependencies]
 criterion = "0.3"

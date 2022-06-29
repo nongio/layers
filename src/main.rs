@@ -1,15 +1,16 @@
 
-
 use skia_safe::{scalar, ColorType, Size, Surface};
 
+use crate::layer::{ModelLayer, Point, BorderRadius, Color};
 use crate::rendering::draw;
-use crate::ecs::setup_ecs;
-
+use crate::ecs::{State, setup_ecs, Entities};
+use crate::ecs::animations::{Transition, Easing, ValueChanges};
 
 mod rendering;
 mod layer;
 mod ecs;
 mod easing;
+mod skcache;
 
 #[allow(unreachable_code)]
 fn main() {
@@ -33,11 +34,9 @@ fn main() {
     };
 
     
-    setup_ecs();
+    
 
-    return;
-
-    let size = LogicalSize::new(1200, 1000);
+    let size = LogicalSize::new(1000, 1000);
 
     let events_loop = EventLoop::new();
 
@@ -55,6 +54,7 @@ fn main() {
         layer.set_device(&device);
         layer.set_pixel_format(MTLPixelFormat::BGRA8Unorm);
         layer.set_presents_with_transaction(false);
+        layer.set_display_sync_enabled(false); // <-- vsync
 
         unsafe {
             let view = window.ns_view() as cocoa_id;
@@ -77,6 +77,11 @@ fn main() {
 
     let mut context = DirectContext::new_metal(&backend, None).unwrap();
 
+    let mut mouse_x = 0.0;
+    let mut mouse_y = 0.0;
+
+    let mut state: State = setup_ecs();
+    
     events_loop.run(move |event, _, control_flow| {
         autoreleasepool(|| {
             *control_flow = ControlFlow::Wait;
@@ -88,8 +93,78 @@ fn main() {
                         metal_layer
                             .set_drawable_size(CGSize::new(size.width as f64, size.height as f64));
                         window.request_redraw()
-                    }
+                    },
+                    WindowEvent::CursorMoved {position, .. } => {
+                        mouse_x = position.x;
+                        mouse_y = position.y;
+                        
+                    },
+                    WindowEvent::MouseInput {state:button_state, ..} => {
+                        if button_state == winit::event::ElementState::Released {
+
+                            let mut changes = Vec::<ValueChanges>::new();
+                            let t = 2.0;
+                            for (id, entity) in state.get_entities().read().unwrap().iter() {
+                                match entity {
+                                    Entities::Layer(layer, render, cache) => {
+                                        
+                                        changes.push(
+                                            layer.position().to(
+                                                Point{
+                                                    x: mouse_x - 500.0 + rand::random::<f64>() * 1000.0,
+                                                    y: mouse_y - 500.0 + rand::random::<f64>() * 1000.0,
+                                                },
+                                                Some(Transition {
+                                                    duration: t*3.0,
+                                                    delay: 0.0,
+                                                    timing: Easing::default(),
+                                                })
+                                            )
+                                        );
+                                        let s = rand::random::<f64>() * 200.0;
+                                        changes.push(
+                                            layer.size().to(
+                                                Point{
+                                                    x: s,
+                                                    y: s,
+                                                },
+                                                None
+                                            )
+                                        );
+                                        changes.push(
+                                            layer.border_corner_radius().to(
+                                                BorderRadius::new_single(s/2.0),
+                                                None
+                                            )
+                                        );
+                                        changes.push(
+                                            layer.background_color().to(
+                                                layer::PaintColor::Solid { color: Color {r: rand::random::<f64>(), g: rand::random::<f64>(), b: rand::random::<f64>(), a: 1.0} },
+                                                None
+                                            )
+                                        );
+                                        changes.push(
+                                            layer.border_width().to(
+                                                s/10.0,
+                                                None
+                                            )
+                                        );
+                                    },
+                                }
+                            }
+
+                            state.add_changes(changes, Some(Transition {
+                                duration: t,
+                                delay: 0.0,
+                                timing: Easing::default(),
+                            }));
+                        }
+                    },
                     _ => (),
+                },
+                Event::MainEventsCleared => {
+                    window.request_redraw();
+                    state.update(0.016);
                 },
                 Event::RedrawRequested(_) => {
                     if let Some(drawable) = metal_layer.next_drawable() {
@@ -118,15 +193,14 @@ fn main() {
                             )
                             .unwrap()
                         };
-
-                        draw(surface.canvas());
+                        
+                        draw(surface.canvas(), &state);
                         surface.flush_and_submit();
                         drop(surface);
 
                         let command_buffer = command_queue.new_command_buffer();
                         command_buffer.present_drawable(drawable);
                         command_buffer.commit();
-                        window.request_redraw();
                     }
                 }
                 _ => {}
