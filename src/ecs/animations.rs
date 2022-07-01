@@ -1,12 +1,10 @@
 use core::fmt;
 
 use std::marker::{Sync};
-use std::ops::Deref;
 use std::sync::atomic::AtomicUsize;
 use std::sync::{Arc, RwLock};
 
 use crate::easing::{bezier_easing_function, Interpolable};
-use crate::layer::{Point, BorderRadius, PaintColor};
 
 // A trait for interpolating across time
 pub trait TimingFunction {
@@ -58,49 +56,6 @@ pub struct Animation {
     pub timing: Easing,
 }
 
-
-
-#[derive(Debug, Clone)]
-pub struct ValueChange<V:Interpolable + Sync> {
-    pub from: V,
-    pub to: V,
-    pub target: AnimatedValue<V>,
-    pub transition: Option<Transition<Easing>>
-}
-
-pub enum ValueChanges {
-    Point(ValueChange<Point>),
-    F64(ValueChange<f64>),
-    BorderCornerRadius(ValueChange<BorderRadius>),
-    PaintColor(ValueChange<PaintColor>),
-}
-
-pub trait ToValueChanges {
-    fn to_value_changes(&self) -> ValueChanges;
-}
-
-impl ToValueChanges for ValueChange<Point> {
-    fn to_value_changes(&self) -> ValueChanges {
-        ValueChanges::Point(self.clone())
-    }
-}
-impl ToValueChanges for ValueChange<f64> {
-    fn to_value_changes(&self) -> ValueChanges {
-        ValueChanges::F64(self.clone())
-    }
-} 
-impl ToValueChanges for ValueChange<BorderRadius> {
-    fn to_value_changes(&self) -> ValueChanges {
-        ValueChanges::BorderCornerRadius(self.clone())
-    }
-}
-
-impl ToValueChanges for ValueChange<PaintColor> {
-    fn to_value_changes(&self) -> ValueChanges {
-        ValueChanges::PaintColor(self.clone())
-    }
-}
-
 // getter for Animation value
 impl Animation {
     
@@ -129,34 +84,22 @@ impl fmt::Debug for Animation {
 }
 static OBJECT_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
-#[derive(Debug)]
-struct Object(usize);
-
 #[derive(Debug, Clone)]
 pub struct AnimatedValue<V:Interpolable + Sync> {
     pub id: usize,
+    pub parent: usize,
     pub value: Arc<RwLock<V>>,
 }
 
-impl<V:Interpolable + Sync + Clone> AnimatedValue<V> 
-where ValueChange<V>: ToValueChanges {
-    pub fn new(value: V) -> AnimatedValue<V> {
+impl<V:Interpolable + Sync + Clone> AnimatedValue<V> {
+    pub fn new(parent: usize, value: V) -> AnimatedValue<V> {
         let id = OBJECT_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         let value = Arc::new(RwLock::new(value));
         Self {
             id,
+            parent,
             value,
         }
-    }
-    pub fn to(&self, value:V, transition: Option<Transition<Easing>>) -> ValueChanges {
-        let v = self.value.read().unwrap();
-
-        ValueChange {
-            from: v.clone(),
-            to: value,
-            target: self.clone(),
-            transition,
-        }.to_value_changes()
     }
 
     pub fn value(&self) -> V {

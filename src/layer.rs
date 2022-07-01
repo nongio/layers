@@ -1,8 +1,8 @@
-use std::{default, ops::Deref};
+use std::{default, ops::Deref, sync::atomic::AtomicUsize};
 
 use indexmap::IndexMap;
 use skia_safe::{Color4f};
-use crate::ecs::animations::*;
+use crate::{ecs::animations::*, easing::Interpolable};
 
 
 #[derive(Clone, Copy, Debug)]
@@ -131,6 +131,7 @@ pub enum Properties {
 }
 
 impl Properties {
+
     pub fn key(&self) -> String {
         match self {
             Properties::Position(_) => "position".to_string(),
@@ -145,21 +146,49 @@ impl Properties {
 }
 #[derive(Debug)]
 pub struct ModelLayer {
+    pub id: usize,
     pub properties: IndexMap<String, Properties>,
 }
 
+#[derive(Clone, Debug)]
+pub struct ValueChange<V:Interpolable + Sync> {
+    pub from: V,
+    pub to: V,
+    pub target: AnimatedValue<V>,
+    pub transition: Option<Transition<Easing>>
+}
+
+pub enum ModelChanges {
+    Point(usize, ValueChange<Point>, bool),
+    F64(usize, ValueChange<f64>, bool),
+    BorderCornerRadius(usize, ValueChange<BorderRadius>, bool),
+    PaintColor(usize, ValueChange<PaintColor>, bool),
+}
+
+
 impl ModelLayer {
     pub fn new() -> Self {
-        default::Default::default()
+        Self {
+            ..default::Default::default()
+        }
     }
 
     pub fn position(&self) -> AnimatedValue<Point> {
-        // self.properties.get("position").unwrap().clone()
         if let Properties::Position(p) = self.properties.get("position").unwrap() {
             p.clone()
         } else {
             panic!("position not found")
         }
+    }
+
+    pub fn position_to(&self, p: Point, transition: Option<Transition<Easing>>)  -> ModelChanges {
+        let position = self.position();
+        ModelChanges::Point(self.id, ValueChange {
+            from: position.value(),
+            to: p,
+            target: position,
+            transition,
+        }, false)
     }
 
     pub fn background_color(&self) -> AnimatedValue<PaintColor> {
@@ -170,6 +199,16 @@ impl ModelLayer {
         }
     }
 
+    pub fn background_color_to(&self, c: PaintColor, transition: Option<Transition<Easing>>)  -> ModelChanges {
+        let color = self.background_color();
+        ModelChanges::PaintColor(self.id, ValueChange {
+            from: color.value(),
+            to: c,
+            target: color,
+            transition,
+        }, true)
+    }
+
     pub fn border_color(&self) -> AnimatedValue<PaintColor> {
         if let Properties::BorderColor(p) = self.properties.get("border_color").unwrap() {
             p.clone()
@@ -178,12 +217,32 @@ impl ModelLayer {
         }
     }
 
+    pub fn border_color_to(&self, c: PaintColor, transition: Option<Transition<Easing>>)  -> ModelChanges {
+        let color = self.border_color();
+        ModelChanges::PaintColor(self.id, ValueChange {
+            from: color.value(),
+            to: c,
+            target: color,
+            transition,
+        }, true)
+    }
+
     pub fn border_width(&self) -> AnimatedValue<f64> {
         if let Properties::BorderWidth(p) = self.properties.get("border_width").unwrap() {
             p.clone()
         } else {
             panic!("border_width not found")
         }
+    }
+
+    pub fn border_width_to(&self, w: f64, transition: Option<Transition<Easing>>)  -> ModelChanges {
+        let width = self.border_width();
+        ModelChanges::F64(self.id, ValueChange {
+            from: width.value(),
+            to: w,
+            target: width,
+            transition,
+        }, true)
     }
 
     pub fn border_style(&self) -> BorderStyle {
@@ -202,12 +261,32 @@ impl ModelLayer {
         }
     }
 
+    pub fn border_corner_radius_to(&self, r: BorderRadius, transition: Option<Transition<Easing>>)  -> ModelChanges {
+        let radius = self.border_corner_radius();
+        ModelChanges::BorderCornerRadius(self.id, ValueChange {
+            from: radius.value(),
+            to: r,
+            target: radius,
+            transition,
+        }, true)
+    }
+
     pub fn size(&self) -> AnimatedValue<Point> {
         if let Properties::Size(p) = self.properties.get("size").unwrap() {
             p.clone()
         } else {
             panic!("size not found")
         }
+    }
+
+    pub fn size_to(&self, s: Point, transition: Option<Transition<Easing>>)  -> ModelChanges {
+        let size = self.size();
+        ModelChanges::Point(self.id, ValueChange {
+            from: size.value(),
+            to: s,
+            target: size,
+            transition,
+        }, true)
     }
 
     pub fn render_layer(&self) -> RenderLayer {
@@ -221,19 +300,8 @@ impl ModelLayer {
             size: self.size().value(),
         }
     }
-
-    pub fn to(&self, layer: RenderLayer, transition: Option<Transition<Easing>>) -> (Vec<ValueChanges>, Option<Transition<Easing>>){
-        let mut changes = Vec::<ValueChanges>::new();
-        
-        
-        changes.push(self.position().to(layer.position, None));
-        changes.push(self.border_width().to(layer.border_width, None));
-        changes.push(self.border_corner_radius().to(layer.border_corner_radius, None));
-        changes.push(self.size().to(layer.size, None));
-        (changes, transition)
-    }
-
 }
+
 impl RenderLayer {
     pub fn contains(&self, x: f64, y: f64) -> bool {
         let RenderLayer{position, size, ..} = self;
@@ -246,22 +314,26 @@ impl RenderLayer {
 impl Clone for ModelLayer {
     fn clone(&self) -> Self {
         ModelLayer {
+            id: self.id,
             properties: self.properties.clone(),
         }
     }
 }
 
+static OBJECT_COUNTER: AtomicUsize = AtomicUsize::new(0);
+
 // implement Default for ModelLayer
 impl Default for ModelLayer {
     fn default() -> Self {
+        let id = OBJECT_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         let mut map = IndexMap::new();
-        let position = Properties::Position(AnimatedValue::new(Point{x:0.0, y:0.0}));
-        let background_color = Properties::BackgroundColor(AnimatedValue::new(PaintColor::Solid {color: Color::new(1.0, 0.0, 0.0, 1.0)}));
-        let border_color = Properties::BorderColor(AnimatedValue::new(PaintColor::Solid {color: Color::new(0.0, 0.0, 0.0, 1.0)}));
-        let border_width = Properties::BorderWidth(AnimatedValue::new(0.0));
+        let position = Properties::Position(AnimatedValue::new(id, Point{x:0.0, y:0.0}));
+        let background_color = Properties::BackgroundColor(AnimatedValue::new(id, PaintColor::Solid {color: Color::new(1.0, 0.0, 0.0, 1.0)}));
+        let border_color = Properties::BorderColor(AnimatedValue::new(id, PaintColor::Solid {color: Color::new(0.0, 0.0, 0.0, 1.0)}));
+        let border_width = Properties::BorderWidth(AnimatedValue::new(id, 0.0));
         let border_style = Properties::BorderStyle(BorderStyle::Solid);
-        let border_corner_radius = Properties::BorderCornerRadius(AnimatedValue::new(BorderRadius::new_single(25.0)));
-        let size = Properties::Size(AnimatedValue::new(Point{x:50.0, y:50.0}));
+        let border_corner_radius = Properties::BorderCornerRadius(AnimatedValue::new(id, BorderRadius::new_single(25.0)));
+        let size = Properties::Size(AnimatedValue::new(id, Point{x:50.0, y:50.0}));
 
         map.insert(position.key(), position);
         map.insert(background_color.key(), background_color);
@@ -270,6 +342,11 @@ impl Default for ModelLayer {
         map.insert(border_style.key(), border_style);
         map.insert(border_corner_radius.key(), border_corner_radius);
         map.insert(size.key(), size);
-        Self { properties: map }
+        
+
+        Self { 
+            id,
+            properties: map
+        }
     }
 }

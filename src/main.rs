@@ -1,10 +1,10 @@
 
 use skia_safe::{scalar, ColorType, Size, Surface};
 
-use crate::layer::{ModelLayer, Point, BorderRadius, Color};
+use crate::layer::{ModelLayer, ModelChanges, Point, BorderRadius, Color};
 use crate::rendering::draw;
 use crate::ecs::{State, setup_ecs, Entities};
-use crate::ecs::animations::{Transition, Easing, ValueChanges};
+use crate::ecs::animations::{Transition, Easing};
 
 mod rendering;
 mod layer;
@@ -102,14 +102,14 @@ fn main() {
                     WindowEvent::MouseInput {state:button_state, ..} => {
                         if button_state == winit::event::ElementState::Released {
 
-                            let mut changes = Vec::<ValueChanges>::new();
-                            let t = 2.0;
+                            let mut changes = Vec::<ModelChanges>::new();
+                            let t = 4.0;
                             for (id, entity) in state.get_entities().read().unwrap().iter() {
                                 match entity {
-                                    Entities::Layer(layer, render, cache) => {
+                                    Entities::Layer(layer, _, _, _) => {
                                         
                                         changes.push(
-                                            layer.position().to(
+                                            layer.position_to(
                                                 Point{
                                                     x: mouse_x - 500.0 + rand::random::<f64>() * 1000.0,
                                                     y: mouse_y - 500.0 + rand::random::<f64>() * 1000.0,
@@ -121,34 +121,34 @@ fn main() {
                                                 })
                                             )
                                         );
-                                        let s = rand::random::<f64>() * 200.0;
-                                        changes.push(
-                                            layer.size().to(
-                                                Point{
-                                                    x: s,
-                                                    y: s,
-                                                },
-                                                None
-                                            )
-                                        );
-                                        changes.push(
-                                            layer.border_corner_radius().to(
-                                                BorderRadius::new_single(s/2.0),
-                                                None
-                                            )
-                                        );
-                                        changes.push(
-                                            layer.background_color().to(
-                                                layer::PaintColor::Solid { color: Color {r: rand::random::<f64>(), g: rand::random::<f64>(), b: rand::random::<f64>(), a: 1.0} },
-                                                None
-                                            )
-                                        );
-                                        changes.push(
-                                            layer.border_width().to(
-                                                s/10.0,
-                                                None
-                                            )
-                                        );
+                                        // let s = rand::random::<f64>() * 200.0;
+                                        // changes.push(
+                                        //     layer.size_to(
+                                        //         Point{
+                                        //             x: s,
+                                        //             y: s,
+                                        //         },
+                                        //         None
+                                        //     )
+                                        // );
+                                        // changes.push(
+                                        //     layer.border_corner_radius_to(
+                                        //         BorderRadius::new_single(s/2.0),
+                                        //         None
+                                        //     )
+                                        // );
+                                        // changes.push(
+                                        //     layer.background_color_to(
+                                        //         layer::PaintColor::Solid { color: Color {r: rand::random::<f64>(), g: rand::random::<f64>(), b: rand::random::<f64>(), a: 1.0} },
+                                        //         None
+                                        //     )
+                                        // );
+                                        // changes.push(
+                                        //     layer.border_width_to(
+                                        //         s/10.0,
+                                        //         None
+                                        //     )
+                                        // );
                                     },
                                 }
                             }

@@ -55,7 +55,7 @@ pub fn draw(canvas: &mut Canvas, state: &State) {
 
     for (id, entity) in state.get_entities().read().unwrap().iter() {
         match entity {
-            Entities::Layer(layer, render, cache) => {
+            Entities::Layer(_, render, cache, _) => {
                 if let Some(picture) = cache.picture.clone() {
                     canvas.draw_picture (picture, Some(&Matrix::translate((render.position.x as f32, render.position.y as f32))), None);
                 } else {
