@@ -203,7 +203,7 @@ impl State {
         }
         ids
     }
-    pub fn update(&mut self, dt: f64) {
+    pub fn update(&mut self, dt: f64) -> bool {
 
         let mut timestamp = self.timestamp.write().unwrap();
         *timestamp = Timestamp(timestamp.0 + dt);
@@ -230,7 +230,8 @@ impl State {
         }
         // Execute commands
         let cmd = self.commands_storage.map.clone();
-            
+        let needs_redraw = cmd.read().unwrap().len() > 0;
+
         cmd.write().unwrap().par_iter().for_each_with(done_commands.clone(),|a, (id, command)| {
             match command {
                 PropChanges::ChangePoint(command) => {
@@ -311,6 +312,7 @@ impl State {
             }                
         });
 
+
         // repaint
         self.model_storage.map.clone().write().unwrap().par_iter_mut()
             .for_each(|(_, entity)| {
@@ -336,7 +338,7 @@ impl State {
             let mut indexmap = cmd.write().unwrap();
             indexmap.remove(command_id);
         }
-
+        needs_redraw
     }
 }
 

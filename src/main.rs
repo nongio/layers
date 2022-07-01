@@ -163,8 +163,10 @@ fn main() {
                     _ => (),
                 },
                 Event::MainEventsCleared => {
-                    window.request_redraw();
-                    state.update(0.016);
+                    
+                    if state.update(0.016) {
+                        window.request_redraw();
+                    }
                 },
                 Event::RedrawRequested(_) => {
                     if let Some(drawable) = metal_layer.next_drawable() {
