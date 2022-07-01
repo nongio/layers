@@ -23,10 +23,10 @@ fn criterion_benchmark(c: &mut Criterion) {
                 changes.push(layer.background_color_to(
                     PaintColor::Solid {
                         color: Color {
-                            r: rand::random::<f64>(),
-                            g: rand::random::<f64>(),
+                            l: rand::random::<f64>(),
+                            a: rand::random::<f64>(),
                             b: rand::random::<f64>(),
-                            a: 1.0,
+                            alpha: 1.0,
                         },
                     },
                     None,

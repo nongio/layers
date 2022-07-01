@@ -585,6 +585,7 @@ dependencies = [
  "criterion",
  "foreign-types-shared",
  "indexmap",
+ "libm",
  "metal",
  "objc",
  "rand",
@@ -711,6 +712,12 @@ dependencies = [
  "cfg-if 1.0.0",
  "winapi",
 ]
+
+[[package]]
+name = "libm"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "33a33a362ce288760ec6a508b94caaec573ae7d3bbbd91b87aa0bad4456839db"
 
 [[package]]
 name = "lock_api"

@@ -84,10 +84,10 @@ impl std::ops::Mul<f64> for crate::layer::Color {
 
     fn mul(self, other: f64) -> crate::layer::Color {
         crate::layer::Color {
-            r: self.r * other,
-            g: self.g * other,
-            b: self.b * other,
+            l: self.l * other,
             a: self.a * other,
+            b: self.b * other,
+            alpha: self.alpha * other,
         }
     }
 }
@@ -97,10 +97,10 @@ impl std::ops::Add for crate::layer::Color {
 
     fn add(self, other: crate::layer::Color) -> crate::layer::Color {
         crate::layer::Color {
-            r: self.r + other.r,
-            g: self.g + other.g,
-            b: self.b + other.b,
+            l: self.l + other.l,
             a: self.a + other.a,
+            b: self.b + other.b,
+            alpha: self.alpha + other.alpha,
         }
     }
 }
@@ -215,7 +215,7 @@ impl std::ops::Add for PaintColor {
 
 impl PartialEq for Color {
     fn eq(&self, other: &Color) -> bool {
-        self.r == other.r && self.g == other.g && self.b == other.b && self.a == other.a
+        self.l == other.l && self.a == other.a && self.b == other.b && self.alpha == other.alpha
     }
 }
 // implementation of PartiallyEq trait for PaintColor

@@ -6,10 +6,10 @@ use skia_safe::Color4f;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Color {
-    pub r: f64,
-    pub g: f64,
-    pub b: f64,
+    pub l: f64,
     pub a: f64,
+    pub b: f64,
+    pub alpha: f64,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -91,17 +91,31 @@ impl Default for BorderRadius {
 impl Default for Color {
     fn default() -> Self {
         Color {
-            r: 1.0,
-            g: 1.0,
-            b: 1.0,
+            l: 1.0,
             a: 1.0,
+            b: 1.0,
+            alpha: 1.0,
         }
     }
 }
 
 impl Color {
+    // Put in the public domain by Björn Ottosson 2020
     pub fn new(r: f64, g: f64, b: f64, a: f64) -> Self {
-        Color { r, g, b, a }
+        let l = 0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b;
+        let m = 0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b;
+        let s = 0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b;
+
+        let l_ = libm::cbrt(l);
+        let m_ = libm::cbrt(m);
+        let s_ = libm::cbrt(s);
+
+        Color {
+            l: 0.2104542553 * l_ + 0.7936177850 * m_ - 0.0040720468 * s_,
+            b: 1.9779984951 * l_ - 2.4285922050 * m_ + 0.4505937099 * s_,
+            a: 0.0259040371 * l_ + 0.7827717662 * m_ - 0.8086757660 * s_,
+            alpha: a,
+        }
     }
 }
 
@@ -109,13 +123,19 @@ impl Color {
 
 impl From<Color> for Color4f {
     fn from(color: Color) -> Self {
-        let Color { r, g, b, a } = color;
+        let l_ = color.l + 0.3963377774 * color.a + 0.2158037573 * color.b;
+        let m_ = color.l - 0.1055613458 * color.a - 0.0638541728 * color.b;
+        let s_ = color.l - 0.0894841775 * color.a - 1.2914855480 * color.b;
+
+        let l = l_ * l_ * l_;
+        let m = m_ * m_ * m_;
+        let s = s_ * s_ * s_;
 
         Self {
-            r: r as f32,
-            g: g as f32,
-            b: b as f32,
-            a: a as f32,
+            r: (4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s) as f32,
+            g: (-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s) as f32,
+            b: (-0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s) as f32,
+            a: color.alpha as f32,
         }
     }
 }
