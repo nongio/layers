@@ -115,28 +115,32 @@ fn main() {
                                                 timing: Easing::default(),
                                             }),
                                         ));
-                                        // let s = rand::random::<f64>() * 200.0;
-                                        // changes.push(
-                                        //     layer.size_to(
-                                        //         Point{
-                                        //             x: s,
-                                        //             y: s,
-                                        //         },
-                                        //         None
-                                        //     )
-                                        // );
-                                        // changes.push(
-                                        //     layer.border_corner_radius_to(
-                                        //         BorderRadius::new_single(s/2.0),
-                                        //         None
-                                        //     )
-                                        // );
-                                        // changes.push(
-                                        //     layer.background_color_to(
-                                        //         layer::PaintColor::Solid { color: Color {r: rand::random::<f64>(), g: rand::random::<f64>(), b: rand::random::<f64>(), a: 1.0} },
-                                        //         None
-                                        //     )
-                                        // );
+                                        let s = rand::random::<f64>() * 200.0;
+                                        changes.push(
+                                            layer.size_to(
+                                                Point{
+                                                    x: s,
+                                                    y: s,
+                                                },
+                                                None
+                                            )
+                                        );
+                                        changes.push(
+                                            layer.border_corner_radius_to(
+                                                BorderRadius::new_single(s/2.0),
+                                                None
+                                            )
+                                        );
+                                        changes.push(
+                                            layer.background_color_to(
+                                                layer::PaintColor::Solid { color: Color::new(rand::random::<f64>(), rand::random::<f64>(), rand::random::<f64>(), 1.0) },
+                                                Some(Transition {
+                                                    duration: 16.0,
+                                                    delay: 0.0,
+                                                    timing: Easing::default(),
+                                                })
+                                            )
+                                        );
                                         // changes.push(
                                         //     layer.border_width_to(
                                         //         s/10.0,
