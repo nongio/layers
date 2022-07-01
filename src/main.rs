@@ -1,15 +1,14 @@
-
 use skia_safe::{scalar, ColorType, Size, Surface};
 
-use crate::layer::{ModelLayer, ModelChanges, Point, BorderRadius, Color};
+use crate::ecs::animations::{Easing, Transition};
+use crate::ecs::{setup_ecs, Entities, State};
+use crate::layer::{BorderRadius, Color, ModelChanges, ModelLayer, Point};
 use crate::rendering::draw;
-use crate::ecs::{State, setup_ecs, Entities};
-use crate::ecs::animations::{Transition, Easing};
 
-mod rendering;
-mod layer;
-mod ecs;
 mod easing;
+mod ecs;
+mod layer;
+mod rendering;
 mod skcache;
 
 #[allow(unreachable_code)]
@@ -32,9 +31,6 @@ fn main() {
         platform::macos::WindowExtMacOS,
         window::WindowBuilder,
     };
-
-    
-    
 
     let size = LogicalSize::new(1000, 1000);
 
@@ -81,7 +77,7 @@ fn main() {
     let mut mouse_y = 0.0;
 
     let mut state: State = setup_ecs();
-    
+
     events_loop.run(move |event, _, control_flow| {
         autoreleasepool(|| {
             *control_flow = ControlFlow::Wait;
@@ -93,34 +89,32 @@ fn main() {
                         metal_layer
                             .set_drawable_size(CGSize::new(size.width as f64, size.height as f64));
                         window.request_redraw()
-                    },
-                    WindowEvent::CursorMoved {position, .. } => {
+                    }
+                    WindowEvent::CursorMoved { position, .. } => {
                         mouse_x = position.x;
                         mouse_y = position.y;
-                        
-                    },
-                    WindowEvent::MouseInput {state:button_state, ..} => {
+                    }
+                    WindowEvent::MouseInput {
+                        state: button_state,
+                        ..
+                    } => {
                         if button_state == winit::event::ElementState::Released {
-
                             let mut changes = Vec::<ModelChanges>::new();
                             let t = 4.0;
                             for (id, entity) in state.get_entities().read().unwrap().iter() {
                                 match entity {
                                     Entities::Layer(layer, _, _, _) => {
-                                        
-                                        changes.push(
-                                            layer.position_to(
-                                                Point{
-                                                    x: mouse_x - 500.0 + rand::random::<f64>() * 1000.0,
-                                                    y: mouse_y - 500.0 + rand::random::<f64>() * 1000.0,
-                                                },
-                                                Some(Transition {
-                                                    duration: t*3.0,
-                                                    delay: 0.0,
-                                                    timing: Easing::default(),
-                                                })
-                                            )
-                                        );
+                                        changes.push(layer.position_to(
+                                            Point {
+                                                x: mouse_x - 500.0 + rand::random::<f64>() * 1000.0,
+                                                y: mouse_y - 500.0 + rand::random::<f64>() * 1000.0,
+                                            },
+                                            Some(Transition {
+                                                duration: t * 3.0,
+                                                delay: 0.0,
+                                                timing: Easing::default(),
+                                            }),
+                                        ));
                                         // let s = rand::random::<f64>() * 200.0;
                                         // changes.push(
                                         //     layer.size_to(
@@ -149,25 +143,27 @@ fn main() {
                                         //         None
                                         //     )
                                         // );
-                                    },
+                                    }
                                 }
                             }
 
-                            state.add_changes(changes, Some(Transition {
-                                duration: t,
-                                delay: 0.0,
-                                timing: Easing::default(),
-                            }));
+                            state.add_changes(
+                                changes,
+                                Some(Transition {
+                                    duration: t,
+                                    delay: 0.0,
+                                    timing: Easing::default(),
+                                }),
+                            );
                         }
-                    },
+                    }
                     _ => (),
                 },
                 Event::MainEventsCleared => {
-                    
                     if state.update(0.016) {
                         window.request_redraw();
                     }
-                },
+                }
                 Event::RedrawRequested(_) => {
                     if let Some(drawable) = metal_layer.next_drawable() {
                         let drawable_size = {
@@ -195,7 +191,7 @@ fn main() {
                             )
                             .unwrap()
                         };
-                        
+
                         draw(surface.canvas(), &state);
                         surface.flush_and_submit();
                         drop(surface);
@@ -210,5 +206,3 @@ fn main() {
         });
     });
 }
-
-

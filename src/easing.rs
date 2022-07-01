@@ -1,12 +1,19 @@
 use std::fmt::Debug;
 
-use crate::layer::{Point, PaintColor, Color};
+use crate::layer::{Color, PaintColor, Point};
 
 fn linspace(steps: u64, step: u64) -> f64 {
     step as f64 / (steps as f64 - 1.0)
 }
 
-pub trait Interpolable : std::ops::Mul<f64, Output = Self> + std::ops::Add<Output = Self> + std::cmp::PartialEq + Debug + Sized {}
+pub trait Interpolable:
+    std::ops::Mul<f64, Output = Self>
+    + std::ops::Add<Output = Self>
+    + std::cmp::PartialEq
+    + Debug
+    + Sized
+{
+}
 
 // implementation of Add trait for Point
 impl std::ops::Add for crate::layer::Point {
@@ -39,7 +46,10 @@ impl std::cmp::PartialEq for crate::layer::Point {
 // implementation of PartialEq trait for BorderRadius
 impl std::cmp::PartialEq for crate::layer::BorderRadius {
     fn eq(&self, other: &crate::layer::BorderRadius) -> bool {
-        self.top_left == other.top_left && self.top_right == other.top_right && self.bottom_left == other.bottom_left && self.bottom_right == other.bottom_right
+        self.top_left == other.top_left
+            && self.top_right == other.top_right
+            && self.bottom_left == other.bottom_left
+            && self.bottom_right == other.bottom_right
     }
 }
 // implementation of Add trait for BorderRadius
@@ -100,9 +110,24 @@ impl std::ops::Mul<f64> for PaintColor {
 
     fn mul(self, other: f64) -> PaintColor {
         match self {
-            PaintColor::Solid {color} => PaintColor::Solid {color: color * other},
-            PaintColor::GradientLinear {colors, points} => PaintColor::GradientLinear {colors: colors.iter().map(|c| *c * other).collect(), points: points.clone()},
-            PaintColor::GradientRadial {center, radius, colors, points} => PaintColor::GradientRadial {center, radius, colors: colors.iter().map(|c| *c * other).collect(), points: points.clone()},
+            PaintColor::Solid { color } => PaintColor::Solid {
+                color: color * other,
+            },
+            PaintColor::GradientLinear { colors, points } => PaintColor::GradientLinear {
+                colors: colors.iter().map(|c| *c * other).collect(),
+                points: points.clone(),
+            },
+            PaintColor::GradientRadial {
+                center,
+                radius,
+                colors,
+                points,
+            } => PaintColor::GradientRadial {
+                center,
+                radius,
+                colors: colors.iter().map(|c| *c * other).collect(),
+                points: points.clone(),
+            },
         }
     }
 }
@@ -113,45 +138,77 @@ impl std::ops::Add for PaintColor {
 
     fn add(self, other: PaintColor) -> PaintColor {
         match self {
-            PaintColor::Solid {color} => {
-                match other {
-                    PaintColor::Solid {color: other_color} => {
-                        PaintColor::Solid {color: color + other_color}
-                    },
-                    PaintColor::GradientLinear {colors, points} => {
-                        PaintColor::GradientLinear {colors: colors.clone(), points: points.clone()}
-                    },
-                    PaintColor::GradientRadial {center, radius, colors, points} => {
-                        PaintColor::GradientRadial {center: center, radius: radius, colors: colors.clone(), points: points.clone()}
-                    }
-                }
+            PaintColor::Solid { color } => match other {
+                PaintColor::Solid { color: other_color } => PaintColor::Solid {
+                    color: color + other_color,
+                },
+                PaintColor::GradientLinear { colors, points } => PaintColor::GradientLinear {
+                    colors: colors.clone(),
+                    points: points.clone(),
+                },
+                PaintColor::GradientRadial {
+                    center,
+                    radius,
+                    colors,
+                    points,
+                } => PaintColor::GradientRadial {
+                    center: center,
+                    radius: radius,
+                    colors: colors.clone(),
+                    points: points.clone(),
+                },
             },
-            PaintColor::GradientLinear {colors, points} => {
-                match other {
-                    PaintColor::Solid {color: other_color} => {
-                        PaintColor::Solid {color: other_color}
-                    },
-                    PaintColor::GradientLinear {colors: other_colors, points: other_points} => {
-                        PaintColor::GradientLinear {colors: other_colors.clone(), points: other_points.clone()}
-                    },
-                    PaintColor::GradientRadial {center, radius, colors, points} => {
-                        PaintColor::GradientRadial {center, radius, colors: colors.clone(), points: points.clone()}
-                    }
+            PaintColor::GradientLinear { colors, points } => match other {
+                PaintColor::Solid { color: other_color } => {
+                    PaintColor::Solid { color: other_color }
                 }
+                PaintColor::GradientLinear {
+                    colors: other_colors,
+                    points: other_points,
+                } => PaintColor::GradientLinear {
+                    colors: other_colors.clone(),
+                    points: other_points.clone(),
+                },
+                PaintColor::GradientRadial {
+                    center,
+                    radius,
+                    colors,
+                    points,
+                } => PaintColor::GradientRadial {
+                    center,
+                    radius,
+                    colors: colors.clone(),
+                    points: points.clone(),
+                },
             },
-            PaintColor::GradientRadial {center, radius, colors, points} => {
-                match other {
-                    PaintColor::Solid {color: other_color} => {
-                        PaintColor::Solid {color: other_color}
-                    },
-                    PaintColor::GradientLinear {colors: other_colors, points: other_points} => {
-                        PaintColor::GradientLinear {colors: other_colors.clone(), points: other_points.clone()}
-                    },
-                    PaintColor::GradientRadial {center: other_center, radius: other_radius, colors: other_colors, points: other_points} => {
-                        PaintColor::GradientRadial {center: other_center.clone(), radius: other_radius, colors: other_colors.clone(), points: other_points.clone()}
-                    }
+            PaintColor::GradientRadial {
+                center,
+                radius,
+                colors,
+                points,
+            } => match other {
+                PaintColor::Solid { color: other_color } => {
+                    PaintColor::Solid { color: other_color }
                 }
-            }
+                PaintColor::GradientLinear {
+                    colors: other_colors,
+                    points: other_points,
+                } => PaintColor::GradientLinear {
+                    colors: other_colors.clone(),
+                    points: other_points.clone(),
+                },
+                PaintColor::GradientRadial {
+                    center: other_center,
+                    radius: other_radius,
+                    colors: other_colors,
+                    points: other_points,
+                } => PaintColor::GradientRadial {
+                    center: other_center.clone(),
+                    radius: other_radius,
+                    colors: other_colors.clone(),
+                    points: other_points.clone(),
+                },
+            },
         }
     }
 }
@@ -166,13 +223,34 @@ impl std::cmp::PartialEq for PaintColor {
     fn eq(&self, other: &PaintColor) -> bool {
         match (self, other) {
             (PaintColor::Solid { color: c1 }, PaintColor::Solid { color: c2 }) => c1 == c2,
-            (PaintColor::GradientLinear { colors: c1, points: p1 }, PaintColor::GradientLinear { colors: c2, points: p2 }) => c1 == c2 && p1 == p2,
-            (PaintColor::GradientRadial { center: c1, radius: r1, colors: cols1, points: p2 }, PaintColor::GradientRadial { center: c2, radius: r2, colors: cols2, points: p3 }) => c1 == c2 && r1 == r2 && cols1 == cols2 && p2 == p3,
+            (
+                PaintColor::GradientLinear {
+                    colors: c1,
+                    points: p1,
+                },
+                PaintColor::GradientLinear {
+                    colors: c2,
+                    points: p2,
+                },
+            ) => c1 == c2 && p1 == p2,
+            (
+                PaintColor::GradientRadial {
+                    center: c1,
+                    radius: r1,
+                    colors: cols1,
+                    points: p2,
+                },
+                PaintColor::GradientRadial {
+                    center: c2,
+                    radius: r2,
+                    colors: cols2,
+                    points: p3,
+                },
+            ) => c1 == c2 && r1 == r2 && cols1 == cols2 && p2 == p3,
             _ => false,
         }
     }
 }
-
 
 impl Interpolable for f64 {}
 impl Interpolable for crate::layer::Point {}
