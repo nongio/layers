@@ -1,7 +1,8 @@
-use skia_safe::{Canvas, Color4f, Font, Matrix, Paint, Point, RRect, Rect, Size};
+use skia_safe::{Canvas, Color4f, Font, Paint, Point, RRect, Rect, Size};
 use skia_safe::{FontStyle, PaintStyle, Typeface};
 
-use crate::ecs::{Entities, State};
+use crate::ecs::entities::HasHierarchy;
+use crate::ecs::{entities::Entities, State};
 use crate::layer::{PaintColor, RenderLayer};
 
 pub fn render_layer(canvas: &mut Canvas, layer: &RenderLayer) {
@@ -50,6 +51,30 @@ pub fn render_layer(canvas: &mut Canvas, layer: &RenderLayer) {
     canvas.draw_rrect(rrect, &paint);
 }
 
+pub fn draw_single_entity(canvas: &mut Canvas, entity: &Entities) {
+    match entity {
+        Entities::Layer { layer, cache, .. } => {
+            if let Some(picture) = cache.write().unwrap().picture.clone() {
+                let r = layer.read().unwrap();
+                canvas.concat(&r.matrix);
+                canvas.draw_picture(picture, None, None);
+            } else {
+                let render = layer.clone();
+                let render = render.read().unwrap();
+                render_layer(canvas, &render);
+            }
+        }
+        _ => {}
+    }
+}
+pub fn draw_entity(canvas: &mut Canvas, entity: &Entities) {
+    canvas.save();
+    draw_single_entity(canvas, entity);
+    for child in entity.children().iter() {
+        draw_entity(canvas, child);
+    }
+    canvas.restore();
+}
 /// Renders a rectangle that occupies exactly half of the canvas
 pub fn draw(canvas: &mut Canvas, state: &State) {
     let canvas_size = Size::from(canvas.base_layer_size());
@@ -62,23 +87,5 @@ pub fn draw(canvas: &mut Canvas, state: &State) {
 
     canvas.draw_str(fps, Point::new(10.0, 70.0), &font, &paint);
 
-    for (id, entity) in state.get_entities().read().unwrap().iter() {
-        match entity {
-            Entities::Layer(_, render, cache, _) => {
-                if let Some(picture) = cache.picture.clone() {
-                    canvas.draw_picture(
-                        picture,
-                        Some(&Matrix::translate((
-                            render.position.x as f32,
-                            render.position.y as f32,
-                        ))),
-                        None,
-                    );
-                } else {
-                    render_layer(canvas, render);
-                }
-            }
-            _ => {}
-        }
-    }
+    draw_entity(canvas, &state.root);
 }

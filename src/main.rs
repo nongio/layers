@@ -1,7 +1,7 @@
 use skia_safe::{scalar, ColorType, Size, Surface};
 
 use crate::ecs::animations::{Easing, Transition};
-use crate::ecs::{setup_ecs, Entities, State};
+use crate::ecs::{entities::Entities, entities::HasHierarchy, setup_ecs, State};
 use crate::layer::{BorderRadius, Color, ModelChanges, ModelLayer, Point};
 use crate::rendering::draw;
 
@@ -101,10 +101,10 @@ fn main() {
                         if button_state == winit::event::ElementState::Released {
                             let mut changes = Vec::<ModelChanges>::new();
                             let t = 4.0;
-                            for (id, entity) in state.get_entities().read().unwrap().iter() {
+                            for entity in state.root.children().iter() {
                                 match entity {
-                                    Entities::Layer(layer, _, _, _) => {
-                                        changes.push(layer.position_to(
+                                    Entities::Layer { model, .. } => {
+                                        changes.push(model.position_to(
                                             Point {
                                                 x: mouse_x - 500.0 + rand::random::<f64>() * 1000.0,
                                                 y: mouse_y - 500.0 + rand::random::<f64>() * 1000.0,
@@ -116,31 +116,26 @@ fn main() {
                                             }),
                                         ));
                                         let s = rand::random::<f64>() * 200.0;
-                                        changes.push(
-                                            layer.size_to(
-                                                Point{
-                                                    x: s,
-                                                    y: s,
-                                                },
-                                                None
-                                            )
-                                        );
-                                        changes.push(
-                                            layer.border_corner_radius_to(
-                                                BorderRadius::new_single(s/2.0),
-                                                None
-                                            )
-                                        );
-                                        changes.push(
-                                            layer.background_color_to(
-                                                layer::PaintColor::Solid { color: Color::new(rand::random::<f64>(), rand::random::<f64>(), rand::random::<f64>(), 1.0) },
-                                                Some(Transition {
-                                                    duration: 16.0,
-                                                    delay: 0.0,
-                                                    timing: Easing::default(),
-                                                })
-                                            )
-                                        );
+                                        changes.push(model.size_to(Point { x: s, y: s }, None));
+                                        changes.push(model.border_corner_radius_to(
+                                            BorderRadius::new_single(s / 2.0),
+                                            None,
+                                        ));
+                                        changes.push(model.background_color_to(
+                                            layer::PaintColor::Solid {
+                                                color: Color::new(
+                                                    rand::random::<f64>(),
+                                                    rand::random::<f64>(),
+                                                    rand::random::<f64>(),
+                                                    1.0,
+                                                ),
+                                            },
+                                            Some(Transition {
+                                                duration: 16.0,
+                                                delay: 0.0,
+                                                timing: Easing::default(),
+                                            }),
+                                        ));
                                         // changes.push(
                                         //     layer.border_width_to(
                                         //         s/10.0,
@@ -148,6 +143,7 @@ fn main() {
                                         //     )
                                         // );
                                     }
+                                    _ => (),
                                 }
                             }
 

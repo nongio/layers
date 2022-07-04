@@ -1,8 +1,8 @@
-use std::{default, ops::Deref, sync::atomic::AtomicUsize};
+use std::{default, sync::atomic::AtomicUsize};
 
 use crate::{easing::Interpolable, ecs::animations::*};
 use indexmap::IndexMap;
-use skia_safe::Color4f;
+use skia_safe::{Color4f, Matrix};
 
 #[derive(Clone, Copy, Debug)]
 pub struct Color {
@@ -59,6 +59,7 @@ pub struct RenderLayer {
     pub border_style: BorderStyle,
     pub border_corner_radius: BorderRadius,
     pub size: Point,
+    pub matrix: Matrix,
 }
 
 impl BorderRadius {
@@ -168,7 +169,6 @@ impl Properties {
 pub struct ModelLayer {
     pub id: usize,
     pub properties: IndexMap<String, Properties>,
-    pub children: Vec<ModelLayer>,
 }
 
 #[derive(Clone, Debug)]
@@ -348,14 +348,17 @@ impl ModelLayer {
     }
 
     pub fn render_layer(&self) -> RenderLayer {
+        let position = self.position().value();
+        let matrix = Matrix::translate((position.x as f32, position.y as f32));
         RenderLayer {
-            position: self.position().value(),
+            position,
             background_color: self.background_color().value(),
             border_color: self.border_color().value(),
             border_width: self.border_width().value(),
             border_style: self.border_style().clone(),
             border_corner_radius: self.border_corner_radius().value(),
             size: self.size().value(),
+            matrix,
         }
     }
 }
@@ -374,36 +377,29 @@ impl Clone for ModelLayer {
         ModelLayer {
             id: self.id,
             properties: self.properties.clone(),
-            children: self.children.clone(),
         }
     }
 }
 
-static OBJECT_COUNTER: AtomicUsize = AtomicUsize::new(0);
+static OBJECT_COUNTER: AtomicUsize = AtomicUsize::new(1);
 
 // implement Default for ModelLayer
 impl Default for ModelLayer {
     fn default() -> Self {
         let id = OBJECT_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         let mut map = IndexMap::new();
-        let position = Properties::Position(AnimatedValue::new(id, Point { x: 0.0, y: 0.0 }));
-        let background_color = Properties::BackgroundColor(AnimatedValue::new(
-            id,
-            PaintColor::Solid {
-                color: Color::new(1.0, 0.0, 0.0, 1.0),
-            },
-        ));
-        let border_color = Properties::BorderColor(AnimatedValue::new(
-            id,
-            PaintColor::Solid {
-                color: Color::new(0.0, 0.0, 0.0, 1.0),
-            },
-        ));
-        let border_width = Properties::BorderWidth(AnimatedValue::new(id, 0.0));
+        let position = Properties::Position(AnimatedValue::new(Point { x: 0.0, y: 0.0 }));
+        let background_color = Properties::BackgroundColor(AnimatedValue::new(PaintColor::Solid {
+            color: Color::new(1.0, 0.0, 0.0, 1.0),
+        }));
+        let border_color = Properties::BorderColor(AnimatedValue::new(PaintColor::Solid {
+            color: Color::new(0.0, 0.0, 0.0, 1.0),
+        }));
+        let border_width = Properties::BorderWidth(AnimatedValue::new(0.0));
         let border_style = Properties::BorderStyle(BorderStyle::Solid);
         let border_corner_radius =
-            Properties::BorderCornerRadius(AnimatedValue::new(id, BorderRadius::new_single(25.0)));
-        let size = Properties::Size(AnimatedValue::new(id, Point { x: 50.0, y: 50.0 }));
+            Properties::BorderCornerRadius(AnimatedValue::new(BorderRadius::new_single(25.0)));
+        let size = Properties::Size(AnimatedValue::new(Point { x: 50.0, y: 50.0 }));
 
         map.insert(position.key(), position);
         map.insert(background_color.key(), background_color);
@@ -416,7 +412,6 @@ impl Default for ModelLayer {
         Self {
             id,
             properties: map,
-            children: Vec::new(),
         }
     }
 }

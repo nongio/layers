@@ -152,8 +152,8 @@ impl std::ops::Add for PaintColor {
                     colors,
                     points,
                 } => PaintColor::GradientRadial {
-                    center: center,
-                    radius: radius,
+                    center,
+                    radius,
                     colors: colors.clone(),
                     points: points.clone(),
                 },

@@ -18,10 +18,6 @@ impl TimingFunction for Easing {
     }
 }
 
-pub trait Animatable<T>: Sync {
-    fn value_at(&mut self, t: f64) -> T;
-}
-
 #[derive(Clone, Copy, Debug)]
 pub struct Easing {
     pub x1: f64,
@@ -49,6 +45,8 @@ pub struct Transition<T: TimingFunction> {
     // easing
     pub timing: T,
 }
+
+#[derive(Clone)]
 
 pub struct Animation {
     pub start: f64,
@@ -85,15 +83,14 @@ static OBJECT_COUNTER: AtomicUsize = AtomicUsize::new(0);
 #[derive(Debug, Clone)]
 pub struct AnimatedValue<V: Interpolable + Sync> {
     pub id: usize,
-    pub parent: usize,
     pub value: Arc<RwLock<V>>,
 }
 
 impl<V: Interpolable + Sync + Clone> AnimatedValue<V> {
-    pub fn new(parent: usize, value: V) -> AnimatedValue<V> {
+    pub fn new(value: V) -> AnimatedValue<V> {
         let id = OBJECT_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         let value = Arc::new(RwLock::new(value));
-        Self { id, parent, value }
+        Self { id, value }
     }
 
     pub fn value(&self) -> V {
