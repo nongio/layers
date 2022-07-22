@@ -1,10 +1,12 @@
-use std::sync::{atomic::AtomicBool, Arc, RwLock};
-
 use skia_safe::Picture;
+use std::{
+    fmt::Debug,
+    sync::{atomic::AtomicBool, Arc, RwLock},
+};
 
 use crate::{
-    layer::{ModelLayer, RenderLayer},
-    skcache::render_layer_cache,
+    layers::layer::ModelLayer,
+    rendering::{DrawCache, Drawable},
 };
 
 #[derive(Clone, Debug)]
@@ -12,14 +14,17 @@ pub struct SkiaCache {
     pub picture: Option<Picture>,
 }
 
+pub trait Entity: Drawable + DrawCache + HasId + Send + Sync + Debug {}
+
+impl Entity for ModelLayer {}
+
 #[derive(Clone, Debug)]
 pub enum Entities {
     Root {
         children: Arc<RwLock<Vec<Entities>>>,
     },
     Layer {
-        model: ModelLayer,
-        layer: Arc<RwLock<RenderLayer>>,
+        model: Arc<dyn Entity>,
         cache: Arc<RwLock<SkiaCache>>,
         needs_paint: Arc<AtomicBool>,
         parent: Arc<RwLock<Option<Entities>>>,
@@ -43,7 +48,7 @@ impl HasId for Entities {
     fn id(&self) -> usize {
         match self {
             Entities::Root { .. } => 0,
-            Entities::Layer { model, .. } => model.id,
+            Entities::Layer { model, .. } => model.id(),
         }
     }
 }
@@ -55,10 +60,7 @@ impl HasHierarchy for Entities {
             Entities::Layer {
                 parent: maybe_parent,
                 ..
-            } => match &*maybe_parent.read().unwrap() {
-                Some(parent) => Some(parent.clone()),
-                None => None,
-            },
+            } => (*maybe_parent.read().unwrap()).as_ref().cloned(),
         }
     }
     fn set_parent(&mut self, new_parent: Entities) {
@@ -77,7 +79,7 @@ impl HasHierarchy for Entities {
                     }
                 }
 
-                *parent_handle = Some(new_parent.clone());
+                *parent_handle = Some(new_parent);
             }
         }
     }
@@ -103,12 +105,20 @@ impl HasHierarchy for Entities {
     }
     fn remove_child(&self, child_id: usize) {
         let children = self.children_mut();
-        children.write().unwrap().remove(child_id);
+        let find_id = children
+            .read()
+            .unwrap()
+            .iter()
+            .position(|child| child.id() == child_id);
+        if let Some(index) = find_id {
+            children.write().unwrap().remove(index);
+        }
     }
 }
 
 pub trait PaintCache {
     fn repaint_if_needed(&self);
+    fn set_need_repaint(&self, value: bool);
 }
 
 impl PaintCache for Entities {
@@ -117,17 +127,23 @@ impl PaintCache for Entities {
             Entities::Root { .. } => (),
             Entities::Layer {
                 model,
-                layer,
+                // layer,
                 needs_paint,
                 cache,
                 ..
             } => {
-                let new_layer = model.render_layer();
                 if needs_paint.swap(false, std::sync::atomic::Ordering::Relaxed) {
-                    cache.write().unwrap().picture = render_layer_cache(&new_layer);
+                    cache.write().unwrap().picture = model.draw_cache();
                 }
-                {
-                    *layer.write().unwrap() = new_layer;
+            }
+        }
+    }
+    fn set_need_repaint(&self, value: bool) {
+        match self {
+            Entities::Root { .. } => (),
+            Entities::Layer { needs_paint, .. } => {
+                if value {
+                    needs_paint.store(value, std::sync::atomic::Ordering::Relaxed);
                 }
             }
         }
@@ -139,18 +155,26 @@ impl Entities {
             children: Arc::new(RwLock::new(Vec::new())),
         }
     }
-    pub fn new_layer(model: ModelLayer) -> Entities {
+    pub fn new_layer() -> Entities {
         let cache = SkiaCache { picture: None };
         let children = Vec::new();
-        let layer = model.render_layer();
+        let model = ModelLayer::new();
 
         Entities::Layer {
-            model,
-            layer: Arc::new(RwLock::new(layer)),
+            model: Arc::new(model),
             cache: Arc::new(RwLock::new(cache)),
             needs_paint: Arc::new(AtomicBool::new(true)),
             parent: Arc::new(RwLock::new(None)),
             children: Arc::new(RwLock::new(children)),
+        }
+    }
+
+    pub fn change(&mut self, new_model: Arc<dyn Entity>) {
+        match self {
+            Entities::Root { .. } => (),
+            Entities::Layer { model, .. } => {
+                *model = new_model;
+            }
         }
     }
 }

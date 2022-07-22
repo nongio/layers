@@ -7,7 +7,7 @@ use std::sync::{Arc, RwLock};
 pub fn test_entites() {
     let mut state = State::new();
 
-    let model = ModelLayer::new();
+    let model = ModelProperties::new();
     let entity = Entities::new_layer(model.clone());
 
     state.add_entity(entity.clone());
@@ -38,13 +38,13 @@ pub fn test_entites() {
         _ => panic!("Wrong type"),
     }
 
-    let child_entity = Entities::new_layer(ModelLayer::new());
+    let child_entity = Entities::new_layer(ModelProperties::new());
 
     // entity.add_child(child_entity.clone());
 
     // state.add_entity(child_entity);
 
-    let mut e = state.model_storage.get(entity.id()).unwrap();
+    let mut e = state.entity_storage.get(entity.id()).unwrap();
 
     e.add_child(&mut child_entity.clone());
 

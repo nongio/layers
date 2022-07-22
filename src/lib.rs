@@ -1,5 +1,5 @@
 pub mod easing;
 pub mod ecs;
-pub mod layer;
+pub mod layers;
 pub mod rendering;
-pub mod skcache;
+pub mod types;

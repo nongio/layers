@@ -1,7 +1,8 @@
 use std::fmt::Debug;
 
-use crate::layer::{Color, PaintColor, Point};
+use crate::types::{BorderRadius, Color, PaintColor, Point, Point3d};
 
+#[allow(dead_code)]
 fn linspace(steps: u64, step: u64) -> f64 {
     step as f64 / (steps as f64 - 1.0)
 }
@@ -16,10 +17,10 @@ pub trait Interpolable:
 }
 
 // implementation of Add trait for Point
-impl std::ops::Add for crate::layer::Point {
+impl std::ops::Add for Point {
     type Output = Point;
 
-    fn add(self, other: crate::layer::Point) -> crate::layer::Point {
+    fn add(self, other: Point) -> Point {
         Point {
             x: self.x + other.x,
             y: self.y + other.y,
@@ -27,25 +28,60 @@ impl std::ops::Add for crate::layer::Point {
     }
 }
 // implementation of Mul<f64> trait for Point
-impl std::ops::Mul<f64> for crate::layer::Point {
-    type Output = crate::layer::Point;
+impl std::ops::Mul<f64> for Point {
+    type Output = Point;
 
-    fn mul(self, other: f64) -> crate::layer::Point {
-        crate::layer::Point {
+    fn mul(self, other: f64) -> Point {
+        Point {
             x: self.x * other,
             y: self.y * other,
         }
     }
 }
+
+// implementation of Add trait for Point
+impl std::ops::Add for Point3d {
+    type Output = Point3d;
+
+    fn add(self, other: Point3d) -> Point3d {
+        Point3d {
+            x: self.x + other.x,
+            y: self.y + other.y,
+            z: self.z + other.z,
+        }
+    }
+}
+
+// implementation of Mul<f64> trait for Point
+impl std::ops::Mul<f64> for Point3d {
+    type Output = Point3d;
+
+    fn mul(self, other: f64) -> Point3d {
+        Point3d {
+            x: self.x * other,
+            y: self.y * other,
+            z: self.z * other,
+        }
+    }
+}
+
 // implementation of PartialEq trait for Point
-impl std::cmp::PartialEq for crate::layer::Point {
-    fn eq(&self, other: &crate::layer::Point) -> bool {
+impl std::cmp::PartialEq for Point {
+    fn eq(&self, other: &Point) -> bool {
         self.x == other.x && self.y == other.y
     }
 }
+
+// implementation of PartialEq trait for Point
+impl std::cmp::PartialEq for Point3d {
+    fn eq(&self, other: &Point3d) -> bool {
+        self.x == other.x && self.y == other.y && self.z == other.z
+    }
+}
+
 // implementation of PartialEq trait for BorderRadius
-impl std::cmp::PartialEq for crate::layer::BorderRadius {
-    fn eq(&self, other: &crate::layer::BorderRadius) -> bool {
+impl std::cmp::PartialEq for BorderRadius {
+    fn eq(&self, other: &BorderRadius) -> bool {
         self.top_left == other.top_left
             && self.top_right == other.top_right
             && self.bottom_left == other.bottom_left
@@ -53,11 +89,11 @@ impl std::cmp::PartialEq for crate::layer::BorderRadius {
     }
 }
 // implementation of Add trait for BorderRadius
-impl std::ops::Add for crate::layer::BorderRadius {
-    type Output = crate::layer::BorderRadius;
+impl std::ops::Add for BorderRadius {
+    type Output = BorderRadius;
 
-    fn add(self, other: crate::layer::BorderRadius) -> crate::layer::BorderRadius {
-        crate::layer::BorderRadius {
+    fn add(self, other: BorderRadius) -> BorderRadius {
+        BorderRadius {
             top_left: self.top_left + other.top_left,
             top_right: self.top_right + other.top_right,
             bottom_left: self.bottom_left + other.bottom_left,
@@ -66,11 +102,11 @@ impl std::ops::Add for crate::layer::BorderRadius {
     }
 }
 // implementation of Mul<f64> trait for BorderRadius
-impl std::ops::Mul<f64> for crate::layer::BorderRadius {
-    type Output = crate::layer::BorderRadius;
+impl std::ops::Mul<f64> for BorderRadius {
+    type Output = BorderRadius;
 
-    fn mul(self, other: f64) -> crate::layer::BorderRadius {
-        crate::layer::BorderRadius {
+    fn mul(self, other: f64) -> BorderRadius {
+        BorderRadius {
             top_left: self.top_left * other,
             top_right: self.top_right * other,
             bottom_left: self.bottom_left * other,
@@ -79,11 +115,11 @@ impl std::ops::Mul<f64> for crate::layer::BorderRadius {
     }
 }
 // implementation of Mul<f64> trait for Color
-impl std::ops::Mul<f64> for crate::layer::Color {
-    type Output = crate::layer::Color;
+impl std::ops::Mul<f64> for Color {
+    type Output = Color;
 
-    fn mul(self, other: f64) -> crate::layer::Color {
-        crate::layer::Color {
+    fn mul(self, other: f64) -> Color {
+        Color {
             l: self.l * other,
             a: self.a * other,
             b: self.b * other,
@@ -92,11 +128,11 @@ impl std::ops::Mul<f64> for crate::layer::Color {
     }
 }
 // implementation of Add trait for Color
-impl std::ops::Add for crate::layer::Color {
-    type Output = crate::layer::Color;
+impl std::ops::Add for Color {
+    type Output = Color;
 
-    fn add(self, other: crate::layer::Color) -> crate::layer::Color {
-        crate::layer::Color {
+    fn add(self, other: Color) -> Color {
+        Color {
             l: self.l + other.l,
             a: self.a + other.a,
             b: self.b + other.b,
@@ -115,7 +151,7 @@ impl std::ops::Mul<f64> for PaintColor {
             },
             PaintColor::GradientLinear { colors, points } => PaintColor::GradientLinear {
                 colors: colors.iter().map(|c| *c * other).collect(),
-                points: points.clone(),
+                points,
             },
             PaintColor::GradientRadial {
                 center,
@@ -126,7 +162,7 @@ impl std::ops::Mul<f64> for PaintColor {
                 center,
                 radius,
                 colors: colors.iter().map(|c| *c * other).collect(),
-                points: points.clone(),
+                points,
             },
         }
     }
@@ -142,9 +178,31 @@ impl std::ops::Add for PaintColor {
                 PaintColor::Solid { color: other_color } => PaintColor::Solid {
                     color: color + other_color,
                 },
-                PaintColor::GradientLinear { colors, points } => PaintColor::GradientLinear {
-                    colors: colors.clone(),
-                    points: points.clone(),
+                PaintColor::GradientLinear { colors, points } => {
+                    PaintColor::GradientLinear { colors, points }
+                }
+                PaintColor::GradientRadial {
+                    center,
+                    radius,
+                    colors,
+                    points,
+                } => PaintColor::GradientRadial {
+                    center,
+                    radius,
+                    colors,
+                    points,
+                },
+            },
+            PaintColor::GradientLinear { .. } => match other {
+                PaintColor::Solid { color: other_color } => {
+                    PaintColor::Solid { color: other_color }
+                }
+                PaintColor::GradientLinear {
+                    colors: other_colors,
+                    points: other_points,
+                } => PaintColor::GradientLinear {
+                    colors: other_colors,
+                    points: other_points,
                 },
                 PaintColor::GradientRadial {
                     center,
@@ -154,39 +212,11 @@ impl std::ops::Add for PaintColor {
                 } => PaintColor::GradientRadial {
                     center,
                     radius,
-                    colors: colors.clone(),
-                    points: points.clone(),
-                },
-            },
-            PaintColor::GradientLinear { colors, points } => match other {
-                PaintColor::Solid { color: other_color } => {
-                    PaintColor::Solid { color: other_color }
-                }
-                PaintColor::GradientLinear {
-                    colors: other_colors,
-                    points: other_points,
-                } => PaintColor::GradientLinear {
-                    colors: other_colors.clone(),
-                    points: other_points.clone(),
-                },
-                PaintColor::GradientRadial {
-                    center,
-                    radius,
                     colors,
                     points,
-                } => PaintColor::GradientRadial {
-                    center,
-                    radius,
-                    colors: colors.clone(),
-                    points: points.clone(),
                 },
             },
-            PaintColor::GradientRadial {
-                center,
-                radius,
-                colors,
-                points,
-            } => match other {
+            PaintColor::GradientRadial { .. } => match other {
                 PaintColor::Solid { color: other_color } => {
                     PaintColor::Solid { color: other_color }
                 }
@@ -194,8 +224,8 @@ impl std::ops::Add for PaintColor {
                     colors: other_colors,
                     points: other_points,
                 } => PaintColor::GradientLinear {
-                    colors: other_colors.clone(),
-                    points: other_points.clone(),
+                    colors: other_colors,
+                    points: other_points,
                 },
                 PaintColor::GradientRadial {
                     center: other_center,
@@ -203,10 +233,10 @@ impl std::ops::Add for PaintColor {
                     colors: other_colors,
                     points: other_points,
                 } => PaintColor::GradientRadial {
-                    center: other_center.clone(),
+                    center: other_center,
                     radius: other_radius,
-                    colors: other_colors.clone(),
-                    points: other_points.clone(),
+                    colors: other_colors,
+                    points: other_points,
                 },
             },
         }
@@ -253,9 +283,11 @@ impl std::cmp::PartialEq for PaintColor {
 }
 
 impl Interpolable for f64 {}
-impl Interpolable for crate::layer::Point {}
-impl Interpolable for crate::layer::BorderRadius {}
-impl Interpolable for crate::layer::PaintColor {}
+impl Interpolable for crate::types::Point {}
+impl Interpolable for crate::types::Point3d {}
+impl Interpolable for crate::types::BorderRadius {}
+impl Interpolable for crate::types::PaintColor {}
+impl Interpolable for crate::types::Color {}
 
 pub fn interpolate<T: Interpolable>(p1: T, p2: T, f: f64) -> T {
     p1 * (1.0 - f) + p2 * f
@@ -293,13 +325,13 @@ fn find_root(p1: f64, p2: f64, target: f64) -> f64 {
         p0 = p_next;
     }
     // numerical difficulties
-    return f64::NAN;
+    f64::NAN
 }
 
 pub fn bezier_easing_function(x1: f64, y1: f64, x2: f64, y2: f64, f: f64) -> f64 {
-    assert!(x1 >= 0.0 && x1 <= 1.0);
-    assert!(x1 >= 0.0 && x1 <= 1.0);
-    assert!(f >= 0.0 && f <= 1.0);
+    assert!((0.0..=1.0).contains(&x1));
+    assert!((0.0..=1.0).contains(&x1));
+    assert!((0.0..=1.0).contains(&f));
     let curve_fraction = find_root(x1, x2, f);
     bezier_easing_1d(y1, y2, curve_fraction)
 }

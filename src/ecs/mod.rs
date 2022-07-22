@@ -4,12 +4,13 @@ pub mod storage;
 
 use indexmap::IndexMap;
 use rayon::iter::{IntoParallelRefIterator, IntoParallelRefMutIterator, ParallelIterator};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
 
 use crate::easing::{interpolate, Interpolable};
-use crate::layer::*;
+use crate::layers::layer::ModelLayer;
+use crate::layers::*;
 
 use self::animations::*;
 use self::entities::*;
@@ -17,32 +18,51 @@ use self::storage::*;
 
 pub struct Timestamp(f64);
 
-#[derive(Clone, Debug)]
-pub struct PropChange<T: Interpolable + Sync> {
-    change: ValueChange<T>,
+pub trait ExecutableChange {
+    fn execute(&self, progress: f64) -> bool;
+    // fn animation_id(&self) -> Option<usize>;
+    fn id(&self) -> usize;
+}
+pub trait AnimatedChange: ExecutableChange + ChangeWithTransition + Send + Sync {}
+
+#[derive(Clone)]
+
+pub struct Transaction {
+    pub change: Arc<dyn AnimatedChange>,
     animation_id: Option<usize>,
-    model_id: usize,
-    needs_repaint: bool,
-    target_needs_repaint: Arc<AtomicBool>,
+    entity: Entities,
 }
 
-#[derive(Clone, Debug)]
-pub enum PropChanges {
-    ChangePoint(PropChange<Point>),
-    ChangeF64(PropChange<f64>),
-    ChangeBorderRadius(PropChange<BorderRadius>),
-    ChangePaintColor(PropChange<PaintColor>),
+impl<T: Interpolable + Sync + Clone + Sized + 'static> ExecutableChange for ModelChange<T> {
+    fn execute(&self, progress: f64) -> bool {
+        let ModelChange {
+            value_change,
+            need_repaint,
+            ..
+        } = &self;
+        *value_change.target.value.write().unwrap() =
+            interpolate(value_change.from.clone(), value_change.to.clone(), progress);
+
+        *need_repaint
+    }
+
+    fn id(&self) -> usize {
+        let ModelChange { id: mid, .. } = self;
+        *mid
+    }
 }
+
+impl<T: Interpolable + Sync + Send + Clone + Sized + 'static> AnimatedChange for ModelChange<T> {}
 
 #[derive(Clone)]
 pub struct AnimationState(Animation, f64, bool);
 
 pub struct State {
-    pub model_storage: Storage<Entities>,
-    commands_storage: Storage<PropChanges>,
+    pub entities_storage: Storage<Entities>,
+    transactions_storage: Storage<Transaction>,
     animations_storage: Storage<AnimationState>,
 
-    pub root: Entities,
+    pub root: Arc<RwLock<Entities>>,
 
     timestamp: RwLock<Timestamp>,
     time: Instant,
@@ -51,160 +71,92 @@ pub struct State {
 
 impl State {
     pub fn new() -> Self {
-        let mut state = State {
-            model_storage: Storage::new(),
-            animations_storage: Storage::new(),
-            commands_storage: Storage::new(),
-            root: Entities::new_root(),
-            timestamp: RwLock::new(Timestamp(0.0)),
-            time: Instant::now(),
-            fps: 0.0,
-        };
-
-        state.model_storage.insert_with_id(Entities::new_root(), 0);
-        state
+        Self {
+            ..Default::default()
+        }
     }
     pub fn get_entities(&self) -> Arc<RwLock<IndexMap<usize, Entities>>> {
-        self.model_storage.map.clone()
+        self.entities_storage.data.clone()
     }
     pub fn add_entity(&mut self, entity: Entities) {
         match entity {
             Entities::Root { .. } => (),
             Entities::Layer { ref parent, .. } => {
                 if parent.read().unwrap().is_none() {
-                    self.root.add_child(&mut entity.clone());
+                    self.root.write().unwrap().add_child(&mut entity.clone());
                 }
-                self.model_storage
+                self.entities_storage
                     .insert_with_id(entity.clone(), entity.id());
             }
         }
     }
+    pub fn add_layer(&mut self, layer: ModelLayer) -> Entities {
+        let layer_entity = Entities::Layer {
+            model: Arc::new(layer),
+            cache: Arc::new(RwLock::new(SkiaCache { picture: None })),
+            needs_paint: Arc::new(AtomicBool::new(true)),
+            parent: Arc::new(RwLock::new(None)),
+            children: Arc::new(RwLock::new(vec![])),
+        };
+
+        self.add_entity(layer_entity.clone());
+        layer_entity
+    }
     pub fn add_animation(&mut self, animation: Animation) -> usize {
-        let id = self
-            .animations_storage
-            .insert(AnimationState(animation, 0.0, false));
-        id
+        self.animations_storage
+            .insert(AnimationState(animation, 0.0, false))
     }
     pub fn add_animation_from_transition(&mut self, transition: Transition<Easing>) -> usize {
         let start = self.timestamp.read().unwrap().0 + transition.delay;
-        let id = self.add_animation(Animation {
+
+        self.add_animation(Animation {
             start,
             duration: transition.duration,
             timing: transition.timing,
-        });
-        id
-    }
-
-    pub fn add_animation_for_change<T: Interpolable + Sync>(
-        &mut self,
-        change: ValueChange<T>,
-        default_animation: Option<usize>,
-    ) -> Option<usize> {
-        change
-            .transition
-            .map(|t| self.add_animation_from_transition(t))
-            .or(default_animation)
+        })
     }
 
     pub fn add_change_with_animation(
         &mut self,
-        change: ModelChanges,
+        change: Arc<dyn AnimatedChange>,
         animation_id: Option<usize>,
     ) -> usize {
-        let result: Option<(usize, PropChanges)> = match change {
-            ModelChanges::Point(mid, change, needs_repaint) => {
-                let id = change.target.id;
-                let aid = self.add_animation_for_change(change.clone(), animation_id);
-                let entity = self.model_storage.get(mid).unwrap().clone();
-                match entity {
-                    Entities::Layer { needs_paint: a, .. } => Some((
-                        id,
-                        PropChanges::ChangePoint(PropChange {
-                            change,
-                            animation_id: aid,
-                            model_id: mid,
-                            needs_repaint,
-                            target_needs_repaint: a.clone(),
-                        }),
-                    )),
-                    _ => None,
-                }
-            }
-            ModelChanges::F64(mid, change, needs_repaint) => {
-                let id = change.target.id;
-                let aid = self.add_animation_for_change(change.clone(), animation_id);
-                let entity = self.model_storage.get(mid).unwrap().clone();
-                match entity {
-                    Entities::Layer { needs_paint: a, .. } => Some((
-                        id,
-                        PropChanges::ChangeF64(PropChange {
-                            change,
-                            animation_id: aid,
-                            model_id: mid,
-                            needs_repaint,
-                            target_needs_repaint: a.clone(),
-                        }),
-                    )),
-                    _ => None,
-                }
-            }
-            ModelChanges::BorderCornerRadius(mid, change, needs_repaint) => {
-                let id = change.target.id;
-                let aid = self.add_animation_for_change(change.clone(), animation_id);
-                let entity = self.model_storage.get(mid).unwrap().clone();
-                match entity {
-                    Entities::Layer { needs_paint: a, .. } => Some((
-                        id,
-                        PropChanges::ChangeBorderRadius(PropChange {
-                            change,
-                            animation_id: aid,
-                            model_id: mid,
-                            needs_repaint,
-                            target_needs_repaint: a.clone(),
-                        }),
-                    )),
-                    _ => None,
-                }
-            }
-            ModelChanges::PaintColor(mid, change, needs_repaint) => {
-                let id = change.target.id;
-                let aid = self.add_animation_for_change(change.clone(), animation_id);
-                let entity = self.model_storage.get(mid).unwrap().clone();
-                match entity {
-                    Entities::Layer { needs_paint: a, .. } => Some((
-                        id,
-                        PropChanges::ChangePaintColor(PropChange {
-                            change,
-                            animation_id: aid,
-                            model_id: mid,
-                            needs_repaint,
-                            target_needs_repaint: a.clone(),
-                        }),
-                    )),
-                    _ => None,
-                }
-            }
-        };
-        match result {
-            Some((id, change)) => {
-                self.commands_storage.insert_with_id(change, id);
-                id
-            }
-            None => 0,
+        let mid = change.id();
+        let value_target_id = change.value_change_id();
+
+        let aid = change
+            .transition()
+            .map(|t| self.add_animation_from_transition(t))
+            .or(animation_id);
+
+        let entity = self.entities_storage.get(mid);
+        if let Some(entity) = entity {
+            let ec = Transaction {
+                change,
+                animation_id: aid,
+                entity,
+            };
+
+            self.transactions_storage
+                .insert_with_id(ec, value_target_id);
+            value_target_id
+        } else {
+            0
         }
     }
-    pub fn add_change(&mut self, change: ModelChanges) -> usize {
+
+    pub fn add_change(&mut self, change: Arc<dyn AnimatedChange>) -> usize {
         self.add_change_with_animation(change, None)
     }
     pub fn add_changes(
         &mut self,
-        changes: Vec<ModelChanges>,
+        changes: Vec<Arc<dyn AnimatedChange>>,
         transition: Option<Transition<Easing>>,
     ) -> Vec<usize> {
         let animation_id = transition.map(|t| self.add_animation_from_transition(t));
         let mut ids = Vec::new();
-        for vc in changes {
-            let id = self.add_change_with_animation(vc, animation_id);
+        for mc in changes {
+            let id = self.add_change_with_animation(mc, animation_id);
             ids.push(id);
         }
         ids
@@ -224,12 +176,13 @@ impl State {
 
         // Update animations
         {
-            let animations = self.animations_storage.map.clone();
+            let animations = self.animations_storage.data.clone();
 
             animations.write().unwrap().par_iter_mut().for_each_with(
                 done_animations.clone(),
                 |done, (id, AnimationState(animation, value, finished))| {
                     (*value, *finished) = animation.value(timestamp.0);
+
                     if *finished {
                         done.clone().write().unwrap().push(*id);
                     }
@@ -237,136 +190,56 @@ impl State {
             );
         }
         // Execute commands
-        let cmd = self.commands_storage.map.clone();
+        let cmd = self.transactions_storage.data.clone();
         let needs_redraw = cmd.read().unwrap().len() > 0;
 
-        cmd.write()
+        cmd.read()
             .unwrap()
             .par_iter()
-            .for_each_with(done_commands.clone(), |a, (id, command)| match command {
-                PropChanges::ChangePoint(command) => {
-                    let (f, done) = command
-                        .animation_id
-                        .map(|id| {
-                            self.animations_storage
-                                .map
-                                .read()
-                                .unwrap()
-                                .get(&id)
-                                .map(|AnimationState(_, value, done)| (*value, *done))
-                                .unwrap_or((1.0, true))
-                        })
-                        .unwrap_or((1.0, true));
+            .for_each_with(done_commands.clone(), |a, (_, command)| {
+                let (progress, done) = command
+                    .animation_id
+                    .map(|id| {
+                        self.animations_storage
+                            .data
+                            .read()
+                            .unwrap()
+                            .get(&id)
+                            .map(|AnimationState(_, value, done)| (*value, *done))
+                            .unwrap_or((1.0, true))
+                    })
+                    .unwrap_or((1.0, true));
 
-                    *command.change.target.value.write().unwrap() =
-                        interpolate(command.change.from, command.change.to, f);
-                    if command.needs_repaint {
-                        command.target_needs_repaint.store(true, Ordering::Relaxed);
-                    }
+                let repaint = command.change.execute(progress);
+                command.entity.set_need_repaint(repaint);
 
-                    if done {
-                        a.write().unwrap().push(*id);
-                    }
-                }
-                PropChanges::ChangeF64(command) => {
-                    let (f, done) = command
-                        .animation_id
-                        .map(|id| {
-                            self.animations_storage
-                                .map
-                                .read()
-                                .unwrap()
-                                .get(&id)
-                                .map(|AnimationState(_, value, done)| (*value, *done))
-                                .unwrap_or((1.0, true))
-                        })
-                        .unwrap_or((1.0, true));
-
-                    *command.change.target.value.write().unwrap() =
-                        interpolate(command.change.from, command.change.to, f);
-
-                    if command.needs_repaint {
-                        command.target_needs_repaint.store(true, Ordering::Relaxed);
-                    }
-
-                    if done {
-                        a.write().unwrap().push(*id);
-                    }
-                }
-                PropChanges::ChangeBorderRadius(command) => {
-                    let (f, done) = command
-                        .animation_id
-                        .map(|id| {
-                            self.animations_storage
-                                .map
-                                .read()
-                                .unwrap()
-                                .get(&id)
-                                .map(|AnimationState(_, value, done)| (*value, *done))
-                                .unwrap_or((1.0, true))
-                        })
-                        .unwrap_or((1.0, true));
-
-                    *command.change.target.value.write().unwrap() =
-                        interpolate(command.change.from, command.change.to, f);
-
-                    if command.needs_repaint {
-                        command.target_needs_repaint.store(true, Ordering::Relaxed);
-                    }
-
-                    if done {
-                        a.write().unwrap().push(*id);
-                    }
-                }
-                PropChanges::ChangePaintColor(command) => {
-                    let (f, done) = command
-                        .animation_id
-                        .map(|id| {
-                            self.animations_storage
-                                .map
-                                .read()
-                                .unwrap()
-                                .get(&id)
-                                .map(|AnimationState(_, value, done)| (*value, *done))
-                                .unwrap_or((1.0, true))
-                        })
-                        .unwrap_or((1.0, true));
-
-                    *command.change.target.value.write().unwrap() =
-                        interpolate(command.change.from.clone(), command.change.to.clone(), f);
-
-                    if command.needs_repaint {
-                        command.target_needs_repaint.store(true, Ordering::Relaxed);
-                    }
-
-                    if done {
-                        a.write().unwrap().push(*id);
-                    }
+                if done {
+                    a.write().unwrap().push(command.change.id());
                 }
             });
 
         // repaint
-        self.model_storage
-            .map
+        self.entities_storage
+            .data
             .clone()
-            .write()
+            .read()
             .unwrap()
-            .par_iter_mut()
+            .par_iter()
             .for_each(|(_, entity)| {
                 entity.repaint_if_needed();
             });
 
         // cleanup
-        for animation_id in done_animations.clone().read().unwrap().iter() {
+        for animation_id in done_animations.read().unwrap().iter() {
             self.animations_storage
-                .map
+                .data
                 .write()
                 .unwrap()
                 .remove(animation_id);
         }
 
-        for command_id in done_commands.clone().read().unwrap().iter() {
-            let cmd = self.commands_storage.map.clone();
+        for command_id in done_commands.read().unwrap().iter() {
+            let cmd = self.transactions_storage.data.clone();
             let mut indexmap = cmd.write().unwrap();
             indexmap.remove(command_id);
         }
@@ -374,27 +247,25 @@ impl State {
     }
 }
 
+impl Default for State {
+    fn default() -> Self {
+        let mut state = State {
+            entities_storage: Storage::new(),
+            animations_storage: Storage::new(),
+            transactions_storage: Storage::new(),
+            root: Arc::new(RwLock::new(Entities::new_root())),
+            timestamp: RwLock::new(Timestamp(0.0)),
+            time: Instant::now(),
+            fps: 0.0,
+        };
+
+        state
+            .entities_storage
+            .insert_with_id(Entities::new_root(), 0);
+        state
+    }
+}
+
 pub fn setup_ecs() -> State {
-    let mut state = State::new();
-
-    let model = ModelLayer::new();
-    let mut entity = Entities::new_layer(model.clone());
-    state.add_entity(entity.clone());
-    state.add_change(model.size_to(Point { x: 100.0, y: 100.0 }, None));
-    state.add_change(model.position_to(Point { x: 100.0, y: 100.0 }, None));
-    state.add_change(model.background_color_to(
-        PaintColor::Solid {
-            color: Color::new(1.0, 0.0, 0.0, 1.0),
-        },
-        None,
-    ));
-    let child_entity = Entities::new_layer(ModelLayer::new());
-
-    entity.add_child(&mut child_entity.clone());
-    state.add_entity(child_entity);
-
-    let entity = Entities::new_layer(ModelLayer::new());
-
-    state.add_entity(entity.clone());
-    return state;
+    State::new()
 }

@@ -78,12 +78,25 @@ impl fmt::Debug for Animation {
         write!(f, "({:?}->{:?})", self.start, self.duration)
     }
 }
+
+#[derive(Clone, Debug)]
+pub struct ValueChange<V: Interpolable + Sync> {
+    pub from: V,
+    pub to: V,
+    pub target: AnimatedValue<V>,
+    pub transition: Option<Transition<Easing>>,
+}
+
 static OBJECT_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
 #[derive(Debug, Clone)]
 pub struct AnimatedValue<V: Interpolable + Sync> {
     pub id: usize,
     pub value: Arc<RwLock<V>>,
+}
+
+pub trait AnimatedValueTrait<V: Interpolable + Sync> {
+    fn to(&self, to: V, transition: Option<Transition<Easing>>) -> ValueChange<V>;
 }
 
 impl<V: Interpolable + Sync + Clone> AnimatedValue<V> {
@@ -95,5 +108,25 @@ impl<V: Interpolable + Sync + Clone> AnimatedValue<V> {
 
     pub fn value(&self) -> V {
         self.value.read().unwrap().clone()
+    }
+
+    pub fn to(&self, to: V, transition: Option<Transition<Easing>>) -> ValueChange<V> {
+        ValueChange {
+            from: self.value(),
+            to,
+            target: self.clone(),
+            transition,
+        }
+    }
+}
+
+impl<V: Interpolable + Sync + Clone> AnimatedValueTrait<V> for AnimatedValue<V> {
+    fn to(&self, to: V, transition: Option<Transition<Easing>>) -> ValueChange<V> {
+        ValueChange {
+            from: self.value(),
+            to,
+            target: self.clone(),
+            transition,
+        }
     }
 }
