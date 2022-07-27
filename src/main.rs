@@ -1,3 +1,5 @@
+#![deny(warnings)]
+
 use std::{f64::consts::PI, sync::Arc};
 
 use gl::types::*;
@@ -14,24 +16,23 @@ use skia_safe::{
     ColorType, Data, Image, Matrix, Surface,
 };
 
-use crate::ecs::{
+use crate::engine::{
     animations::{Easing, Transition},
-    entities::HasHierarchy,
     AnimatedChange,
 };
-use crate::ecs::{setup_ecs, State};
+use crate::engine::{setup_ecs, Scene};
 use crate::types::{BorderRadius, BorderStyle, Color, PaintColor, Point};
 
 use crate::layers::layer::{BlendMode, Layer, ModelLayer};
 use crate::rendering::draw;
 
 mod easing;
-mod ecs;
+mod engine;
 mod layers;
 mod rendering;
 mod types;
 
-fn iconLayer(x: f32) -> Layer {
+fn make_icon_layer(x: f32) -> Layer {
     let mut matrix = Matrix::new_identity();
     matrix.set_translate_x(x);
     Layer {
@@ -84,9 +85,8 @@ fn main() {
         .with_pixel_format(24, 8)
         .with_gl_profile(GlProfile::Core);
 
-    #[cfg(not(feature = "wayland"))]
-    let cb = cb.with_double_buffer(Some(true));
-
+    // #[cfg(not(feature = "wayland"))]
+    // let cb = cb.with_double_buffer(Some(true));
     let windowed_context = cb.build_windowed(window, &events_loop).unwrap();
 
     let windowed_context = unsafe { windowed_context.make_current().unwrap() };
@@ -99,7 +99,7 @@ fn main() {
 
     gl::load_with(|s| windowed_context.get_proc_address(s));
 
-    let gr_context = skia_safe::gpu::DirectContext::new_gl(None, None).unwrap();
+    let mut gr_context = skia_safe::gpu::DirectContext::new_gl(None, None).unwrap();
 
     let fb_info = {
         let mut fboid: GLint = 0;
@@ -138,11 +138,11 @@ fn main() {
         .unwrap()
     }
 
-    let mut mouse_x = 0.0;
-    let mut mouse_y = 0.0;
+    let mut _mouse_x = 0.0;
+    let mut _mouse_y = 0.0;
 
-    let mut state: State = setup_ecs();
-    let surface = None; //create_surface(&windowed_context, &fb_info, &mut gr_context);
+    let mut state: Scene = setup_ecs();
+    let surface = create_surface(&windowed_context, &fb_info, &mut gr_context);
 
     struct Env {
         surface: Option<Surface>,
@@ -151,7 +151,7 @@ fn main() {
     }
 
     let mut env = Env {
-        surface,
+        surface: Some(surface),
         gr_context,
         windowed_context,
     };
@@ -159,14 +159,14 @@ fn main() {
     let mut background_layer = ModelLayer::new();
 
     // decode an image from a file path
-    let data = std::fs::read("/Users/rcanalicchio/Pictures/ventura-resize-1.jpg").unwrap();
+    let data = std::fs::read("/home/riccardo/Pictures/gradienta-LeG68PrXA6Y-unsplash.jpg").unwrap();
     unsafe {
         let data = Data::new_bytes(&data);
         let image = Image::from_encoded(data).unwrap();
         background_layer.content = Some(image);
     }
 
-    state.add_layer(background_layer.clone());
+    // state.add_layer(background_layer.clone());
 
     state.add_change(background_layer.size(
         Point {
@@ -199,43 +199,43 @@ fn main() {
         blend_mode: BlendMode::BackgroundBlur,
     });
 
-    let mut dock = state.add_layer(dock_layer.clone());
+    // let mut dock = state.add_layer(dock_layer.clone());
 
-    let icon_layer = ModelLayer::from(iconLayer(0.0));
+    let _icon_layer = ModelLayer::from(make_icon_layer(0.0));
 
-    let mut entity = state.add_layer(icon_layer.clone());
+    // let mut entity = state.add_layer(icon_layer.clone());
 
-    dock.add_child(&mut entity);
+    // dock.add_child(&mut entity);
 
-    let icon_layer2 = ModelLayer::from(Layer {
+    let _icon_layer2 = ModelLayer::from(Layer {
         background_color: PaintColor::Solid {
             color: Color::new(1.0, 1.0, 0.0, 1.0),
         },
-        ..iconLayer(90.0)
+        ..make_icon_layer(90.0)
     });
 
-    let mut entity2 = state.add_layer(icon_layer2.clone());
-    dock.add_child(&mut entity2);
+    // let mut entity2 = state.add_layer(icon_layer2.clone());
+    // dock.add_child(&mut entity2);
 
-    let icon_layer3 = ModelLayer::from(Layer {
+    let _icon_layer3 = ModelLayer::from(Layer {
         background_color: PaintColor::Solid {
             color: Color::new(0.0, 1.0, 0.0, 1.0),
         },
-        ..iconLayer(180.0)
+        ..make_icon_layer(180.0)
     });
 
-    let mut entity3 = state.add_layer(icon_layer3.clone());
-    dock.add_child(&mut entity3);
+    let mut _entity3 = state.add_model(Arc::new(_icon_layer3));
+    // dock.add_child(&mut entity3);
 
     let icon_layer4 = ModelLayer::from(Layer {
         background_color: PaintColor::Solid {
             color: Color::new(0.0, 1.0, 0.0, 1.0),
         },
-        ..iconLayer(270.0)
+        ..make_icon_layer(270.0)
     });
 
-    let mut entity4 = state.add_layer(icon_layer4.clone());
-    dock.add_child(&mut entity4);
+    let mut _entity4 = state.add_model(Arc::new(icon_layer4));
+    // dock.add_child(&mut entity4);
 
     let mut dock_shown = false;
     events_loop.run(move |event, _, control_flow| {
@@ -254,10 +254,10 @@ fn main() {
                     env.windowed_context.window().request_redraw();
                 }
                 WindowEvent::CursorMoved { position, .. } => {
-                    mouse_x = position.x;
-                    mouse_y = position.y;
+                    _mouse_x = position.x;
+                    _mouse_y = position.y;
 
-                    if mouse_y > 0.0 && mouse_y < 100.0 {
+                    if _mouse_y > 0.0 && _mouse_y < 100.0 {
                         if !dock_shown {
                             dock_shown = true;
                             state.add_change(dock_layer.position(
@@ -274,68 +274,68 @@ fn main() {
 
                         let offset_x = dock_layer.position.value().x;
 
-                        let (shift1, scale_1) = magnify_for_x(mouse_x - offset_x, 0.0);
-                        let (shift2, scale_2) = magnify_for_x(mouse_x - offset_x, 90.0);
-                        let (shift3, scale_3) = magnify_for_x(mouse_x - offset_x, 180.0);
-                        let (shift4, scale_4) = magnify_for_x(mouse_x - offset_x, 270.0);
+                        let (_shift1, _scale_1) = magnify_for_x(_mouse_x - offset_x, 0.0);
+                        let (_shift2, _scale_2) = magnify_for_x(_mouse_x - offset_x, 90.0);
+                        let (_shift3, _scale_3) = magnify_for_x(_mouse_x - offset_x, 180.0);
+                        let (_shift4, _scale_4) = magnify_for_x(_mouse_x - offset_x, 270.0);
 
                         let changes: Vec<Arc<dyn AnimatedChange>> = vec![
-                            icon_layer.scale(
-                                Point {
-                                    x: scale_1,
-                                    y: scale_1,
-                                },
-                                None,
-                            ),
-                            icon_layer.position(
-                                Point {
-                                    x: 0.0 - shift1 * 20.0,
-                                    y: icon_layer.position.value().y,
-                                },
-                                None,
-                            ),
-                            icon_layer2.scale(
-                                Point {
-                                    x: scale_2,
-                                    y: scale_2,
-                                },
-                                None,
-                            ),
-                            icon_layer2.position(
-                                Point {
-                                    x: 90.0 - shift2 * 20.0,
-                                    y: icon_layer2.position.value().y,
-                                },
-                                None,
-                            ),
-                            icon_layer3.scale(
-                                Point {
-                                    x: scale_3,
-                                    y: scale_3,
-                                },
-                                None,
-                            ),
-                            icon_layer3.position(
-                                Point {
-                                    x: 180.0 - shift3 * 20.0,
-                                    y: icon_layer3.position.value().y,
-                                },
-                                None,
-                            ),
-                            icon_layer4.scale(
-                                Point {
-                                    x: scale_4,
-                                    y: scale_4,
-                                },
-                                None,
-                            ),
-                            icon_layer4.position(
-                                Point {
-                                    x: 270.0 - shift4 * 20.0,
-                                    y: icon_layer4.position.value().y,
-                                },
-                                None,
-                            ),
+                            // icon_layer.scale(
+                            //     Point {
+                            //         x: scale_1,
+                            //         y: scale_1,
+                            //     },
+                            //     None,
+                            // ),
+                            // icon_layer.position(
+                            //     Point {
+                            //         x: 0.0 - shift1 * 20.0,
+                            //         y: icon_layer.position.value().y,
+                            //     },
+                            //     None,
+                            // ),
+                            // icon_layer2.scale(
+                            //     Point {
+                            //         x: scale_2,
+                            //         y: scale_2,
+                            //     },
+                            //     None,
+                            // ),
+                            // icon_layer2.position(
+                            //     Point {
+                            //         x: 90.0 - shift2 * 20.0,
+                            //         y: icon_layer2.position.value().y,
+                            //     },
+                            //     None,
+                            // ),
+                            // icon_layer3.scale(
+                            //     Point {
+                            //         x: scale_3,
+                            //         y: scale_3,
+                            //     },
+                            //     None,
+                            // ),
+                            // icon_layer3.position(
+                            //     Point {
+                            //         x: 180.0 - shift3 * 20.0,
+                            //         y: icon_layer3.position.value().y,
+                            //     },
+                            //     None,
+                            // ),
+                            // icon_layer4.scale(
+                            //     Point {
+                            //         x: scale_4,
+                            //         y: scale_4,
+                            //     },
+                            //     None,
+                            // ),
+                            // icon_layer4.position(
+                            //     Point {
+                            //         x: 270.0 - shift4 * 20.0,
+                            //         y: icon_layer4.position.value().y,
+                            //     },
+                            //     None,
+                            // ),
                         ];
                         state.add_changes(
                             changes,

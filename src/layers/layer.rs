@@ -3,18 +3,27 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
 use crate::easing::Interpolable;
-use crate::ecs::animations::*;
-use crate::ecs::entities::HasId;
+use crate::engine::animations::*;
+use crate::engine::entities::HasId;
 use crate::layers::*;
 use crate::rendering::{draw_layer, Drawable};
 use crate::types::*;
 
 #[derive(Clone, PartialEq, Debug)]
+#[repr(u32)]
 pub enum BlendMode {
     Normal,
     BackgroundBlur,
 }
+
 #[derive(Clone, Debug)]
+#[repr(transparent)]
+pub struct SkiaImage {
+    pub data: Box<Image>,
+}
+
+#[derive(Clone, Debug)]
+#[repr(C)]
 pub struct Layer {
     pub background_color: PaintColor,
     pub border_color: PaintColor,
@@ -27,7 +36,7 @@ pub struct Layer {
     pub shadow_color: Color,
     pub shadow_spread: f64,
     pub matrix: Matrix,
-    pub content: Option<Image>,
+    pub content: Option<SkiaImage>,
     pub blend_mode: BlendMode,
 }
 
@@ -81,7 +90,7 @@ impl ModelLayer {
 
     change_attr!(position, Point);
     change_attr!(size, Point);
-    change_attr!(scale, Point);
+    // change_attr!(scale, Point);
 }
 
 impl Default for ModelLayer {
@@ -188,7 +197,9 @@ impl From<ModelLayer> for Layer {
         let shadow_spread = model.shadow_spread.value();
         let shadow_color = model.shadow_color.value();
         let matrix = model.transform();
-        let content = model.content;
+        let content = model.content.map(|image| SkiaImage {
+            data: Box::new(image),
+        });
 
         Self {
             size,
@@ -221,7 +232,10 @@ impl From<Layer> for ModelLayer {
         let shadow_spread = layer.shadow_spread;
         let shadow_color = layer.shadow_color;
         let matrix = M44::new_identity();
-        let content = layer.content;
+        let content = layer.content.map(|image| {
+            let i = image.data;
+            *i
+        });
         let blend_mode = layer.blend_mode;
 
         let (x, y) = (

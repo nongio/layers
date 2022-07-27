@@ -1,5 +1,5 @@
-use crate::ecs::entities::HasHierarchy;
-use crate::ecs::{entities::Entities, State};
+use crate::engine::entities::HasHierarchy;
+use crate::engine::{entities::Entities, Scene};
 use crate::layers::layer::{BlendMode, Layer};
 use crate::types::{PaintColor, Rectangle};
 
@@ -7,11 +7,10 @@ use skia_safe::canvas::SaveLayerRec;
 
 use skia_safe::image_filters::{blur, CropRect};
 
+use skia_safe::PaintStyle;
 use skia_safe::{
-    BlurStyle, Canvas, ClipOp, Color4f, Font, MaskFilter, Matrix, Paint, Point, RRect, Rect,
-    TileMode,
+    BlurStyle, Canvas, ClipOp, Color4f, MaskFilter, Matrix, Paint, Point, RRect, Rect, TileMode,
 };
-use skia_safe::{FontStyle, PaintStyle, Typeface};
 use skia_safe::{Picture, PictureRecorder};
 
 /// A trait for objects that can be drawn to a canvas.
@@ -170,7 +169,8 @@ pub fn draw_layer(canvas: &mut Canvas, layer: &Layer) {
         let mut paint = Paint::new(Color4f::new(1.0, 1.0, 1.0, 1.0), None);
         paint.set_style(PaintStyle::Fill);
         paint.set_anti_alias(true);
-        canvas.draw_image(content, (0, 0), Some(&paint));
+        let image = &*content.data;
+        canvas.draw_image(image, (0, 0), Some(&paint));
     }
 }
 
@@ -197,16 +197,8 @@ pub fn draw_entity(canvas: &mut Canvas, entity: &Entities) {
     canvas.restore();
 }
 
-pub fn draw(canvas: &mut Canvas, state: &State) {
+pub fn draw(canvas: &mut Canvas, state: &Scene) {
     canvas.clear(Color4f::new(1.0, 1.0, 1.0, 1.0));
 
-    let paint = Paint::new(Color4f::new(0.0, 0.0, 0.6, 1.0), None);
-
-    let typeface = Typeface::new("HelveticaNeue", FontStyle::normal()).unwrap();
-    let font = Font::new(typeface, 72.0 * 2.0);
-    let fps = format!("{}", state.fps as u32);
-
-    canvas.draw_str(fps, Point::new(20.0, 70.0 * 2.0), &font, &paint);
-
-    draw_entity(canvas, &state.root.read().unwrap());
+    draw_entity(canvas, &state.root().read().unwrap());
 }

@@ -14,9 +14,9 @@ pub struct SkiaCache {
     pub picture: Option<Picture>,
 }
 
-pub trait Entity: Drawable + DrawCache + HasId + Send + Sync + Debug {}
+pub trait Renderable: Drawable + DrawCache + HasId + Send + Sync + Debug {}
 
-impl Entity for ModelLayer {}
+impl Renderable for ModelLayer {}
 
 #[derive(Clone, Debug)]
 pub enum Entities {
@@ -24,7 +24,7 @@ pub enum Entities {
         children: Arc<RwLock<Vec<Entities>>>,
     },
     Layer {
-        model: Arc<dyn Entity>,
+        model: Arc<dyn Renderable>,
         cache: Arc<RwLock<SkiaCache>>,
         needs_paint: Arc<AtomicBool>,
         parent: Arc<RwLock<Option<Entities>>>,
@@ -155,6 +155,7 @@ impl Entities {
             children: Arc::new(RwLock::new(Vec::new())),
         }
     }
+    #[allow(dead_code)]
     pub fn new_layer() -> Entities {
         let cache = SkiaCache { picture: None };
         let children = Vec::new();
@@ -168,8 +169,8 @@ impl Entities {
             children: Arc::new(RwLock::new(children)),
         }
     }
-
-    pub fn change(&mut self, new_model: Arc<dyn Entity>) {
+    #[allow(dead_code)]
+    pub fn change(&mut self, new_model: Arc<dyn Renderable>) {
         match self {
             Entities::Root { .. } => (),
             Entities::Layer { model, .. } => {

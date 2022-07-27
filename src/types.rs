@@ -1,6 +1,7 @@
 use skia_safe::Color4f;
 
 #[derive(Clone, Copy, Debug)]
+#[repr(C)]
 pub struct Color {
     pub l: f64,
     pub a: f64,
@@ -9,18 +10,21 @@ pub struct Color {
 }
 
 #[derive(Clone, Copy, Debug)]
+#[repr(C)]
 pub struct Point {
     pub x: f64,
     pub y: f64,
 }
 
 #[derive(Clone, Copy, Debug)]
+#[repr(C)]
 pub struct Point3d {
     pub x: f64,
     pub y: f64,
     pub z: f64,
 }
 #[derive(Clone, Copy, Debug)]
+#[repr(C)]
 pub struct Rectangle {
     pub x: f64,
     pub y: f64,
@@ -29,23 +33,30 @@ pub struct Rectangle {
 }
 
 #[derive(Clone, Debug)]
-pub enum PaintColor {
-    Solid {
-        color: Color,
-    },
-    GradientLinear {
-        colors: Vec<Color>,
-        points: Vec<Point>,
-    },
-    GradientRadial {
-        center: Point,
-        radius: f64,
-        colors: Vec<Color>,
-        points: Vec<Point>,
-    },
+pub struct GradientLinear {
+    pub colors: Vec<Color>,
+    pub points: Vec<f64>,
+}
+#[derive(Clone, Debug)]
+pub struct GradientRadial {
+    pub center: Point,
+    pub radius: f64,
+    pub colors: Vec<Color>,
+    pub points: Vec<Point>,
 }
 
+#[allow(dead_code)]
+#[derive(Clone, Debug)]
+#[repr(C)]
+pub enum PaintColor {
+    Solid { color: Color },
+    GradientLinear(Box<GradientLinear>),
+    GradientRadial(Box<GradientRadial>),
+}
+
+#[allow(dead_code)]
 #[derive(Clone, Copy, Debug)]
+#[repr(u32)]
 pub enum BorderStyle {
     Solid,
     Dotted,
@@ -53,6 +64,7 @@ pub enum BorderStyle {
 }
 
 #[derive(Clone, Copy, Debug)]
+#[repr(C)]
 pub struct BorderRadius {
     pub top_left: f64,
     pub top_right: f64,

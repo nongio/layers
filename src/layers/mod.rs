@@ -1,6 +1,6 @@
 use crate::{
     easing::Interpolable,
-    ecs::animations::{Easing, Transition, ValueChange},
+    engine::animations::{Easing, Transition, ValueChange},
 };
 
 pub mod layer;

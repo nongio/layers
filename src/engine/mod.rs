@@ -9,7 +9,6 @@ use std::sync::{Arc, RwLock};
 use std::time::Instant;
 
 use crate::easing::{interpolate, Interpolable};
-use crate::layers::layer::ModelLayer;
 use crate::layers::*;
 
 use self::animations::*;
@@ -57,26 +56,30 @@ impl<T: Interpolable + Sync + Send + Clone + Sized + 'static> AnimatedChange for
 #[derive(Clone)]
 pub struct AnimationState(Animation, f64, bool);
 
-pub struct State {
-    pub entities_storage: Storage<Entities>,
+pub struct Scene {
+    entities_storage: Storage<Entities>,
     transactions_storage: Storage<Transaction>,
     animations_storage: Storage<AnimationState>,
 
-    pub root: Arc<RwLock<Entities>>,
+    root: Arc<RwLock<Entities>>,
 
     timestamp: RwLock<Timestamp>,
     time: Instant,
-    pub fps: f64,
+    fps: f64,
 }
 
-impl State {
+impl Scene {
     pub fn new() -> Self {
         Self {
             ..Default::default()
         }
     }
+    pub fn root(&self) -> Arc<RwLock<Entities>> {
+        self.root.clone()
+    }
+    #[allow(dead_code)]
     pub fn get_entities(&self) -> Arc<RwLock<IndexMap<usize, Entities>>> {
-        self.entities_storage.data.clone()
+        self.entities_storage.data()
     }
     pub fn add_entity(&mut self, entity: Entities) {
         match entity {
@@ -90,9 +93,9 @@ impl State {
             }
         }
     }
-    pub fn add_layer(&mut self, layer: ModelLayer) -> Entities {
+    pub fn add_model(&mut self, renderable: Arc<dyn Renderable>) -> Entities {
         let layer_entity = Entities::Layer {
-            model: Arc::new(layer),
+            model: renderable,
             cache: Arc::new(RwLock::new(SkiaCache { picture: None })),
             needs_paint: Arc::new(AtomicBool::new(true)),
             parent: Arc::new(RwLock::new(None)),
@@ -129,7 +132,7 @@ impl State {
             .map(|t| self.add_animation_from_transition(t))
             .or(animation_id);
 
-        let entity = self.entities_storage.get(mid);
+        let entity = self.entities_storage.get(&mid);
         if let Some(entity) = entity {
             let ec = Transaction {
                 change,
@@ -176,7 +179,7 @@ impl State {
 
         // Update animations
         {
-            let animations = self.animations_storage.data.clone();
+            let animations = self.animations_storage.data();
 
             animations.write().unwrap().par_iter_mut().for_each_with(
                 done_animations.clone(),
@@ -190,7 +193,7 @@ impl State {
             );
         }
         // Execute commands
-        let cmd = self.transactions_storage.data.clone();
+        let cmd = self.transactions_storage.data();
         let needs_redraw = cmd.read().unwrap().len() > 0;
 
         cmd.read()
@@ -201,11 +204,8 @@ impl State {
                     .animation_id
                     .map(|id| {
                         self.animations_storage
-                            .data
-                            .read()
-                            .unwrap()
                             .get(&id)
-                            .map(|AnimationState(_, value, done)| (*value, *done))
+                            .map(|AnimationState(_, value, done)| (value, done))
                             .unwrap_or((1.0, true))
                     })
                     .unwrap_or((1.0, true));
@@ -220,8 +220,7 @@ impl State {
 
         // repaint
         self.entities_storage
-            .data
-            .clone()
+            .data()
             .read()
             .unwrap()
             .par_iter()
@@ -232,24 +231,22 @@ impl State {
         // cleanup
         for animation_id in done_animations.read().unwrap().iter() {
             self.animations_storage
-                .data
+                .data()
                 .write()
                 .unwrap()
                 .remove(animation_id);
         }
 
         for command_id in done_commands.read().unwrap().iter() {
-            let cmd = self.transactions_storage.data.clone();
-            let mut indexmap = cmd.write().unwrap();
-            indexmap.remove(command_id);
+            self.transactions_storage.remove_at(command_id)
         }
         needs_redraw
     }
 }
 
-impl Default for State {
+impl Default for Scene {
     fn default() -> Self {
-        let mut state = State {
+        let mut state = Scene {
             entities_storage: Storage::new(),
             animations_storage: Storage::new(),
             transactions_storage: Storage::new(),
@@ -266,6 +263,6 @@ impl Default for State {
     }
 }
 
-pub fn setup_ecs() -> State {
-    State::new()
+pub fn setup_ecs() -> Scene {
+    Scene::new()
 }
