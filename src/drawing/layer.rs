@@ -1,49 +1,13 @@
-use crate::engine::entities::HasHierarchy;
-use crate::engine::{entities::Entities, Scene};
-use crate::layers::layer::{BlendMode, Layer};
-use crate::types::{PaintColor, Rectangle};
-
 use skia_safe::canvas::SaveLayerRec;
+use skia_safe::{Color4f, Paint};
 
 use skia_safe::image_filters::{blur, CropRect};
-
 use skia_safe::PaintStyle;
-use skia_safe::{
-    BlurStyle, Canvas, ClipOp, Color4f, MaskFilter, Matrix, Paint, Point, RRect, Rect, TileMode,
-};
-use skia_safe::{Picture, PictureRecorder};
+use skia_safe::{BlurStyle, Canvas, ClipOp, MaskFilter, Point, RRect, Rect, TileMode};
 
-/// A trait for objects that can be drawn to a canvas.
-pub trait Drawable {
-    /// Draws the entity on the canvas.
-    fn draw(&self, canvas: &mut Canvas);
-    /// Returns the area that this drawable occupies.
-    fn bounds(&self) -> Rectangle;
-    fn transform(&self) -> Matrix;
-}
+use crate::layers::layer::{BlendMode, Layer};
+use crate::types::PaintColor;
 
-/// A trait for objects that can be drawn to a PictureRecorder.
-pub trait DrawCache {
-    fn draw_cache(&self) -> Option<Picture>;
-}
-
-impl<T> DrawCache for T
-where
-    T: Drawable,
-{
-    fn draw_cache(&self) -> Option<Picture> {
-        let mut recorder = PictureRecorder::new();
-
-        let r = self.bounds();
-
-        let canvas = recorder.begin_recording(
-            Rect::from_xywh(0.0, 0.0, r.width as f32, r.height as f32),
-            None,
-        );
-        self.draw(canvas);
-        recorder.finish_recording_as_picture(None)
-    }
-}
 // impl Drawable for Layer {
 pub fn draw_layer(canvas: &mut Canvas, layer: &Layer) {
     let rect = Rect::from_point_and_size((0.0, 0.0), (layer.size.x as f32, layer.size.y as f32));
@@ -172,33 +136,4 @@ pub fn draw_layer(canvas: &mut Canvas, layer: &Layer) {
         let image = &*content.data;
         canvas.draw_image(image, (0, 0), Some(&paint));
     }
-}
-
-pub fn draw_single_entity(canvas: &mut Canvas, entity: &Entities) {
-    match entity {
-        Entities::Layer { model, cache, .. } => {
-            if let Some(picture) = cache.read().unwrap().picture.clone() {
-                let transform = model.transform();
-                canvas.concat(&transform);
-                canvas.draw_picture(picture, None, None);
-            } else {
-                model.draw(canvas);
-            }
-        }
-        Entities::Root { .. } => (),
-    }
-}
-pub fn draw_entity(canvas: &mut Canvas, entity: &Entities) {
-    canvas.save();
-    draw_single_entity(canvas, entity);
-    for child in entity.children().iter() {
-        draw_entity(canvas, child);
-    }
-    canvas.restore();
-}
-
-pub fn draw(canvas: &mut Canvas, state: &Scene) {
-    canvas.clear(Color4f::new(1.0, 1.0, 1.0, 1.0));
-
-    draw_entity(canvas, &state.root().read().unwrap());
 }

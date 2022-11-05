@@ -1,27 +1,41 @@
 use crate::{
-    easing::Interpolable,
-    engine::animations::{Easing, Transition, ValueChange},
+    easing::{interpolate, Interpolable},
+    engine::{
+        animations::{Easing, Transition},
+        command::ModelChange,
+        node::NodeFlags,
+        Command, CommandWithTransition, WithTransition,
+    },
 };
+
+use self::layer::ModelLayer;
 
 pub mod layer;
 pub mod text;
 
-#[derive(Clone, Debug)]
-pub struct ModelChange<T: Interpolable + Sync> {
-    pub id: usize,
-    pub value_change: ValueChange<T>,
-    pub need_repaint: bool,
+pub enum Nodes {
+    Layer(ModelLayer),
 }
 
-pub trait ChangeWithTransition {
-    fn transition(&self) -> Option<Transition<Easing>>;
-    fn value_change_id(&self) -> usize;
-}
-impl<T: Interpolable + Sync> ChangeWithTransition for ModelChange<T> {
+impl<T: Interpolable + Sync> WithTransition for ModelChange<T> {
     fn transition(&self) -> Option<Transition<Easing>> {
         self.value_change.transition
     }
-    fn value_change_id(&self) -> usize {
-        self.value_change.target.id
+}
+
+impl<T: Interpolable + Sync + Clone + Sized + 'static> Command for ModelChange<T> {
+    fn execute(&self, progress: f64) -> NodeFlags {
+        let ModelChange {
+            value_change, flag, ..
+        } = &self;
+        *value_change.target.value.write().unwrap() =
+            interpolate(value_change.from.clone(), value_change.to.clone(), progress);
+
+        *flag
     }
+}
+
+impl<T: Interpolable + Sync + Send + Clone + Sized + 'static> CommandWithTransition
+    for ModelChange<T>
+{
 }

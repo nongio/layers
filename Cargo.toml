@@ -5,8 +5,8 @@ edition = "2021"
 build = "build.rs"
 
 
-[lib]
-name = "hello"
+# [lib]
+# name = "hello"
 # crate-type = ["cdylib"]      # Creates dynamic lib
 # crate-type = ["staticlib"] # Creates static lib
 
@@ -27,10 +27,12 @@ skia-bindings = { version = "0", features = ["embed-freetype"] }
 winit = "0.26.1"
 foreign-types-shared = "0.1.1"
 indexmap = { version = "1.9.1", features = ["rayon"] }
+indextree = { version = "4.5.0", features = ["par_iter"] }
 rand = "0.8.5"
 rayon = "1.5.3"
 libm = "0.2.2"
 enum_dispatch = "0"
+bitflags = "1.3"
 
 [dev-dependencies]
 criterion = "0.3"

@@ -1,6 +1,4 @@
-#![deny(warnings)]
-
-use std::{f64::consts::PI, sync::Arc};
+// #[allow(unreachable_code)]
 
 use gl::types::*;
 use gl_rs as gl;
@@ -13,57 +11,29 @@ use glutin::{
 
 use skia_safe::{
     gpu::{gl::FramebufferInfo, BackendRenderTarget, SurfaceOrigin},
-    ColorType, Data, Image, Matrix, Surface,
+    Canvas, Color4f, ColorType, Data, Image, Matrix, Paint, Rect, Surface,
 };
 
-use crate::engine::{
-    animations::{Easing, Transition},
-    AnimatedChange,
+use hello::{
+    drawing::scene::draw_scene,
+    engine::{
+        animations::{Easing, Transition},
+        scene::Scene,
+    },
+    layers::layer::ModelLayer,
+    types::{Color, PaintColor, Point},
 };
-use crate::engine::{setup_ecs, Scene};
-use crate::types::{BorderRadius, BorderStyle, Color, PaintColor, Point};
 
-use crate::layers::layer::{BlendMode, Layer, ModelLayer};
-use crate::rendering::draw;
+fn draw(canvas: &mut Canvas, _scene: &Scene) {
+    let mut paint = Paint::new(Color4f::new(0.6, 0.6, 0.6, 1.0), None);
+    paint.set_anti_alias(true);
+    paint.set_style(skia_bindings::SkPaint_Style::Fill);
+    let w = canvas.image_info().width() as f32;
+    let h = canvas.image_info().height() as f32;
+    canvas.draw_rect(Rect::from_xywh(0.0, 0.0, w, h), &paint);
 
-mod easing;
-mod engine;
-mod layers;
-mod rendering;
-mod types;
-
-fn make_icon_layer(x: f32) -> Layer {
-    let mut matrix = Matrix::new_identity();
-    matrix.set_translate_x(x);
-    Layer {
-        content: None,
-        background_color: PaintColor::Solid {
-            color: Color::new(1.0, 0.0, 0.0, 1.0),
-        },
-        border_color: PaintColor::Solid {
-            color: Color::new(0.0, 0.0, 0.0, 1.0),
-        },
-        border_width: 0.0,
-        size: Point { x: 80.0, y: 80.0 },
-        border_style: BorderStyle::Solid,
-        border_corner_radius: BorderRadius::new_single(15.0),
-        shadow_offset: Point { x: 0.0, y: 0.0 },
-        shadow_color: Color::new(0.0, 0.0, 0.0, 0.3),
-        shadow_radius: 10.0,
-        shadow_spread: 0.0,
-        matrix,
-        blend_mode: BlendMode::Normal,
-    }
+    draw_scene(canvas, _scene);
 }
-
-fn magnify_for_x(x: f64, center: f64) -> (f64, f64) {
-    let mut xx = ((x - center) / 200.0) / 2.0;
-    xx = xx.max(-1.0);
-    xx = xx.min(1.0);
-
-    (xx, 1.0 + (PI * xx * 1.0).cos() / 4.0)
-}
-#[allow(unreachable_code)]
 fn main() {
     type WindowedContext = glutin::ContextWrapper<glutin::PossiblyCurrent, glutin::window::Window>;
 
@@ -141,7 +111,6 @@ fn main() {
     let mut _mouse_x = 0.0;
     let mut _mouse_y = 0.0;
 
-    let mut state: Scene = setup_ecs();
     let surface = create_surface(&windowed_context, &fb_info, &mut gr_context);
 
     struct Env {
@@ -155,89 +124,20 @@ fn main() {
         gr_context,
         windowed_context,
     };
+    let scene = Scene::create();
+    let model = ModelLayer::create();
+    let _id = scene.add_renderable(model.clone());
 
-    let mut background_layer = ModelLayer::new();
+    model.size(Point { x: 100.0, y: 100.0 }, None);
+    model.position(Point { x: 100.0, y: 100.0 }, None);
 
-    // decode an image from a file path
-    let data = std::fs::read("/home/riccardo/Pictures/gradienta-LeG68PrXA6Y-unsplash.jpg").unwrap();
-    unsafe {
-        let data = Data::new_bytes(&data);
-        let image = Image::from_encoded(data).unwrap();
-        background_layer.content = Some(image);
-    }
-
-    // state.add_layer(background_layer.clone());
-
-    state.add_change(background_layer.size(
-        Point {
-            x: 2000.0,
-            y: 2000.0,
+    model.background_color(
+        PaintColor::Solid {
+            color: Color::new(0.0, 0.8, 0.0, 1.0),
         },
         None,
-    ));
+    );
 
-    let mut m = Matrix::new_identity();
-    m.set_translate_y(-100.0);
-    m.set_translate_x(200.0);
-    let dock_layer = ModelLayer::from(Layer {
-        content: None,
-        background_color: PaintColor::Solid {
-            color: Color::new(1.0, 1.0, 1.0, 0.5),
-        },
-        border_color: PaintColor::Solid {
-            color: Color::new(1.0, 1.0, 1.0, 0.3),
-        },
-        border_width: 1.0,
-        size: Point { x: 1000.0, y: 90.0 },
-        border_style: BorderStyle::Solid,
-        border_corner_radius: BorderRadius::new_single(25.0),
-        shadow_offset: Point { x: 00.0, y: 0.0 },
-        shadow_color: Color::new(0.0, 0.0, 0.0, 0.3),
-        shadow_radius: 20.0,
-        shadow_spread: 0.0,
-        matrix: m,
-        blend_mode: BlendMode::BackgroundBlur,
-    });
-
-    // let mut dock = state.add_layer(dock_layer.clone());
-
-    let _icon_layer = ModelLayer::from(make_icon_layer(0.0));
-
-    // let mut entity = state.add_layer(icon_layer.clone());
-
-    // dock.add_child(&mut entity);
-
-    let _icon_layer2 = ModelLayer::from(Layer {
-        background_color: PaintColor::Solid {
-            color: Color::new(1.0, 1.0, 0.0, 1.0),
-        },
-        ..make_icon_layer(90.0)
-    });
-
-    // let mut entity2 = state.add_layer(icon_layer2.clone());
-    // dock.add_child(&mut entity2);
-
-    let _icon_layer3 = ModelLayer::from(Layer {
-        background_color: PaintColor::Solid {
-            color: Color::new(0.0, 1.0, 0.0, 1.0),
-        },
-        ..make_icon_layer(180.0)
-    });
-
-    let mut _entity3 = state.add_model(Arc::new(_icon_layer3));
-    // dock.add_child(&mut entity3);
-
-    let icon_layer4 = ModelLayer::from(Layer {
-        background_color: PaintColor::Solid {
-            color: Color::new(0.0, 1.0, 0.0, 1.0),
-        },
-        ..make_icon_layer(270.0)
-    });
-
-    let mut _entity4 = state.add_model(Arc::new(icon_layer4));
-    // dock.add_child(&mut entity4);
-
-    let mut dock_shown = false;
     events_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Wait;
 
@@ -256,170 +156,36 @@ fn main() {
                 WindowEvent::CursorMoved { position, .. } => {
                     _mouse_x = position.x;
                     _mouse_y = position.y;
-
-                    if _mouse_y > 0.0 && _mouse_y < 100.0 {
-                        if !dock_shown {
-                            dock_shown = true;
-                            state.add_change(dock_layer.position(
-                                Point { x: 200.0, y: 0.0 },
-                                Some(Transition {
-                                    duration: 2.0,
-                                    delay: 0.0,
-                                    timing: Easing {
-                                        ..Default::default()
-                                    },
-                                }),
-                            ));
-                        }
-
-                        let offset_x = dock_layer.position.value().x;
-
-                        let (_shift1, _scale_1) = magnify_for_x(_mouse_x - offset_x, 0.0);
-                        let (_shift2, _scale_2) = magnify_for_x(_mouse_x - offset_x, 90.0);
-                        let (_shift3, _scale_3) = magnify_for_x(_mouse_x - offset_x, 180.0);
-                        let (_shift4, _scale_4) = magnify_for_x(_mouse_x - offset_x, 270.0);
-
-                        let changes: Vec<Arc<dyn AnimatedChange>> = vec![
-                            // icon_layer.scale(
-                            //     Point {
-                            //         x: scale_1,
-                            //         y: scale_1,
-                            //     },
-                            //     None,
-                            // ),
-                            // icon_layer.position(
-                            //     Point {
-                            //         x: 0.0 - shift1 * 20.0,
-                            //         y: icon_layer.position.value().y,
-                            //     },
-                            //     None,
-                            // ),
-                            // icon_layer2.scale(
-                            //     Point {
-                            //         x: scale_2,
-                            //         y: scale_2,
-                            //     },
-                            //     None,
-                            // ),
-                            // icon_layer2.position(
-                            //     Point {
-                            //         x: 90.0 - shift2 * 20.0,
-                            //         y: icon_layer2.position.value().y,
-                            //     },
-                            //     None,
-                            // ),
-                            // icon_layer3.scale(
-                            //     Point {
-                            //         x: scale_3,
-                            //         y: scale_3,
-                            //     },
-                            //     None,
-                            // ),
-                            // icon_layer3.position(
-                            //     Point {
-                            //         x: 180.0 - shift3 * 20.0,
-                            //         y: icon_layer3.position.value().y,
-                            //     },
-                            //     None,
-                            // ),
-                            // icon_layer4.scale(
-                            //     Point {
-                            //         x: scale_4,
-                            //         y: scale_4,
-                            //     },
-                            //     None,
-                            // ),
-                            // icon_layer4.position(
-                            //     Point {
-                            //         x: 270.0 - shift4 * 20.0,
-                            //         y: icon_layer4.position.value().y,
-                            //     },
-                            //     None,
-                            // ),
-                        ];
-                        state.add_changes(
-                            changes,
-                            Some(Transition {
-                                duration: 0.5,
-                                delay: 0.0,
-                                timing: Easing {
-                                    ..Default::default()
-                                },
-                            }),
-                        );
-                    } else if dock_shown {
-                        dock_shown = false;
-                        state.add_change(dock_layer.position(
-                            Point {
-                                x: 200.0,
-                                y: -100.0,
-                            },
-                            Some(Transition {
-                                duration: 0.5,
-                                delay: 0.0,
-                                timing: Easing {
-                                    ..Default::default()
-                                },
-                            }),
-                        ));
-                    }
                 }
                 WindowEvent::MouseInput {
                     state: button_state,
                     ..
                 } => {
                     if button_state == winit::event::ElementState::Released {
-                        // println!("{:?}", mouse_x / 5.0);
-                        // state.add_change(dock_layer.change(dock_layer.shadow_radius.to(
-                        //     mouse_x / 5.0,
-                        //     Some(Transition {
-                        //         duration: 2.0,
-                        //         delay: 0.0,
-                        //         timing: Easing {
-                        //             ..Default::default()
-                        //         },
-                        //     }),
-                        // )));
-                        // state.add_change(dock_layer.change(dock_layer.position.to(
-                        //     Point {
-                        //         x: mouse_x,
-                        //         y: mouse_y,
-                        //     },
-                        //     Some(Transition {
-                        //         duration: 2.0,
-                        //         delay: 0.0,
-                        //         timing: Easing {
-                        //             ..Default::default()
-                        //         },
-                        //     }),
-                        // )));
-
-                        // state.add_change(layer.change(layer.size.to(
-                        //     Point {
-                        //         x: mouse_x,
-                        //         y: mouse_y,
-                        //     },
-                        //     Some(Transition {
-                        //         duration: 2.0,
-                        //         delay: 0.0,
-                        //         timing: Easing {
-                        //             ..Default::default()
-                        //         },
-                        //     }),
-                        // )));
+                        model.position(
+                            Point {
+                                x: _mouse_x,
+                                y: _mouse_y,
+                            },
+                            Some(Transition {
+                                duration: 30.0,
+                                delay: 0.0,
+                                timing: Easing::default(),
+                            }),
+                        );
                     }
                 }
                 _ => (),
             },
             Event::MainEventsCleared => {
-                if state.update(0.016) {
+                let needs_redraw = scene.update(0.0016);
+                if needs_redraw {
                     env.windowed_context.window().request_redraw();
                 }
             }
             Event::RedrawRequested(_) => {
                 if let Some(ref mut surface) = env.surface {
-                    // test_draw(surface.canvas());
-                    draw(surface.canvas(), &state);
+                    draw(surface.canvas(), &scene);
                     surface.flush_and_submit();
 
                     env.windowed_context.swap_buffers().unwrap();
