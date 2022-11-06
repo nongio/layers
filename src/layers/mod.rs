@@ -1,21 +1,33 @@
-use crate::{
-    easing::{interpolate, Interpolable},
-    engine::{
-        animations::{Easing, Transition},
-        command::ModelChange,
-        node::NodeFlags,
-        Command, CommandWithTransition, WithTransition,
-    },
+use crate::easing::{interpolate, Interpolable};
+
+use crate::engine::{
+    animations::*, command::*, node::*, Command, CommandWithTransition, WithTransition,
 };
 
-use self::layer::ModelLayer;
+macro_rules! change_attr {
+    ($variable_name:ident, $type:ty, $flag:expr) => {
+        pub fn $variable_name(
+            &self,
+            value: $type,
+            transition: Option<Transition<Easing>>,
+        ) -> Arc<ModelChange<$type>> {
+            let change: Arc<ModelChange<$type>> = Arc::new(ModelChange {
+                value_change: self.$variable_name.to(value, transition),
+                flag: $flag,
+            });
+
+            let maybe_engine = self.engine.read().unwrap().clone();
+            if let Some((id, engine)) = maybe_engine {
+                engine.add_change(id, change.clone());
+            }
+            change
+        }
+    };
+}
+pub(crate) use change_attr;
 
 pub mod layer;
 pub mod text;
-
-pub enum Nodes {
-    Layer(ModelLayer),
-}
 
 impl<T: Interpolable + Sync> WithTransition for ModelChange<T> {
     fn transition(&self) -> Option<Transition<Easing>> {
@@ -24,7 +36,7 @@ impl<T: Interpolable + Sync> WithTransition for ModelChange<T> {
 }
 
 impl<T: Interpolable + Sync + Clone + Sized + 'static> Command for ModelChange<T> {
-    fn execute(&self, progress: f64) -> NodeFlags {
+    fn execute(&self, progress: f64) -> RenderableFlags {
         let ModelChange {
             value_change, flag, ..
         } = &self;

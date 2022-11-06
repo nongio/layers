@@ -31,7 +31,7 @@ impl<V: Clone + Send + Sync> TreeStorage<V> {
 
     pub fn get(&self, id: TreeStorageId) -> Option<TreeStorageNode<V>> {
         let data = self.data.read().unwrap();
-        // this is like Some(obj.clone())
+        // this is equivalent to Some(obj.clone())
         data.get(id).cloned()
     }
 

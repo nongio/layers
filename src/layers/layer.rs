@@ -1,20 +1,18 @@
 use skia_safe::{Canvas, Image, Matrix, M44};
-use std::ops::Deref;
 use std::sync::Arc;
 use std::sync::RwLock;
 
 use crate::drawing::layer::draw_layer;
-use crate::easing::Interpolable;
-use crate::engine::animations::*;
-use crate::engine::command::ValueChange;
-use crate::engine::node::NodeFlags;
-use crate::engine::node::Renderable;
+use crate::engine::node::RenderNode;
+use crate::engine::node::RenderableFlags;
 use crate::engine::rendering::Drawable;
 use crate::engine::storage::TreeStorageId;
-use crate::engine::ChangeInvoker;
+use crate::engine::ChangeProducer;
 use crate::engine::Engine;
 use crate::layers::*;
 use crate::types::*;
+
+use super::change_attr;
 
 #[derive(Clone, PartialEq, Debug)]
 #[repr(u32)]
@@ -46,10 +44,7 @@ pub struct Layer {
     pub content: Option<SkiaImage>,
     pub blend_mode: BlendMode,
 }
-#[derive(Clone)]
-pub struct EngineRef(pub Arc<dyn Engine>, pub TreeStorageId);
-
-#[derive(Clone)]
+// #[derive(Clone)]
 pub struct ModelLayer {
     pub anchor_point: SyncValue<Point>,
     pub position: SyncValue<Point>,
@@ -69,90 +64,38 @@ pub struct ModelLayer {
     pub content: Option<Image>,
     pub blend_mode: BlendMode,
 
-    pub engine: Arc<RwLock<Option<EngineRef>>>,
-}
-macro_rules! change_attr {
-    ($variable_name:ident, $type:ty, $repaint:expr) => {
-        pub fn $variable_name(
-            &self,
-            value: $type,
-            transition: Option<Transition<Easing>>,
-        ) -> Arc<ModelChange<$type>> {
-            let change: Arc<ModelChange<$type>> =
-                Arc::new(self.change(self.$variable_name.to(value, transition), $repaint));
-
-            let maybe_engine: Option<EngineRef> = self.engine.read().unwrap().clone();
-            if let Some(engine) = maybe_engine {
-                let (engine, id) = (engine.0, engine.1);
-                engine.add_change(id, change.clone());
-            }
-            change
-        }
-    };
-}
-pub struct ModelLayerRef(Arc<ModelLayer>);
-
-impl ModelLayerRef {
-    pub fn new(model: ModelLayer) -> ModelLayerRef {
-        Self(Arc::new(model))
-    }
+    pub engine: RwLock<Option<(TreeStorageId, Arc<Engine>)>>,
 }
 
-impl Deref for ModelLayerRef {
-    type Target = ModelLayer;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-impl From<ModelLayerRef> for Arc<ModelLayer> {
-    fn from(m: ModelLayerRef) -> Self {
-        m.0
-    }
-}
-impl From<ModelLayerRef> for Arc<dyn Renderable> {
-    fn from(m: ModelLayerRef) -> Self {
-        m.0
-    }
-}
 impl ModelLayer {
     fn new() -> Self {
         Default::default()
     }
-    pub fn create() -> ModelLayerRef {
-        ModelLayerRef::new(Self::new())
-    }
-    pub fn set_engine<E: Into<Arc<dyn Engine>>>(&self, engine: E, id: TreeStorageId) {
-        *self.engine.write().unwrap() = Some(EngineRef(engine.into(), id));
+    pub fn create() -> Arc<ModelLayer> {
+        Arc::new(Self::new())
     }
 
-    pub fn change<T: Interpolable + Sync>(
-        &self,
-        change: ValueChange<T>,
-        flag: NodeFlags,
-    ) -> ModelChange<T> {
-        ModelChange {
-            value_change: change,
-            flag,
-        }
-    }
-
-    change_attr!(position, Point, NodeFlags::NEEDS_LAYOUT);
+    change_attr!(position, Point, RenderableFlags::NEEDS_LAYOUT);
     change_attr!(
         size,
         Point,
-        NodeFlags::NEEDS_LAYOUT | NodeFlags::NEEDS_PAINT
+        RenderableFlags::NEEDS_LAYOUT | RenderableFlags::NEEDS_PAINT
     );
-    change_attr!(background_color, PaintColor, NodeFlags::NEEDS_PAINT);
-    change_attr!(scale, Point, NodeFlags::NEEDS_LAYOUT);
-    change_attr!(rotation, Point3d, NodeFlags::NEEDS_LAYOUT);
-    change_attr!(anchor_point, Point, NodeFlags::NEEDS_LAYOUT);
-    change_attr!(border_corner_radius, BorderRadius, NodeFlags::NEEDS_PAINT);
-    change_attr!(border_color, PaintColor, NodeFlags::NEEDS_PAINT);
-    change_attr!(border_width, f64, NodeFlags::NEEDS_PAINT);
-    change_attr!(shadow_offset, Point, NodeFlags::NEEDS_PAINT);
-    change_attr!(shadow_radius, f64, NodeFlags::NEEDS_PAINT);
-    change_attr!(shadow_spread, f64, NodeFlags::NEEDS_PAINT);
-    change_attr!(shadow_color, Color, NodeFlags::NEEDS_PAINT);
+    change_attr!(background_color, PaintColor, RenderableFlags::NEEDS_PAINT);
+    change_attr!(scale, Point, RenderableFlags::NEEDS_LAYOUT);
+    change_attr!(rotation, Point3d, RenderableFlags::NEEDS_LAYOUT);
+    change_attr!(anchor_point, Point, RenderableFlags::NEEDS_LAYOUT);
+    change_attr!(
+        border_corner_radius,
+        BorderRadius,
+        RenderableFlags::NEEDS_PAINT
+    );
+    change_attr!(border_color, PaintColor, RenderableFlags::NEEDS_PAINT);
+    change_attr!(border_width, f64, RenderableFlags::NEEDS_PAINT);
+    change_attr!(shadow_offset, Point, RenderableFlags::NEEDS_PAINT);
+    change_attr!(shadow_radius, f64, RenderableFlags::NEEDS_PAINT);
+    change_attr!(shadow_spread, f64, RenderableFlags::NEEDS_PAINT);
+    change_attr!(shadow_color, Color, RenderableFlags::NEEDS_PAINT);
 }
 
 impl Default for ModelLayer {
@@ -167,9 +110,9 @@ impl Default for ModelLayer {
             z: 0.0,
         });
         let background_color = SyncValue::new(PaintColor::Solid {
-            color: Color::new(1.0, 0.0, 0.0, 1.0),
+            color: Color::new(1.0, 1.0, 1.0, 1.0),
         });
-        let border_corner_radius = SyncValue::new(BorderRadius::new_single(20.0));
+        let border_corner_radius = SyncValue::new(BorderRadius::new_single(0.0));
         let border_color = SyncValue::new(PaintColor::Solid {
             color: Color::new(0.0, 0.0, 0.0, 1.0),
         });
@@ -181,7 +124,7 @@ impl Default for ModelLayer {
         let shadow_color = SyncValue::new(Color::new(0.0, 0.0, 0.0, 1.0));
         let content = None;
         let blend_mode = BlendMode::Normal;
-        let engine = Arc::new(RwLock::new(None));
+        let engine = RwLock::new(None);
         Self {
             anchor_point,
             position,
@@ -206,7 +149,7 @@ impl Default for ModelLayer {
 
 impl Drawable for ModelLayer {
     fn draw(&self, canvas: &mut Canvas) {
-        let layer: Layer = Layer::from(self.clone());
+        let layer: Layer = Layer::from(self);
         draw_layer(canvas, &layer);
     }
     fn bounds(&self) -> Rectangle {
@@ -241,16 +184,18 @@ impl Drawable for ModelLayer {
     }
 }
 
-impl ChangeInvoker for ModelLayer {
-    fn set_engine(&self, engine: Arc<dyn Engine>, id: TreeStorageId) {
-        self.set_engine(engine, id);
+impl ChangeProducer for ModelLayer {
+    fn set_engine(&self, engine: Arc<Engine>, id: TreeStorageId) {
+        *self.engine.write().unwrap() = Some((id, engine));
     }
 }
 
-impl Renderable for ModelLayer {}
+impl RenderNode for ModelLayer {}
 
-impl From<ModelLayer> for Layer {
-    fn from(model: ModelLayer) -> Self {
+// Convertion helpers
+
+impl From<&ModelLayer> for Layer {
+    fn from(model: &ModelLayer) -> Self {
         let size = model.size.value();
         let background_color = model.background_color.value();
         let border_color = model.border_color.value();
@@ -261,7 +206,7 @@ impl From<ModelLayer> for Layer {
         let shadow_spread = model.shadow_spread.value();
         let shadow_color = model.shadow_color.value();
         let matrix = model.transform();
-        let content = model.content.map(|image| SkiaImage {
+        let content = model.content.clone().map(|image| SkiaImage {
             data: Box::new(image),
         });
 
@@ -278,60 +223,60 @@ impl From<ModelLayer> for Layer {
             shadow_spread,
             matrix,
             content,
-            blend_mode: model.blend_mode,
+            blend_mode: model.blend_mode.clone(),
         }
     }
 }
 
-// impl From<Layer> for ModelLayer {
-//     fn from(layer: Layer) -> Self {
-//         let id = OBJECT_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-//         let size = layer.size;
-//         let background_color = layer.background_color;
-//         let border_color = layer.border_color;
-//         let border_corner_radius = layer.border_corner_radius;
-//         let border_width = layer.border_width;
-//         let shadow_offset = layer.shadow_offset;
-//         let shadow_radius = layer.shadow_radius;
-//         let shadow_spread = layer.shadow_spread;
-//         let shadow_color = layer.shadow_color;
-//         let matrix = M44::new_identity();
-//         let content = layer.content.map(|image| {
-//             let i = image.data;
-//             *i
-//         });
-//         let blend_mode = layer.blend_mode;
+impl From<Layer> for ModelLayer {
+    fn from(layer: Layer) -> Self {
+        let size = layer.size;
+        let background_color = layer.background_color;
+        let border_color = layer.border_color;
+        let border_corner_radius = layer.border_corner_radius;
+        let border_width = layer.border_width;
+        let shadow_offset = layer.shadow_offset;
+        let shadow_radius = layer.shadow_radius;
+        let shadow_spread = layer.shadow_spread;
+        let shadow_color = layer.shadow_color;
+        let matrix = M44::new_identity();
+        let content = layer.content.map(|image| {
+            let i = image.data;
+            *i
+        });
+        let blend_mode = layer.blend_mode;
 
-//         let (x, y) = (
-//             layer.matrix.translate_x() as f64,
-//             layer.matrix.translate_y() as f64,
-//         );
-//         Self {
-//             anchor_point: AnimatedValue::new(Point { x: 0.0, y: 0.0 }),
-//             position: AnimatedValue::new(Point { x, y }),
-//             scale: AnimatedValue::new(Point { x: 1.0, y: 1.0 }),
-//             rotation: AnimatedValue::new(Point3d {
-//                 x: 0.0,
-//                 y: 0.0,
-//                 z: 0.0,
-//             }),
-//             size: AnimatedValue::new(size),
-//             background_color: AnimatedValue::new(background_color),
-//             border_color: AnimatedValue::new(border_color),
-//             border_corner_radius: AnimatedValue::new(border_corner_radius),
-//             border_width: AnimatedValue::new(border_width),
-//             shadow_offset: AnimatedValue::new(shadow_offset),
-//             shadow_radius: AnimatedValue::new(shadow_radius),
-//             shadow_spread: AnimatedValue::new(shadow_spread),
-//             shadow_color: AnimatedValue::new(shadow_color),
-//             content,
-//             matrix,
-//             blend_mode,
-//         }
-//     }
-// }
+        let (x, y) = (
+            layer.matrix.translate_x() as f64,
+            layer.matrix.translate_y() as f64,
+        );
+        Self {
+            anchor_point: SyncValue::new(Point { x: 0.0, y: 0.0 }),
+            position: SyncValue::new(Point { x, y }),
+            scale: SyncValue::new(Point { x: 1.0, y: 1.0 }),
+            rotation: SyncValue::new(Point3d {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            }),
+            size: SyncValue::new(size),
+            background_color: SyncValue::new(background_color),
+            border_color: SyncValue::new(border_color),
+            border_corner_radius: SyncValue::new(border_corner_radius),
+            border_width: SyncValue::new(border_width),
+            shadow_offset: SyncValue::new(shadow_offset),
+            shadow_radius: SyncValue::new(shadow_radius),
+            shadow_spread: SyncValue::new(shadow_spread),
+            shadow_color: SyncValue::new(shadow_color),
+            content,
+            matrix,
+            blend_mode,
+            engine: RwLock::new(None),
+        }
+    }
+}
 
-impl From<ModelLayer> for Arc<dyn Renderable> {
+impl From<ModelLayer> for Arc<dyn RenderNode> {
     fn from(model: ModelLayer) -> Self {
         Arc::new(model)
     }

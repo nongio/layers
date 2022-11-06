@@ -11,14 +11,17 @@ use glutin::{
 
 use skia_safe::{
     gpu::{gl::FramebufferInfo, BackendRenderTarget, SurfaceOrigin},
-    Canvas, Color4f, ColorType, Data, Image, Matrix, Paint, Rect, Surface,
+    Canvas, Color4f, ColorType, Paint, Rect, Surface,
 };
+use std::{sync::Arc, time::Instant};
 
 use hello::{
     drawing::scene::draw_scene,
     engine::{
         animations::{Easing, Transition},
+        node::RenderNode,
         scene::Scene,
+        Engine,
     },
     layers::layer::ModelLayer,
     types::{Color, PaintColor, Point},
@@ -124,20 +127,22 @@ fn main() {
         gr_context,
         windowed_context,
     };
-    let scene = Scene::create();
-    let model = ModelLayer::create();
-    let _id = scene.add_renderable(model.clone());
+    let engine = Engine::create();
+    let layer = ModelLayer::create();
+    let _id = engine.scene.add(layer.clone() as Arc<dyn RenderNode>);
 
-    model.size(Point { x: 100.0, y: 100.0 }, None);
-    model.position(Point { x: 100.0, y: 100.0 }, None);
+    layer.size(Point { x: 100.0, y: 100.0 }, None);
+    layer.position(Point { x: 100.0, y: 100.0 }, None);
 
-    model.background_color(
+    layer.background_color(
         PaintColor::Solid {
             color: Color::new(0.0, 0.8, 0.0, 1.0),
         },
         None,
     );
 
+    let instant = std::time::Instant::now();
+    let mut last_instant = 0.0;
     events_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Wait;
 
@@ -162,13 +167,13 @@ fn main() {
                     ..
                 } => {
                     if button_state == winit::event::ElementState::Released {
-                        model.position(
+                        layer.position(
                             Point {
                                 x: _mouse_x,
                                 y: _mouse_y,
                             },
                             Some(Transition {
-                                duration: 30.0,
+                                duration: 0.5,
                                 delay: 0.0,
                                 timing: Easing::default(),
                             }),
@@ -178,14 +183,16 @@ fn main() {
                 _ => (),
             },
             Event::MainEventsCleared => {
-                let needs_redraw = scene.update(0.0016);
+                let dt = instant.elapsed().as_secs_f64() - last_instant;
+                let needs_redraw = engine.update(dt);
+                last_instant = instant.elapsed().as_secs_f64();
                 if needs_redraw {
                     env.windowed_context.window().request_redraw();
                 }
             }
             Event::RedrawRequested(_) => {
                 if let Some(ref mut surface) = env.surface {
-                    draw(surface.canvas(), &scene);
+                    draw(surface.canvas(), &engine.scene);
                     surface.flush_and_submit();
 
                     env.windowed_context.swap_buffers().unwrap();

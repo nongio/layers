@@ -1,11 +1,12 @@
 use skia_safe::canvas::SaveLayerRec;
-use skia_safe::{Color4f, Paint};
+use skia_safe::{Color4f, Font, FontMgr, Paint};
 
 use skia_safe::image_filters::{blur, CropRect};
 use skia_safe::PaintStyle;
 use skia_safe::{BlurStyle, Canvas, ClipOp, MaskFilter, Point, RRect, Rect, TileMode};
 
 use crate::layers::layer::{BlendMode, Layer};
+use crate::layers::text::Text;
 use crate::types::PaintColor;
 
 // impl Drawable for Layer {
@@ -136,4 +137,12 @@ pub fn draw_layer(canvas: &mut Canvas, layer: &Layer) {
         let image = &*content.data;
         canvas.draw_image(image, (0, 0), Some(&paint));
     }
+}
+
+pub fn draw_text(canvas: &mut Canvas, text: &Text) {
+    let _font_manager = FontMgr::default();
+    // let f = font_manager.match_family(text.font_family);
+    let font = Font::default();
+    let paint = Paint::new(Color4f::new(1.0, 1.0, 1.0, 1.0), None);
+    canvas.draw_str(text.text.as_str(), Point { x: 0.0, y: 0.0 }, &font, &paint);
 }
