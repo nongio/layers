@@ -209,14 +209,6 @@ fn main() {
                                 timing: Easing::default(),
                             }),
                         );
-                        // text.font_size(
-                        //     _mouse_y / 2.0,
-                        //     Some(Transition {
-                        //         duration: 0.5,
-                        //         delay: 0.0,
-                        //         timing: Easing::default(),
-                        //     }),
-                        // );
                     }
                 }
                 _ => (),

@@ -22,7 +22,7 @@ gpu = []
 [dependencies]
 glutin = "0.28"
 gl-rs = { package = "gl", version = "0.14.0" }
-skia-safe = { version = "0.50", features = ["egl", "wayland"] }
+skia-safe = { version = "0.50", features = ["egl", "wayland", "textlayout"] }
 skia-bindings = { version = "0", features = ["embed-freetype"] }
 winit = "0.26.1"
 foreign-types-shared = "0.1.1"
