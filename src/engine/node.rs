@@ -1,4 +1,5 @@
 use bitflags::bitflags;
+use indextree::{Arena, NodeId};
 use skia_safe::Picture;
 use std::{
     fmt::Debug,
@@ -111,4 +112,21 @@ pub fn render_node(node: &SceneNode, canvas: &mut skia_safe::Canvas) {
     if let Some(picture) = &draw_cache.picture {
         canvas.draw_picture(&picture, Some(&matrix), None);
     }
+}
+
+pub fn render_node_children(
+    node_id: NodeId,
+    arena: &Arena<SceneNode>,
+    canvas: &mut skia_safe::Canvas,
+) {
+    let node = arena.get(node_id).unwrap().get();
+    let sc = canvas.save();
+    let matrix = *node.transformation.read().unwrap();
+    canvas.concat(&matrix);
+    node_id.children(arena).for_each(|child_id| {
+        if let Some(child) = arena.get(child_id) {
+            render_node(child.get(), canvas);
+        }
+    });
+    canvas.restore_to_count(sc);
 }

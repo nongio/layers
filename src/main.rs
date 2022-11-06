@@ -13,7 +13,7 @@ use skia_safe::{
     gpu::{gl::FramebufferInfo, BackendRenderTarget, SurfaceOrigin},
     Canvas, Color4f, ColorType, Paint, Rect, Surface,
 };
-use std::{sync::Arc, time::Instant};
+use std::sync::Arc;
 
 use hello::{
     drawing::scene::draw_scene,
@@ -23,8 +23,8 @@ use hello::{
         scene::Scene,
         Engine,
     },
-    layers::layer::ModelLayer,
-    types::{Color, PaintColor, Point},
+    layers::{layer::ModelLayer, text::ModelText},
+    types::*,
 };
 
 fn draw(canvas: &mut Canvas, _scene: &Scene) {
@@ -129,7 +129,7 @@ fn main() {
     };
     let engine = Engine::create();
     let layer = ModelLayer::create();
-    let _id = engine.scene.add(layer.clone() as Arc<dyn RenderNode>);
+    let layer_id = engine.scene.add(layer.clone() as Arc<dyn RenderNode>);
 
     layer.size(Point { x: 100.0, y: 100.0 }, None);
     layer.position(Point { x: 100.0, y: 100.0 }, None);
@@ -140,6 +140,18 @@ fn main() {
         },
         None,
     );
+
+    let text = ModelText::create();
+    {
+        *text.text.write().unwrap() = "Hello World".to_string();
+    }
+    text.position(Point { x: 10.0, y: 10.0 }, None);
+    text.size(Point { x: 500.0, y: 200.0 }, None);
+    text.font_size(22.0, None);
+    println!("text id: {}", text.font_size.value());
+
+    let text_id = engine.scene.add(text.clone() as Arc<dyn RenderNode>);
+    engine.scene.append_node_to(text_id, layer_id);
 
     let instant = std::time::Instant::now();
     let mut last_instant = 0.0;
@@ -167,25 +179,53 @@ fn main() {
                     ..
                 } => {
                     if button_state == winit::event::ElementState::Released {
+                        // text.position(
+                        //     Point { x: 0, y: _mouse_y },
+                        //     Some(Transition {
+                        //         duration: 0.5,
+                        //         delay: 0.0,
+                        //         timing: Easing::default(),
+                        //     }),
+                        // );
                         layer.position(
                             Point {
                                 x: _mouse_x,
                                 y: _mouse_y,
                             },
                             Some(Transition {
-                                duration: 0.5,
+                                duration: 1.5,
                                 delay: 0.0,
                                 timing: Easing::default(),
                             }),
                         );
+                        text.size(
+                            Point {
+                                x: _mouse_x,
+                                y: 100.0,
+                            },
+                            Some(Transition {
+                                duration: 1.5,
+                                delay: 0.0,
+                                timing: Easing::default(),
+                            }),
+                        );
+                        // text.font_size(
+                        //     _mouse_y / 2.0,
+                        //     Some(Transition {
+                        //         duration: 0.5,
+                        //         delay: 0.0,
+                        //         timing: Easing::default(),
+                        //     }),
+                        // );
                     }
                 }
                 _ => (),
             },
             Event::MainEventsCleared => {
-                let dt = instant.elapsed().as_secs_f64() - last_instant;
+                let now = instant.elapsed().as_secs_f64();
+                let dt = now - last_instant;
                 let needs_redraw = engine.update(dt);
-                last_instant = instant.elapsed().as_secs_f64();
+                last_instant = now;
                 if needs_redraw {
                     env.windowed_context.window().request_redraw();
                 }

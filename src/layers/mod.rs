@@ -11,14 +11,16 @@ macro_rules! change_attr {
             value: $type,
             transition: Option<Transition<Easing>>,
         ) -> Arc<ModelChange<$type>> {
+            let maybe_engine = self.engine.read().unwrap().clone();
+
             let change: Arc<ModelChange<$type>> = Arc::new(ModelChange {
-                value_change: self.$variable_name.to(value, transition),
+                value_change: self.$variable_name.to(value.clone(), transition),
                 flag: $flag,
             });
-
-            let maybe_engine = self.engine.read().unwrap().clone();
             if let Some((id, engine)) = maybe_engine {
                 engine.add_change(id, change.clone());
+            } else {
+                self.$variable_name.set(value.clone());
             }
             change
         }
@@ -44,6 +46,9 @@ impl<T: Interpolable + Sync + Clone + Sized + 'static> Command for ModelChange<T
             interpolate(value_change.from.clone(), value_change.to.clone(), progress);
 
         *flag
+    }
+    fn value_id(&self) -> usize {
+        self.value_change.target.id
     }
 }
 

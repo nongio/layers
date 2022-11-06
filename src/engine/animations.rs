@@ -1,6 +1,7 @@
 use core::fmt;
 
 use std::marker::Sync;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 
 use crate::easing::{bezier_easing_function, Interpolable};
@@ -80,19 +81,29 @@ impl fmt::Debug for Animation {
     }
 }
 
+static SYNC_VALUE_COUNTER: AtomicUsize = AtomicUsize::new(0);
+
 #[derive(Debug, Clone)]
 pub struct SyncValue<V: Interpolable + Sync> {
+    pub id: usize,
     pub value: Arc<RwLock<V>>,
 }
 
 impl<V: Interpolable + Sync + Clone> SyncValue<V> {
     pub fn new(value: V) -> SyncValue<V> {
         let value = Arc::new(RwLock::new(value));
-        Self { value }
+        Self {
+            id: SYNC_VALUE_COUNTER.fetch_add(1, Ordering::SeqCst),
+            value,
+        }
     }
 
     pub fn value(&self) -> V {
         self.value.read().unwrap().clone()
+    }
+
+    pub fn set(&self, value: V) {
+        *self.value.write().unwrap() = value;
     }
 
     pub fn to(&self, to: V, transition: Option<Transition<Easing>>) -> ValueChange<V> {

@@ -6,10 +6,7 @@ pub mod scene;
 pub mod storage;
 
 use rayon::prelude::{IntoParallelRefIterator, IntoParallelRefMutIterator, ParallelIterator};
-use std::{
-    num::NonZeroUsize,
-    sync::{Arc, RwLock},
-};
+use std::sync::{Arc, RwLock};
 
 use self::{
     animations::{Animation, Easing, Transition},
@@ -23,6 +20,7 @@ pub struct Timestamp(f64);
 /// A trait for objects that can be exectuded by the engine.
 pub trait Command {
     fn execute(&self, progress: f64) -> RenderableFlags;
+    fn value_id(&self) -> usize;
 }
 
 /// A trait for objects that contain a transition.
@@ -67,6 +65,7 @@ impl Engine {
         transition: Transition<Easing>,
     ) -> FlatStorageId {
         let start = self.timestamp.read().unwrap().0 + transition.delay;
+        println!("start: {}", start);
         self.add_animation(Animation {
             start,
             duration: transition.duration,
@@ -92,14 +91,14 @@ impl Engine {
 
         let node = self.scene.nodes.get(target_id);
         if node.is_some() {
+            let transaction_id: usize = change.value_id();
             let node_change = AnimatedNodeChange {
                 change,
                 animation_id: aid,
                 node_id: target_id,
             };
-            let transation_id: NonZeroUsize = target_id.into();
             self.transactions
-                .insert_with_id(node_change, transation_id.into())
+                .insert_with_id(node_change, transaction_id)
         } else {
             0
         }
