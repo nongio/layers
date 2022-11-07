@@ -42,9 +42,11 @@ impl<T: Interpolable + Sync + Clone + Sized + 'static> Command for ModelChange<T
         let ModelChange {
             value_change, flag, ..
         } = &self;
-        *value_change.target.value.write().unwrap() =
-            interpolate(value_change.from.clone(), value_change.to.clone(), progress);
-
+        value_change.target.set(interpolate(
+            value_change.from.clone(),
+            value_change.to.clone(),
+            progress,
+        ));
         *flag
     }
     fn value_id(&self) -> usize {

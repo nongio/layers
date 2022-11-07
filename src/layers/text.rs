@@ -103,10 +103,8 @@ impl Drawable for ModelText {
         draw_text(canvas, &text);
     }
     fn bounds(&self) -> Rectangle {
-        let p = self.position.value.clone();
-        let p = p.read().unwrap();
-        let s = self.size.value.clone();
-        let s = s.read().unwrap();
+        let p = self.position.value();
+        let s = self.size.value();
         Rectangle {
             x: p.x,
             y: p.y,

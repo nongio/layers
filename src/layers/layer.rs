@@ -153,10 +153,10 @@ impl Drawable for ModelLayer {
         draw_layer(canvas, &layer);
     }
     fn bounds(&self) -> Rectangle {
-        let p = self.position.value.clone();
-        let p = p.read().unwrap();
-        let s = self.size.value.clone();
-        let s = s.read().unwrap();
+        let p = self.position.value();
+
+        let s = self.size.value();
+
         Rectangle {
             x: p.x,
             y: p.y,

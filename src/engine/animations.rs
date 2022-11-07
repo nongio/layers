@@ -86,7 +86,7 @@ static SYNC_VALUE_COUNTER: AtomicUsize = AtomicUsize::new(0);
 #[derive(Debug, Clone)]
 pub struct SyncValue<V: Interpolable + Sync> {
     pub id: usize,
-    pub value: Arc<RwLock<V>>,
+    value: Arc<RwLock<V>>,
 }
 
 impl<V: Interpolable + Sync + Clone> SyncValue<V> {
