@@ -1,5 +1,3 @@
-// #[allow(unreachable_code)]
-
 use gl::types::*;
 use gl_rs as gl;
 use glutin::{
@@ -141,6 +139,28 @@ fn main() {
         None,
     );
 
+    let mut layers: Vec<Arc<ModelLayer>> = Vec::new();
+    for n in 0..10 {
+        let layer = ModelLayer::create();
+        layer.size(Point { x: 50.0, y: 50.0 }, None);
+        layer.position(
+            Point {
+                x: rand::random::<f64>() * 2000.0,
+                y: rand::random::<f64>() * 2000.0,
+            },
+            None,
+        );
+        layer.border_corner_radius(BorderRadius::new_single(15.0), None);
+        layer.background_color(
+            PaintColor::Solid {
+                color: Color::new(rand::random(), rand::random(), rand::random(), 1.0),
+            },
+            None,
+        );
+        layers.push(layer.clone());
+        engine.scene.add(layer as Arc<dyn RenderNode>);
+    }
+
     let text = ModelText::create();
     {
         *text.text.write().unwrap() = "Hello World".to_string();
@@ -187,24 +207,37 @@ fn main() {
                         //         timing: Easing::default(),
                         //     }),
                         // );
-                        layer.position(
-                            Point {
-                                x: _mouse_x,
-                                y: _mouse_y,
-                            },
-                            Some(Transition {
-                                duration: 1.5,
-                                delay: 0.0,
-                                timing: Easing::default(),
-                            }),
-                        );
+                        layers.iter().for_each(|layer| {
+                            layer.position(
+                                Point {
+                                    x: rand::random::<f64>() * 2000.0,
+                                    y: rand::random::<f64>() * 2000.0,
+                                },
+                                Some(Transition {
+                                    duration: 3.0,
+                                    delay: 0.0,
+                                    timing: Easing::default(),
+                                }),
+                            );
+                        });
+                        // layer.position(
+                        //     Point {
+                        //         x: _mouse_x,
+                        //         y: _mouse_y,
+                        //     },
+                        //     Some(Transition {
+                        //         duration: 1.5,
+                        //         delay: 0.0,
+                        //         timing: Easing::default(),
+                        //     }),
+                        // );
                         text.size(
                             Point {
                                 x: _mouse_x,
                                 y: 100.0,
                             },
                             Some(Transition {
-                                duration: 1.5,
+                                duration: 2.5,
                                 delay: 0.0,
                                 timing: Easing::default(),
                             }),

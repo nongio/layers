@@ -5,10 +5,13 @@ edition = "2021"
 build = "build.rs"
 
 
-# [lib]
-# name = "hello"
-# crate-type = ["cdylib"]      # Creates dynamic lib
+[lib]
+crate-type = ["lib", "cdylib"] # Creates dynamic lib
 # crate-type = ["staticlib"] # Creates static lib
+
+[[bin]]
+name = "hello"
+path = "src/example.rs"
 
 [features]
 gl = ["gpu", "skia-bindings/gl"]
