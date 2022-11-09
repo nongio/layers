@@ -1,4 +1,5 @@
 pub mod animations;
+pub mod backend;
 pub mod command;
 pub mod node;
 pub mod rendering;
@@ -64,8 +65,9 @@ impl Engine {
         &self,
         transition: Transition<Easing>,
     ) -> FlatStorageId {
+        
         let start = self.timestamp.read().unwrap().0 + transition.delay;
-        println!("start: {}", start);
+
         self.add_animation(Animation {
             start,
             duration: transition.duration,
@@ -130,7 +132,6 @@ impl Engine {
                     (*value, *finished) = animation.value(timestamp.0);
 
                     if *finished {
-                        println!("done {}", timestamp.0);
                         done.clone().write().unwrap().push(*id);
                     }
                 },
