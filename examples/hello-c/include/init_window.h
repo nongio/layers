@@ -23,6 +23,9 @@ struct WindowContext {
   EGLContext context;
   /// EGL surface
   EGLSurface surface;
+
+  /// Wayland display
+  struct wl_display *wl_display;
 };
 
 #define TRUE 1

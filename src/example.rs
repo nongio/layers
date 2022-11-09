@@ -60,7 +60,7 @@ fn main() {
     // let cb = cb.with_double_buffer(Some(true));
     let windowed_context = cb.build_windowed(window, &events_loop).unwrap();
 
-    let windowed_context = unsafe { windowed_context.make_current().unwrap() };
+    let mut windowed_context = unsafe { windowed_context.make_current().unwrap() };
     let pixel_format = windowed_context.get_pixel_format();
 
     println!(
@@ -109,17 +109,32 @@ fn main() {
         .unwrap()
     }
 
+    let pixel_format = windowed_context.get_pixel_format();
+
+    let size = windowed_context.window().inner_size();
+    let sample_count: usize = pixel_format
+        .multisampling
+        .map(|s| s.try_into().unwrap())
+        .unwrap_or(0);
+    let pixel_format: usize = pixel_format.stencil_bits.try_into().unwrap();
+
+    let mut skia_renderer = hello::engine::backend::SkiaRenderer::create(
+        size.width.try_into().unwrap(),
+        size.height.try_into().unwrap(),
+        sample_count,
+        pixel_format,
+        0,
+    );
+
     let mut _mouse_x = 0.0;
     let mut _mouse_y = 0.0;
 
     let surface = create_surface(&windowed_context, &fb_info, &mut gr_context);
-
     struct Env {
         surface: Option<Surface>,
         gr_context: skia_safe::gpu::DirectContext,
         windowed_context: WindowedContext,
     }
-
     let mut env = Env {
         surface: Some(surface),
         gr_context,
@@ -183,11 +198,16 @@ fn main() {
                 WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
                 WindowEvent::Resized(physical_size) => {
                     env.windowed_context.resize(physical_size);
-                    env.surface = Some(create_surface(
-                        &env.windowed_context,
-                        &fb_info,
-                        &mut env.gr_context,
-                    ));
+
+                    let size = env.windowed_context.window().inner_size();
+                    skia_renderer = hello::engine::backend::SkiaRenderer::create(
+                        size.width.try_into().unwrap(),
+                        size.height.try_into().unwrap(),
+                        sample_count,
+                        pixel_format,
+                        0,
+                    );
+
                     env.windowed_context.window().request_redraw();
                 }
                 WindowEvent::CursorMoved { position, .. } => {
@@ -256,12 +276,12 @@ fn main() {
                 }
             }
             Event::RedrawRequested(_) => {
-                if let Some(ref mut surface) = env.surface {
-                    draw(surface.canvas(), &engine.scene);
-                    surface.flush_and_submit();
+                let surface = skia_renderer.get_mut().surface();
 
-                    env.windowed_context.swap_buffers().unwrap();
-                }
+                draw(surface.canvas(), &engine.scene);
+                surface.flush_and_submit();
+
+                env.windowed_context.swap_buffers().unwrap();
             }
             _ => {}
         }

@@ -25,13 +25,16 @@ struct wl_region *region;
 struct xdg_wm_base *xdg_wm_base;
 struct xdg_surface *xdg_surface;
 struct xdg_toplevel *xdg_top_level;
-struct WindowContext window_context = {.native_display = NULL,
-                                       .window_width = 0,
-                                       .window_height = 0,
-                                       .native_window = 0,
-                                       .display = NULL,
-                                       .context = NULL,
-                                       .surface = NULL};
+struct WindowContext window_context = {
+    .native_display = NULL,
+    .window_width = 0,
+    .window_height = 0,
+    .native_window = 0,
+    .display = NULL,
+    .context = NULL,
+    .surface = NULL,
+    .wl_display = NULL,
+};
 bool program_alive;
 int32_t old_w, old_h;
 
@@ -176,6 +179,7 @@ EGLBoolean create_egl_context() {
   window_context.display = display;
   window_context.surface = surface;
   window_context.context = context;
+  LOG("EGL context created !\n");
   return EGL_TRUE;
 }
 
@@ -197,7 +201,6 @@ EGLBoolean create_window_with_egl_context(char *title, int width, int height) {
 
 void draw() {
   glClearColor(0.5, 0.3, 0.0, 1.0);
-
   glClear(GL_COLOR_BUFFER_BIT);
 }
 
@@ -247,6 +250,7 @@ void setup_wayland() {
   } else {
     LOG("Okay, we got a compositor and a shell... That's something !\n");
     window_context.native_display = display;
+    window_context.wl_display = display;
   }
 }
 

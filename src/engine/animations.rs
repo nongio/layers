@@ -20,6 +20,7 @@ impl TimingFunction for Easing {
     }
 }
 
+#[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct Easing {
     pub x1: f64,
@@ -40,6 +41,8 @@ impl Default for Easing {
         }
     }
 }
+
+#[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct Transition<T: TimingFunction> {
     pub duration: f64,
