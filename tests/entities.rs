@@ -16,7 +16,7 @@ pub fn change_layer_position() {
 
     assert_eq!(layer.position.value().x, 0.0);
 
-    layer.position(Point { x: 200.0, y: 100.0 }, None);
+    layer.set_position(Point { x: 200.0, y: 100.0 }, None);
 
     engine.update(0.01);
 

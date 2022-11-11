@@ -66,14 +66,10 @@ impl Animation {
             start,
             duration,
             timing,
-        } = &*self;
+        } = self;
 
         let mut t = (t - start) / duration;
-        if t < 0.0 {
-            t = 0.0;
-        } else if t > 1.0 {
-            t = 1.0;
-        }
+        t = t.clamp(0.0, 1.0);
         (timing.value_at(t), t >= 1.0)
     }
 }

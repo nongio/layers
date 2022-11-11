@@ -1,21 +1,8 @@
-use gl::types::*;
-use gl_rs as gl;
-use glutin::{
-    dpi::PhysicalSize,
-    event::{Event, WindowEvent},
-    event_loop::{ControlFlow, EventLoop},
-    window::WindowBuilder,
-    GlProfile, PixelFormat,
-};
-
-use skia_bindings::GrDirectContext;
 use skia_safe::{
     gpu::{gl::FramebufferInfo, BackendRenderTarget, SurfaceOrigin},
-    Canvas, Color4f, ColorType, Paint, Rect, Surface,
+    ColorType, Surface,
 };
-use std::{cell::Cell, sync::Arc};
-
-type WindowedContext = glutin::ContextWrapper<glutin::PossiblyCurrent, glutin::window::Window>;
+use std::cell::Cell;
 
 pub struct SkiaRenderer {
     pub gr_context: skia_safe::gpu::DirectContext,
@@ -35,7 +22,8 @@ impl SkiaRenderer {
                 format: skia_safe::gpu::gl::Format::RGBA8.into(),
             }
         };
-        let backend_render_target = BackendRenderTarget::new_gl((width, height), 1, 8, fb_info);
+        let backend_render_target =
+            BackendRenderTarget::new_gl((width, height), sample_count, stencil_bits, fb_info);
 
         let mut gr_context: skia_safe::gpu::DirectContext =
             skia_safe::gpu::DirectContext::new_gl(None, None).unwrap();

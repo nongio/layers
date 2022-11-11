@@ -144,10 +144,10 @@ fn main() {
     let layer = ModelLayer::create();
     let layer_id = engine.scene.add(layer.clone() as Arc<dyn RenderNode>);
 
-    layer.size(Point { x: 100.0, y: 100.0 }, None);
-    layer.position(Point { x: 100.0, y: 100.0 }, None);
+    layer.set_size(Point { x: 100.0, y: 100.0 }, None);
+    layer.set_position(Point { x: 100.0, y: 100.0 }, None);
 
-    layer.background_color(
+    layer.set_background_color(
         PaintColor::Solid {
             color: Color::new(0.0, 0.8, 0.0, 1.0),
         },
@@ -157,16 +157,16 @@ fn main() {
     let mut layers: Vec<Arc<ModelLayer>> = Vec::new();
     for n in 0..10 {
         let layer = ModelLayer::create();
-        layer.size(Point { x: 50.0, y: 50.0 }, None);
-        layer.position(
+        layer.set_size(Point { x: 50.0, y: 50.0 }, None);
+        layer.set_position(
             Point {
                 x: rand::random::<f64>() * 2000.0,
                 y: rand::random::<f64>() * 2000.0,
             },
             None,
         );
-        layer.border_corner_radius(BorderRadius::new_single(15.0), None);
-        layer.background_color(
+        layer.set_border_corner_radius(BorderRadius::new_single(15.0), None);
+        layer.set_background_color(
             PaintColor::Solid {
                 color: Color::new(rand::random(), rand::random(), rand::random(), 1.0),
             },
@@ -180,9 +180,9 @@ fn main() {
     {
         *text.text.write().unwrap() = "Hello World".to_string();
     }
-    text.position(Point { x: 10.0, y: 10.0 }, None);
-    text.size(Point { x: 500.0, y: 200.0 }, None);
-    text.font_size(22.0, None);
+    text.set_position(Point { x: 10.0, y: 10.0 }, None);
+    text.set_size(Point { x: 500.0, y: 200.0 }, None);
+    text.set_font_size(22.0, None);
     println!("text id: {}", text.font_size.value());
 
     let text_id = engine.scene.add(text.clone() as Arc<dyn RenderNode>);
@@ -228,7 +228,7 @@ fn main() {
                         //     }),
                         // );
                         layers.iter().for_each(|layer| {
-                            layer.position(
+                            layer.set_position(
                                 Point {
                                     x: rand::random::<f64>() * 2000.0,
                                     y: rand::random::<f64>() * 2000.0,
@@ -251,7 +251,7 @@ fn main() {
                         //         timing: Easing::default(),
                         //     }),
                         // );
-                        text.size(
+                        text.set_size(
                             Point {
                                 x: _mouse_x,
                                 y: 100.0,

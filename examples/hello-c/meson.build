@@ -6,7 +6,7 @@ run_target('eas',
 
 
 cc = meson.get_compiler('c')
-libeas = cc.find_library('eas', dirs: ['/home/riccardo/dev/EAS/target/debug'])
+libhello = cc.find_library('hello', dirs: ['/home/riccardo/dev/EAS/target/debug'])
 include_libeas = ['/home/riccardo/dev/EAS/target/']
 
 wayland_egl = dependency('wayland-egl')
@@ -52,7 +52,7 @@ client_protos = declare_dependency(
 	sources: wl_protos_headers,
 )
 
-executable('demo', ['src/main.cpp', 'src/init_window.c'], dependencies: [libeas,
+executable('demo', ['src/main.c', 'src/init_window.c'], dependencies: [libhello,
 dependency('egl'),
 dependency('glesv2'),
 dependency('fontconfig'),

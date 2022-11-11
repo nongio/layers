@@ -5,27 +5,47 @@ use crate::engine::{
 };
 
 macro_rules! change_attr {
-    ($variable_name:ident, $type:ty, $flag:expr) => {
-        pub fn $variable_name(
-            &self,
-            value: $type,
-            transition: Option<Transition<Easing>>,
-        ) -> Arc<ModelChange<$type>> {
-            let maybe_engine = self.engine.read().unwrap().clone();
+    ($variable_name:ident, $variable_type:ty, $flags:expr) => {
+        paste::paste! {
+            pub fn [<set_ $variable_name>](
+                &self,
+                value: $variable_type,
+                transition: Option<Transition<Easing>>,
+            ) -> Arc<ModelChange<$variable_type>> {
+                let maybe_engine = self.engine.read().unwrap().clone();
 
-            let change: Arc<ModelChange<$type>> = Arc::new(ModelChange {
-                value_change: self.$variable_name.to(value.clone(), transition),
-                flag: $flag,
-            });
-            if let Some((id, engine)) = maybe_engine {
-                engine.add_change(id, change.clone());
-            } else {
-                self.$variable_name.set(value.clone());
+                let change: Arc<ModelChange<$variable_type>> = Arc::new(ModelChange {
+                    value_change: self.$variable_name.to(value.clone(), transition),
+                    flag: $flags,
+                });
+                if let Some((id, engine)) = maybe_engine {
+                    engine.add_change(id, change.clone());
+                } else {
+                    self.$variable_name.set(value.clone());
+                }
+                change
             }
-            change
         }
     };
 }
+
+// macro_rules! api_change_attr {
+//     ($base_type_export:ty, $variable_name:ident, $variable_type:ty) => {
+//         paste::paste! {
+//             use engine::animations::{Transition, Easing};
+//             #[no_mangle]
+//             pub extern "C" fn [<layer_set_ $variable_name>](
+//                     obj: *const $base_type_export,
+//                     value: $variable_type,
+//                     t: Transition<Easing>,
+//                 ) {
+//                         let obj = unsafe { &*obj };
+//                         obj.[<set_ $variable_name>](value, Some(t));
+//             }
+//         }
+//     };
+// }
+// pub(crate) use api_change_attr;
 pub(crate) use change_attr;
 
 pub mod layer;

@@ -98,6 +98,8 @@ impl ModelLayer {
     change_attr!(shadow_color, Color, RenderableFlags::NEEDS_PAINT);
 }
 
+//api_change_attr!(ModelLayer, position, Point);
+
 impl Default for ModelLayer {
     fn default() -> Self {
         let position = SyncValue::new(Point { x: 0.0, y: 0.0 });

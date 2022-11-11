@@ -11,11 +11,13 @@ use std::sync::*;
 use drawing::scene::draw_scene;
 use engine::{
     animations::{Easing, Transition},
+    // animations::{Easing, Transition},
     backend::SkiaRenderer,
     // backend,
     node::RenderNode,
 };
 use layers::layer::ModelLayer;
+// use types::Point;
 
 #[no_mangle]
 pub extern "C" fn engine_create() -> *const engine::Engine {
@@ -58,19 +60,34 @@ pub extern "C" fn layer_create() -> *const ModelLayer {
 }
 
 #[no_mangle]
-pub extern "C" fn layer_position_set(layer: *const ModelLayer, x: f64, y: f64) {
-    let layer = unsafe { &*layer };
-    layer.position(types::Point { x, y }, None);
-}
-
-#[no_mangle]
-pub extern "C" fn layer_border_radius_to(
+pub extern "C" fn layer_animate(
     layer: *const ModelLayer,
-    radius: f64,
+    prop_name: *const libc::c_char,
+    value: *mut (),
     t: Transition<Easing>,
 ) {
-    let layer = unsafe { &*layer };
-    layer.border_corner_radius(types::BorderRadius::new_single(radius), Some(t));
+    let _layer = unsafe { &*layer };
+    let mut setter;
+    match prop_name.as_str() {
+        "position" => {
+            let value = unsafe { &*(value as *const types::Point) };
+            setter = _layer.set_position;
+            // _layer.set_position(value.to_owned(), Some(t));
+        }
+        "size" => {
+            let value = unsafe { &*(value as *const types::Point) };
+            setter = _layer.set_size;
+            // _layer.set_size(value.to_owned(), Some(t));
+        }
+        "border_color" => {
+            let value = unsafe { &*(value as *const types::Color) };
+            setter = _layer.set_border_color;
+            // _layer.set_border_color(value.to_owned(), Some(t));
+        }
+        _ => println!("something else!"),
+    }
+
+    // layer.set_border_corner_radius(types::BorderRadius::new_single(radius), Some(t));
 }
 
 #[no_mangle]
@@ -81,7 +98,7 @@ pub extern "C" fn layer_position_to(
     t: Transition<Easing>,
 ) {
     let layer = unsafe { &*layer };
-    layer.position(types::Point { x, y }, Some(t));
+    layer.set_position(types::Point { x, y }, Some(t));
 }
 
 #[no_mangle]
