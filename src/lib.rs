@@ -18,7 +18,7 @@ use engine::{
 };
 use layers::layer::ModelLayer;
 
-use crate::types::BorderRadius;
+// use crate::types::BorderRadius;
 // use types::Point;
 
 #[no_mangle]
@@ -61,35 +61,34 @@ pub extern "C" fn layer_create() -> *const ModelLayer {
     Arc::into_raw(layer)
 }
 
-#[no_mangle]
-pub extern "C" fn layer_animate(
-    layer: *const ModelLayer,
-    prop_name: *const libc::c_char,
-    value: *mut (),
-    t: Transition<Easing>,
-) {
-    let layer = unsafe { &*layer };
-
-    use std::ffi::CStr;
-
-    let prop_name = unsafe { CStr::from_ptr(prop_name) };
-    let prop_name = prop_name.to_str().unwrap();
-    match prop_name {
-        "position" => {
-            let value = unsafe { *(value as *const types::Point) };
-            layer.set_position(value, Some(t));
-        }
-        "size" => {
-            let value = unsafe { *(value as *const types::Point) };
-            layer.set_size(value, Some(t));
-        }
-        "border_radius" => {
-            let value = unsafe { *(value as *const f64) };
-            layer.set_border_corner_radius(BorderRadius::new_single(value), Some(t));
-        }
-        _ => println!("something else!"),
-    }
-}
+// #[no_mangle]
+// pub extern "C" fn layer_animate(
+//     layer: *const ModelLayer,
+//     prop_name: *const libc::c_char,
+//     value: *mut (),
+//     t: Transition<Easing>,
+// ) {
+//     let _layer = unsafe { &*layer };
+//     let mut setter;
+//     match prop_name.as_str() {
+//         "position" => {
+//             let value = unsafe { &*(value as *const types::Point) };
+//             setter = _layer.set_position;
+//             // _layer.set_position(value.to_owned(), Some(t));
+//         }
+//         "size" => {
+//             let value = unsafe { &*(value as *const types::Point) };
+//             setter = _layer.set_size;
+//             // _layer.set_size(value.to_owned(), Some(t));
+//         }
+//         "border_color" => {
+//             let value = unsafe { &*(value as *const types::Color) };
+//             setter = _layer.set_border_color;
+//             _layer.set_border_color(value.to_owned(), Some(t));
+//         }
+//         _ => println!("something else!"),
+//     }
+// }
 
 #[no_mangle]
 pub extern "C" fn layer_position_to(
@@ -130,7 +129,7 @@ pub extern "C" fn create_skia_renderer(
 pub extern "C" fn render_scene(renderer: *mut SkiaRenderer, engine: *const engine::Engine) {
     let mut paint = skia_safe::Paint::new(skia_safe::Color4f::new(0.6, 0.6, 0.6, 1.0), None);
     paint.set_anti_alias(true);
-    paint.set_style(skia_bindings::SkPaint_Style::Fill);
+    // paint.set_style(skia_bindings::SkPaint_Style::Fill);
     let renderer = unsafe { &mut *renderer };
     let canvas = renderer.surface.canvas();
     let w = canvas.image_info().width() as f32;
