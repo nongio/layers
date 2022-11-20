@@ -1,9 +1,0 @@
-{
-    "files.associations": {
-        "stdio.h": "c",
-        "eglplatform.h": "c",
-        "init_window.h": "c",
-        "cerrno": "c",
-        "time.h": "c"
-    }
-}

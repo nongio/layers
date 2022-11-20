@@ -142,6 +142,7 @@ fn main() {
     };
     let engine = Engine::create();
     let layer = ModelLayer::create();
+    let _text = ModelText::create();
     let layer_id = engine.scene.add(layer.clone() as Arc<dyn RenderNode>);
 
     layer.set_size(Point { x: 100.0, y: 100.0 }, None);

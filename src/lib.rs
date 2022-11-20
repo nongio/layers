@@ -17,6 +17,8 @@ use engine::{
     node::RenderNode,
 };
 use layers::layer::ModelLayer;
+
+use crate::types::BorderRadius;
 // use types::Point;
 
 #[no_mangle]
@@ -66,28 +68,27 @@ pub extern "C" fn layer_animate(
     value: *mut (),
     t: Transition<Easing>,
 ) {
-    let _layer = unsafe { &*layer };
-    let mut setter;
-    match prop_name.as_str() {
+    let layer = unsafe { &*layer };
+
+    use std::ffi::CStr;
+
+    let prop_name = unsafe { CStr::from_ptr(prop_name) };
+    let prop_name = prop_name.to_str().unwrap();
+    match prop_name {
         "position" => {
-            let value = unsafe { &*(value as *const types::Point) };
-            setter = _layer.set_position;
-            // _layer.set_position(value.to_owned(), Some(t));
+            let value = unsafe { *(value as *const types::Point) };
+            layer.set_position(value, Some(t));
         }
         "size" => {
-            let value = unsafe { &*(value as *const types::Point) };
-            setter = _layer.set_size;
-            // _layer.set_size(value.to_owned(), Some(t));
+            let value = unsafe { *(value as *const types::Point) };
+            layer.set_size(value, Some(t));
         }
-        "border_color" => {
-            let value = unsafe { &*(value as *const types::Color) };
-            setter = _layer.set_border_color;
-            // _layer.set_border_color(value.to_owned(), Some(t));
+        "border_radius" => {
+            let value = unsafe { *(value as *const f64) };
+            layer.set_border_corner_radius(BorderRadius::new_single(value), Some(t));
         }
         _ => println!("something else!"),
     }
-
-    // layer.set_border_corner_radius(types::BorderRadius::new_single(radius), Some(t));
 }
 
 #[no_mangle]

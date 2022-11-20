@@ -110,7 +110,7 @@ pub fn render_node(node: &SceneNode, canvas: &mut skia_safe::Canvas) {
     let draw_cache = node.draw_cache.read().unwrap();
     let matrix = node.transformation.read().unwrap();
     if let Some(picture) = &draw_cache.picture {
-        canvas.draw_picture(&picture, Some(&matrix), None);
+        canvas.draw_picture(picture, Some(&matrix), None);
     }
 }
 

@@ -14,11 +14,17 @@ use crate::types::*;
 
 use super::change_attr;
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 #[repr(u32)]
 pub enum BlendMode {
     Normal,
     BackgroundBlur,
+}
+
+impl PartialEq for BlendMode {
+    fn eq(&self, other: &Self) -> bool {
+        core::mem::discriminant(self) == core::mem::discriminant(other)
+    }
 }
 
 #[derive(Clone, Debug)]
