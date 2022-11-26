@@ -38,21 +38,21 @@ int main(int argc, char **argv) {
       create_skia_renderer(1280, 720, 1, 8, drawFboId);
 
   struct ModelLayer *layers[100];
-  for (int i = 0; i < 100; i++) {
-    const struct ModelLayer *layer = layer_create();
-    engine_add_layer(engine, layer);
-    layers[i] = (struct ModelLayer *)layer;
-  }
-
   Easing ease_out = {.x1 = 0.0, .y1 = 0.0, .x2 = 0.0, .y2 = 1.0};
-
   Transition_Easing timing = {
       .duration = 10.0f,
       .delay = 0.0f,
       .timing = ease_out,
   };
   for (int i = 0; i < 100; i++) {
-    struct Point position = {.x = 0.0f, .y = 0.0f};
+    const struct ModelLayer *layer = layer_create();
+    engine_add_layer(engine, layer);
+    layers[i] = (struct ModelLayer *)layer;
+  }
+
+  for (int i = 0; i < 100; i++) {
+    // struct Point position = {.x = 0.0f, .y = 0.0f};
+    layer_backgroundcolor_to(layers[i], 100, 80, 90, 100, timing);
     layer_position_to(layers[i], (rand() % 500) * 1.0f,
                       (rand() % 500) * 1.0f - 250.0, timing);
     layer_border_radius_to(layers[i], (rand() % 50) * 1.0f, timing);

@@ -8,7 +8,7 @@ pub mod types;
 
 use std::sync::*;
 
-use drawing::scene::draw_scene;
+use drawing::scene::DrawScene;
 use engine::{
     animations::{Easing, Transition},
     // animations::{Easing, Transition},
@@ -17,6 +17,7 @@ use engine::{
     node::RenderNode,
 };
 use layers::layer::ModelLayer;
+use types::BorderRadius;
 
 // use crate::types::BorderRadius;
 // use types::Point;
@@ -91,6 +92,27 @@ pub extern "C" fn layer_create() -> *const ModelLayer {
 // }
 
 #[no_mangle]
+pub extern "C" fn layer_backgroundcolor_to(
+    layer: *const ModelLayer,
+    r: f64,
+    g: f64,
+    b: f64,
+    a: f64,
+    t: Transition<Easing>,
+) {
+    let layer = unsafe { &*layer };
+    let bg = types::PaintColor::Solid {
+        color: types::Color::new(r, g, b, a),
+    };
+    layer.set_background_color(bg, Some(t));
+}
+#[no_mangle]
+pub extern "C" fn layer_border_radius_to(layer: *const ModelLayer, r: f64, t: Transition<Easing>) {
+    let layer = unsafe { &*layer };
+
+    layer.set_border_corner_radius(BorderRadius::new_single(r), Some(t));
+}
+#[no_mangle]
 pub extern "C" fn layer_position_to(
     layer: *const ModelLayer,
     x: f64,
@@ -137,6 +159,7 @@ pub extern "C" fn render_scene(renderer: *mut SkiaRenderer, engine: *const engin
 
     canvas.draw_rect(skia_safe::Rect::from_xywh(0.0, 0.0, w, h), &paint);
     let engine = unsafe { &*engine };
-    draw_scene(canvas, &engine.scene);
-    renderer.surface.flush_and_submit();
+    // draw_scene(canvas, &engine.scene);
+    renderer.draw_scene(&engine.scene);
+    // renderer.surface.flush_and_submit();
 }

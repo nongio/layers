@@ -1,0 +1,1 @@
+The Modern Interface Library is a fast renderer for animated interfaces. It uses Skia for drawing the components on a variety of graphic backends. Offers an easy interface to create animations and a rich set of drawing API to create modern interfaces.

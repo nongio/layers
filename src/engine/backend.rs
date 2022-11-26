@@ -4,6 +4,11 @@ use skia_safe::{
 };
 use std::cell::Cell;
 
+use crate::drawing::scene::DrawScene;
+
+use super::super::drawing::scene::draw_scene;
+use super::Scene;
+
 pub struct SkiaRenderer {
     pub gr_context: skia_safe::gpu::DirectContext,
     pub surface: Surface,
@@ -56,5 +61,14 @@ impl SkiaRenderer {
 
     pub fn surface(&mut self) -> &mut Surface {
         &mut self.surface
+    }
+}
+
+impl DrawScene for SkiaRenderer {
+    fn draw_scene(&mut self, scene: &Scene) {
+        let surface = self.surface();
+        let c = surface.canvas();
+        draw_scene(c, scene);
+        surface.flush_and_submit();
     }
 }

@@ -5,7 +5,11 @@ use crate::engine::{
     scene::Scene,
 };
 
-pub fn draw_scene(canvas: &mut Canvas, scene: &Scene) {
+pub trait DrawScene {
+    fn draw_scene(&mut self, scene: &Scene);
+}
+
+pub(crate) fn draw_scene(canvas: &mut Canvas, scene: &Scene) {
     if let Some(root_id) = *scene.root.read().unwrap() {
         let arena = scene.nodes.data();
         let arena = arena.read().unwrap();
