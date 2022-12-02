@@ -80,6 +80,12 @@ impl ModelLayer {
     pub fn create() -> Arc<ModelLayer> {
         Arc::new(Self::new())
     }
+    pub fn add_on_click_handler(&self, _handler: Box<dyn Fn()>) {
+        let mut _engine = self.engine.write().unwrap();
+        // if let Some((id, engine)) = engine.as_mut() {
+        // engine.add_on_click_handler(*id, handler);
+        // }
+    }
 
     change_attr!(position, Point, RenderableFlags::NEEDS_LAYOUT);
     change_attr!(

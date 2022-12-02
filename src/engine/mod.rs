@@ -2,6 +2,7 @@ pub mod animations;
 pub mod backend;
 pub mod command;
 pub mod node;
+pub mod pointer;
 pub mod rendering;
 pub mod scene;
 pub mod storage;
@@ -41,12 +42,17 @@ pub struct AnimatedNodeChange {
 
 #[derive(Clone)]
 pub struct AnimationState(Animation, f64, bool);
-
+#[derive(Clone)]
+pub struct CallbackHandler {
+    pub callback: Arc<dyn Fn()>,
+    pub node_id: TreeStorageId,
+}
 pub struct Engine {
     pub scene: Arc<Scene>,
     transactions: FlatStorage<AnimatedNodeChange>,
     animations: FlatStorage<AnimationState>,
     pub timestamp: RwLock<Timestamp>,
+    // pub handlers: FlatStorage<CallbackHandler>,
 }
 
 impl Engine {
@@ -65,7 +71,6 @@ impl Engine {
         &self,
         transition: Transition<Easing>,
     ) -> FlatStorageId {
-        
         let start = self.timestamp.read().unwrap().0 + transition.delay;
 
         self.add_animation(Animation {
@@ -196,6 +201,17 @@ impl Engine {
         }
 
         needs_redraw
+    }
+
+    pub fn add_on_click_handler(
+        &self,
+        _node_id: FlatStorageId,
+        _handler: Arc<dyn Fn() + Send + Sync>,
+    ) {
+        // let node = self.scene.nodes.get(node_id);
+        // if let Some(node) = node {
+        // node.get().add_on_click_handler(handler);
+        // }
     }
 }
 
