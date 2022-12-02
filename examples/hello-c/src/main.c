@@ -19,22 +19,22 @@
 #include "init_window.h"
 
 extern bool program_alive;
-extern struct WindowContext window_context;
 
 int main(int argc, char **argv) {
 
-  printf("Hello there.\n");
+  LOG("Hello there.\n");
   program_alive = true;
 
-  setup_wayland();
+  struct wayland_client *wl = create_wayland_client();
+  struct window_context *win =
+      create_window_with_egl_context(wl, "Nya", 1280, 720);
 
-  const struct Engine *engine = engine_create();
+  const struct Engine *engine = create_engine();
 
-  create_window_with_egl_context("Nya", 1280, 720);
   GLint drawFboId = 0;
   glGetIntegerv(GL_FRAMEBUFFER_BINDING, &drawFboId);
 
-  const struct SkiaRenderer *renderer =
+  struct SkiaRenderer *renderer =
       create_skia_renderer(1280, 720, 1, 8, drawFboId);
 
   struct ModelLayer *layers[100];
@@ -45,14 +45,18 @@ int main(int argc, char **argv) {
       .timing = ease_out,
   };
   for (int i = 0; i < 100; i++) {
-    const struct ModelLayer *layer = layer_create();
+    const struct ModelLayer *layer = create_layer();
     engine_add_layer(engine, layer);
     layers[i] = (struct ModelLayer *)layer;
   }
 
   for (int i = 0; i < 100; i++) {
-    // struct Point position = {.x = 0.0f, .y = 0.0f};
-    layer_backgroundcolor_to(layers[i], 100, 80, 90, 100, timing);
+
+    layer_size_to(layers[i], (rand() % 500) * 1.0f, (rand() % 500) * 1.0f,
+                  timing);
+    layer_backgroundcolor_to(layers[i], (rand() % 100) / 100.0,
+                             (rand() % 100) / 100.0, (rand() % 100) / 100.0,
+                             1.0, timing);
     layer_position_to(layers[i], (rand() % 500) * 1.0f,
                       (rand() % 500) * 1.0f - 250.0, timing);
     layer_border_radius_to(layers[i], (rand() % 50) * 1.0f, timing);
@@ -61,16 +65,16 @@ int main(int argc, char **argv) {
   program_alive = true;
 
   while (program_alive) {
-    wl_display_dispatch_pending(window_context.wl_display);
+    wl_display_dispatch_pending(win->wl_display);
     engine_update(engine, 0.0333);
 
     render_scene(renderer, engine);
 
-    swap_buffers();
+    window_swap_buffers(win);
   }
 
-  destroy_window();
-  wl_display_disconnect(window_context.wl_display);
+  destroy_window(win);
+  wl_display_disconnect(win->wl_display);
   LOG("Display disconnected !\n");
 
   return 0;

@@ -52,11 +52,23 @@ client_protos = declare_dependency(
 	sources: wl_protos_headers,
 )
 
-executable('demo', ['src/main.c', 'src/init_window.c'], dependencies: [libhello,
-dependency('egl'),
-dependency('glesv2'),
-dependency('fontconfig'),
-wayland_egl,
-client_protos
-
-], include_directories: ['include/', include_libeas])
+executable('demo',
+[
+	'src/main.c',
+	'src/init_window.c',
+	'src/window_events.c',
+	'src/window_pointer.c',
+	'src/window_keyboard.c',
+],
+dependencies: [
+	libhello,
+	dependency('egl'),
+	dependency('glesv2'),
+	dependency('fontconfig'),
+	wayland_egl,
+	client_protos
+],
+include_directories: [
+	'include/',
+	include_libeas
+])
