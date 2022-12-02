@@ -1,6 +1,0 @@
-{
-    "files.associations": {
-        "wayland-client.h": "c",
-        "xdg-shell-protocol.h": "c"
-    }
-}
