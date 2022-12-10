@@ -11,7 +11,8 @@ macro_rules! change_attr {
                 &self,
                 value: $variable_type,
                 transition: Option<Transition<Easing>>,
-            ) -> Arc<ModelChange<$variable_type>> {
+            )  -> TransactionRef {
+
                 let maybe_engine = self.engine.read().unwrap().clone();
 
                 let change: Arc<ModelChange<$variable_type>> = Arc::new(ModelChange {
@@ -19,37 +20,15 @@ macro_rules! change_attr {
                     flag: $flags,
                 });
                 if let Some((id, engine)) = maybe_engine {
-                    engine.add_change(id, change.clone());
+                    engine.add_change(NodeRef(id), change.clone())
                 } else {
                     self.$variable_name.set(value.clone());
+                    TransactionRef(0)
                 }
-                change
             }
         }
     };
 }
-
-// macro_rules! api_change_attr {
-//     ($base_type_export:ty, $variable_name:ident, $variable_type:ty) => {
-//         paste::paste! {
-//             use engine::animations::{Transition, Easing};
-//             #[no_mangle]
-//             pub extern "C" fn [<layer_set_ $variable_name>](
-//                     obj: *const $base_type_export,
-//                     value: $variable_type,
-//                     t: Transition<Easing>,
-//                 ) {
-//                         let obj = unsafe { &*obj };
-//                         obj.[<set_ $variable_name>](value, Some(t));
-//             }
-//         }
-//     };
-// }
-// pub(crate) use api_change_attr;
-pub(crate) use change_attr;
-
-pub mod layer;
-pub mod text;
 
 impl<T: Interpolable + Sync> WithTransition for ModelChange<T> {
     fn transition(&self) -> Option<Transition<Easing>> {
@@ -78,3 +57,8 @@ impl<T: Interpolable + Sync + Send + Clone + Sized + 'static> CommandWithTransit
     for ModelChange<T>
 {
 }
+
+pub(crate) use change_attr;
+
+pub mod layer;
+pub mod text;
