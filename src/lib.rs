@@ -12,9 +12,6 @@ use std::sync::*;
 use drawing::scene::DrawScene;
 use engine::backend::SkiaRenderer;
 
-// use crate::types::BorderRadius;
-// use types::Point;
-
 #[no_mangle]
 pub extern "C" fn create_text() -> *const layers::text::ModelText {
     let text = layers::text::ModelText::create();
