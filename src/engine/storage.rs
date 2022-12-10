@@ -52,7 +52,7 @@ impl<V: Clone + Send + Sync> Default for TreeStorage<V> {
     }
 }
 
-pub struct FlatStorage<V: Clone + Send + Sync> {
+pub struct FlatStorage<V: Clone> {
     data: Arc<RwLock<FlatStorageData<V>>>,
     index: AtomicUsize,
 }

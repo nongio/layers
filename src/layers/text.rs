@@ -15,7 +15,7 @@ use crate::{
 
 use super::change_attr;
 use crate::engine::{animations::*, command::*};
-
+use crate::engine::{NodeRef, TransactionRef};
 #[derive(Clone, Debug)]
 pub struct Text {
     pub matrix: Matrix,

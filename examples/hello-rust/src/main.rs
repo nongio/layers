@@ -10,13 +10,13 @@ use glutin::{
 use rand::*;
 use std::sync::Arc;
 
-use hello::{
+use layers::{
     drawing::scene::DrawScene,
     engine::{
         animations::{Easing, Transition},
         node::RenderNode,
         scene::Scene,
-        Engine,
+        Engine, TransactionEventType,
     },
     layers::{layer::ModelLayer, text::ModelText},
     types::*,
@@ -62,7 +62,7 @@ fn main() {
         .unwrap_or(0);
     let pixel_format: usize = pixel_format.stencil_bits.try_into().unwrap();
 
-    let mut skia_renderer = hello::engine::backend::SkiaRenderer::create(
+    let mut skia_renderer = layers::engine::backend::SkiaRenderer::create(
         size.width.try_into().unwrap(),
         size.height.try_into().unwrap(),
         sample_count,
@@ -99,26 +99,26 @@ fn main() {
     );
 
     let mut layers: Vec<Arc<ModelLayer>> = Vec::new();
-    for n in 0..10 {
-        let layer = ModelLayer::create();
-        layer.set_size(Point { x: 50.0, y: 50.0 }, None);
-        layer.set_position(
-            Point {
-                x: rand::random::<f64>() * 2000.0,
-                y: rand::random::<f64>() * 2000.0,
-            },
-            None,
-        );
-        layer.set_border_corner_radius(BorderRadius::new_single(15.0), None);
-        layer.set_background_color(
-            PaintColor::Solid {
-                color: Color::new(rand::random(), rand::random(), rand::random(), 1.0),
-            },
-            None,
-        );
-        layers.push(layer.clone());
-        engine.scene.add(layer as Arc<dyn RenderNode>);
-    }
+    // for n in 0..10 {
+    let layer = ModelLayer::create();
+    layer.set_size(Point { x: 50.0, y: 50.0 }, None);
+    layer.set_position(
+        Point {
+            x: rand::random::<f64>() * 2000.0,
+            y: rand::random::<f64>() * 2000.0,
+        },
+        None,
+    );
+    layer.set_border_corner_radius(BorderRadius::new_single(15.0), None);
+    layer.set_background_color(
+        PaintColor::Solid {
+            color: Color::new(rand::random(), rand::random(), rand::random(), 1.0),
+        },
+        None,
+    );
+    layers.push(layer.clone());
+    engine.scene.add(layer as Arc<dyn RenderNode>);
+    // }
 
     let text = ModelText::create();
     {
@@ -144,7 +144,7 @@ fn main() {
                     env.windowed_context.resize(physical_size);
 
                     let size = env.windowed_context.window().inner_size();
-                    skia_renderer = hello::engine::backend::SkiaRenderer::create(
+                    skia_renderer = layers::engine::backend::SkiaRenderer::create(
                         size.width.try_into().unwrap(),
                         size.height.try_into().unwrap(),
                         sample_count,
@@ -163,16 +163,9 @@ fn main() {
                     ..
                 } => {
                     if button_state == winit::event::ElementState::Released {
-                        // text.position(
-                        //     Point { x: 0, y: _mouse_y },
-                        //     Some(Transition {
-                        //         duration: 0.5,
-                        //         delay: 0.0,
-                        //         timing: Easing::default(),
-                        //     }),
-                        // );
+                        let i = 0;
                         layers.iter().for_each(|layer| {
-                            layer.set_position(
+                            let transition = layer.set_position(
                                 Point {
                                     x: rand::random::<f64>() * 2000.0,
                                     y: rand::random::<f64>() * 2000.0,
@@ -183,18 +176,15 @@ fn main() {
                                     timing: Easing::default(),
                                 }),
                             );
+
+                            engine.on_update(transition, move |p| {
+                                println!("({}): {}", transition.0, p);
+                            });
+                            engine.on_finish(transition, move |_p| {
+                                println!("transition finished {}", transition.0);
+                            });
                         });
-                        // layer.position(
-                        //     Point {
-                        //         x: _mouse_x,
-                        //         y: _mouse_y,
-                        //     },
-                        //     Some(Transition {
-                        //         duration: 1.5,
-                        //         delay: 0.0,
-                        //         timing: Easing::default(),
-                        //     }),
-                        // );
+
                         text.set_size(
                             Point {
                                 x: _mouse_x,
