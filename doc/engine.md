@@ -15,7 +15,7 @@ The tree is stored in a memory arena using IndexTree, which allow fast read/writ
 
 ### Nodes
 Nodes have animatable properties that accepts changes and schedule them in the engine to be executed. Using this Command pattern, changes to the nodes have a consistent api between immediate changes and animated changes.
-The rendering commands are optimised using skia display list.
+The rendering commands are optimised using display list.
 
 
 
@@ -25,10 +25,11 @@ trait Renderable: Drawable + DrawCache ...;
 
 ### Command Pattern
 
-A Renderable when receiving a change to a property, sends a change message to the Engine. Changes are stored in a HashMap like storage, that allows for id based read/write as well thread safe parallel iterations.
+A Renderable when receiving a change to a property, sends a change message to the Engine. Changes are stored in a HashMap storage, that allows for id based read/write as well thread safe parallel iterations.
 The changes can includes an optional Transition description used by the engine to produce animations. Animations are separated from the changes to allow grouping of multiple changes in sync.
 A Change when executed returns a set of bit flags to mark as dirty the affected Renderable.
 On every update the Engine step forward the animations and applies the changes to the Renderables. Based on the flags the engines marks the nodes as in need of rendering or layout.
+
 Data model for Changes:
 *ModelChange*: a change over a property of a node model that could trigger a repaint or layout
 *ValueChange*: a change over a property, described by 2 values and am optional description of the transition between them

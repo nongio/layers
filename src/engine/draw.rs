@@ -6,6 +6,7 @@ pub trait Drawable {
     fn draw(&self, canvas: &mut Canvas);
     /// Returns the area that this drawable occupies.
     fn bounds(&self) -> Rectangle;
+    /// Returns the transformation matrix for this drawable.
     fn transform(&self) -> Matrix;
 }
 
@@ -13,7 +14,7 @@ pub trait Drawable {
 pub trait DrawToPicture {
     fn draw_to_picture(&self) -> Option<Picture>;
 }
-
+/// Drawable can be drawn to a picture.
 impl<T> DrawToPicture for T
 where
     T: Drawable,
