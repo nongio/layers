@@ -6,7 +6,7 @@ run_target('eas',
 
 
 cc = meson.get_compiler('c')
-libhello = cc.find_library('hello', dirs: ['/home/riccardo/dev/EAS/target/debug'])
+liblayers = cc.find_library('layers', dirs: ['/home/riccardo/dev/EAS/target/debug'])
 include_libeas = ['/home/riccardo/dev/EAS/target/']
 
 wayland_egl = dependency('wayland-egl')
@@ -61,7 +61,7 @@ executable('demo',
 	'src/window_keyboard.c',
 ],
 dependencies: [
-	libhello,
+	liblayers,
 	dependency('egl'),
 	dependency('glesv2'),
 	dependency('fontconfig'),
