@@ -62,7 +62,7 @@ fn main() {
         .unwrap_or(0);
     let pixel_format: usize = pixel_format.stencil_bits.try_into().unwrap();
 
-    let mut skia_renderer = layers::engine::backend::SkiaRenderer::create(
+    let mut skia_renderer = layers::renderer::skia_fbo::SkiaFboRenderer::create(
         size.width.try_into().unwrap(),
         size.height.try_into().unwrap(),
         sample_count,
@@ -76,7 +76,7 @@ fn main() {
     struct Env {
         windowed_context: WindowedContext,
     }
-    let mut env = Env { windowed_context };
+    let env = Env { windowed_context };
     let engine = Engine::create();
     let root_layer = ModelLayer::create();
     let _text = ModelText::create();
@@ -144,7 +144,7 @@ fn main() {
                     env.windowed_context.resize(physical_size);
 
                     let size = env.windowed_context.window().inner_size();
-                    skia_renderer = layers::engine::backend::SkiaRenderer::create(
+                    skia_renderer = layers::renderer::skia_fbo::SkiaFboRenderer::create(
                         size.width.try_into().unwrap(),
                         size.height.try_into().unwrap(),
                         sample_count,

@@ -4,16 +4,14 @@ use skia_safe::{
 };
 use std::cell::Cell;
 
-use crate::drawing::scene::DrawScene;
+use crate::drawing::scene::{draw_scene, DrawScene};
+use crate::engine::scene::Scene;
 
-use super::super::drawing::scene::draw_scene;
-use super::Scene;
-
-pub struct SkiaRenderer {
+pub struct SkiaFboRenderer {
     pub gr_context: skia_safe::gpu::DirectContext,
     pub surface: Surface,
 }
-impl SkiaRenderer {
+impl SkiaFboRenderer {
     pub fn new(
         width: i32,
         height: i32,
@@ -64,7 +62,7 @@ impl SkiaRenderer {
     }
 }
 
-impl DrawScene for SkiaRenderer {
+impl DrawScene for SkiaFboRenderer {
     fn draw_scene(&mut self, scene: &Scene) {
         let surface = self.surface();
         let c = surface.canvas();

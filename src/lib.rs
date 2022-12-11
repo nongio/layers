@@ -5,12 +5,13 @@ pub mod drawing;
 mod easing;
 pub mod engine;
 pub mod models;
+pub mod renderer;
 pub mod types;
 
 use std::sync::*;
 
 use drawing::scene::DrawScene;
-use engine::backend::SkiaRenderer;
+use renderer::skia_fbo::SkiaFboRenderer;
 
 #[no_mangle]
 pub extern "C" fn create_text() -> *const models::text::ModelText {
@@ -25,13 +26,13 @@ pub extern "C" fn create_skia_renderer(
     sample_count: usize,
     stencil_bits: usize,
     fboid: usize,
-) -> *mut SkiaRenderer {
-    let renderer = SkiaRenderer::new(width, height, sample_count, stencil_bits, fboid);
+) -> *mut SkiaFboRenderer {
+    let renderer = SkiaFboRenderer::new(width, height, sample_count, stencil_bits, fboid);
     Box::into_raw(Box::new(renderer))
 }
 
 #[no_mangle]
-pub extern "C" fn render_scene(renderer: *mut SkiaRenderer, engine: *const engine::Engine) {
+pub extern "C" fn render_scene(renderer: *mut SkiaFboRenderer, engine: *const engine::Engine) {
     let mut paint = skia_safe::Paint::new(skia_safe::Color4f::new(0.6, 0.6, 0.6, 1.0), None);
     paint.set_anti_alias(true);
     // paint.set_style(skia_bindings::SkPaint_Style::Fill);
