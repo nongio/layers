@@ -7,7 +7,6 @@ use crate::{
         animations::SyncValue,
         node::{RenderNode, RenderableFlags},
         rendering::Drawable,
-        storage::TreeStorageId,
         ChangeProducer, Engine,
     },
     types::{Color, PaintColor, Point, Rectangle},
@@ -41,7 +40,7 @@ pub struct ModelText {
     pub font_weight: SyncValue<f64>,
     pub font_letter_spacing: SyncValue<f64>,
     pub text: RwLock<String>,
-    pub engine: RwLock<Option<(TreeStorageId, Arc<Engine>)>>,
+    pub engine: RwLock<Option<(NodeRef, Arc<Engine>)>>,
 }
 
 impl ModelText {
@@ -133,7 +132,7 @@ impl Drawable for ModelText {
 }
 
 impl ChangeProducer for ModelText {
-    fn set_engine(&self, engine: Arc<Engine>, id: TreeStorageId) {
+    fn set_engine(&self, engine: Arc<Engine>, id: NodeRef) {
         *self.engine.write().unwrap() = Some((id, engine));
     }
 }

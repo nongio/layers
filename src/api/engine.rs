@@ -29,7 +29,7 @@ pub extern "C" fn engine_add_layer(
     let engine = unsafe { &*engine };
     let layer = unsafe { Arc::from_raw(layer) };
 
-    engine.scene.add(layer as Arc<dyn RenderNode>).into()
+    engine.scene.add(layer as Arc<dyn RenderNode>).0.into()
 }
 
 #[no_mangle]
@@ -40,7 +40,7 @@ pub extern "C" fn engine_add_text(
     let layer = unsafe { Arc::from_raw(text) };
     let engine = unsafe { &*engine };
 
-    engine.scene.add(layer as Arc<dyn RenderNode>).into()
+    engine.scene.add(layer as Arc<dyn RenderNode>).0.into()
 }
 
 #[no_mangle]

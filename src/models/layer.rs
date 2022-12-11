@@ -6,7 +6,6 @@ use crate::drawing::layer::draw_layer;
 use crate::engine::node::RenderNode;
 use crate::engine::node::RenderableFlags;
 use crate::engine::rendering::Drawable;
-use crate::engine::storage::TreeStorageId;
 use crate::engine::{ChangeProducer, Engine};
 use crate::engine::{NodeRef, TransactionRef};
 use crate::models::*;
@@ -70,7 +69,7 @@ pub struct ModelLayer {
     pub content: Option<Image>,
     pub blend_mode: BlendMode,
 
-    pub engine: RwLock<Option<(TreeStorageId, Arc<Engine>)>>,
+    pub engine: RwLock<Option<(NodeRef, Arc<Engine>)>>,
 }
 
 impl ModelLayer {

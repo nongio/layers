@@ -20,7 +20,7 @@ macro_rules! change_attr {
                     flag: $flags,
                 });
                 if let Some((id, engine)) = maybe_engine {
-                    engine.add_change(NodeRef(id), change.clone())
+                    engine.add_change(id, change.clone())
                 } else {
                     self.$variable_name.set(value.clone());
                     TransactionRef(0)

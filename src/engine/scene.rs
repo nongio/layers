@@ -3,7 +3,7 @@ use std::sync::{Arc, RwLock};
 use super::{
     node::{RenderNode, SceneNode},
     storage::{TreeStorage, TreeStorageId, TreeStorageNode},
-    Engine,
+    Engine, NodeRef,
 };
 
 pub struct Scene {
@@ -46,7 +46,7 @@ impl Scene {
         self.nodes.get(id)
     }
 
-    pub fn add<R: Into<Arc<dyn RenderNode>>>(&self, renderable: R) -> TreeStorageId {
+    pub fn add<R: Into<Arc<dyn RenderNode>>>(&self, renderable: R) -> NodeRef {
         let renderable: Arc<dyn RenderNode> = renderable.into();
         let node = SceneNode::with_renderable(renderable.clone());
         let id = self.insert_node(&node);
