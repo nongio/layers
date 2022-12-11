@@ -14,7 +14,7 @@
 #include <EGL/eglplatform.h>
 #include <GLES2/gl2.h>
 
-#include <hello.h>
+#include <layers.h>
 
 #include "init_window.h"
 

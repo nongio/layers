@@ -10,7 +10,7 @@
 #include <EGL/egl.h>
 #include <EGL/eglplatform.h>
 
-#include <hello.h>
+#include <layers.h>
 
 #define LOG(...) fprintf(stderr, __VA_ARGS__)
 #define LOG_ERRNO(...)                                                         \

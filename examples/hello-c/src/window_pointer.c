@@ -14,7 +14,7 @@ static void pointer_handle_button(void *data, struct wl_pointer *pointer,
   switch (state) {
   case WL_POINTER_BUTTON_STATE_PRESSED:
     LOG("wl button pressed\n");
-button_state =
+    // button_state =
     /* code */
     break;
   case WL_POINTER_BUTTON_STATE_RELEASED:

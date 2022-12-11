@@ -6,8 +6,12 @@ run_target('eas',
 
 
 cc = meson.get_compiler('c')
-liblayers = cc.find_library('layers', dirs: ['/home/riccardo/dev/EAS/target/debug'])
-include_libeas = ['/home/riccardo/dev/EAS/target/']
+p = join_paths(meson.source_root(), '../../target')
+# print variable p
+message(p)
+
+liblayers = cc.find_library('layers', dirs: [join_paths(meson.source_root(), '../../target/debug')])
+include_libeas = ['../../target/']
 
 wayland_egl = dependency('wayland-egl')
 wayland_protos = dependency('wayland-protocols', version: '>=1.14')
