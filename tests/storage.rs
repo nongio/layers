@@ -1,4 +1,4 @@
-use hello::engine::storage::{FlatStorage, TreeStorage};
+use layers::engine::storage::{FlatStorage, TreeStorage};
 
 #[test]
 pub fn test_flat_storage() {
@@ -34,21 +34,4 @@ pub fn test_tree_storage() {
         .collect::<Vec<_>>();
 
     assert_eq!(children, [2, 3]);
-}
-#[test]
-pub fn parallel_iteration() {
-    // let arena = &mut Arena::new();
-
-    // let mut last_node = arena.new_node(1);
-    // for i in 1..10_000_000 {
-    //     let node = arena.new_node(i);
-    //     node.append(last_node, arena);
-    //     last_node = node;
-    // }
-
-    // println!("Parallel iteration over arena tree");
-    // let _: Vec<f64> = arena
-    //     .par_iter()
-    //     .map(|ref mut i| (*i.get() as f64).sqrt())
-    //     .collect();
 }
