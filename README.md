@@ -12,3 +12,32 @@ The scene tree is stored in a memory arena using IndexTree, which allow fast rea
 ## Colors
 Colors are stored in OK lab color space to enable smooth and uniform looking transitions between them.
 more about Oklab in Björn Ottosson (blog)[https://bottosson.github.io/posts/oklab/] 
+
+# Build the library
+At the moment the project requires to setup skia-safe configuration variables before building. See `Cargo.toml`. Once configured the library can be built using cargo.
+The C header will be generated in the `target` folder.
+```
+cargo build
+```
+
+## Build the rust example
+The rust example is setup as a different workspace.
+```
+cargo build -p hello-rust
+```
+Likewise to run the rust example:
+```
+cargo run -p hello-rust
+```
+
+## Build the C example
+The C example is setup with meson. It requires linux to be built and run because of the dependency with Wayland.
+To build, it first needs to configure meson:
+```
+meson build/
+```
+and then run ninja:
+```
+ninja -c build
+```
+the executable will be in the `build/` folder.
