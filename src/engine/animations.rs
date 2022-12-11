@@ -51,6 +51,15 @@ pub struct Transition<T: TimingFunction> {
     pub timing: T,
 }
 
+impl Default for Transition<Easing> {
+    fn default() -> Self {
+        Transition {
+            duration: 0.0,
+            delay: 0.0,
+            timing: Easing::default(),
+        }
+    }
+}
 #[derive(Clone)]
 
 pub struct Animation {
