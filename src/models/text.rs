@@ -71,10 +71,10 @@ impl Default for ModelText {
         let scale = SyncValue::new(Point { x: 1.0, y: 1.0 });
 
         let background_color = SyncValue::new(PaintColor::Solid {
-            color: Color::new(1.0, 1.0, 1.0, 1.0),
+            color: Color::new_rgba(1.0, 1.0, 1.0, 1.0),
         });
 
-        let text_color = SyncValue::new(Color::new(0.0, 0.0, 0.0, 1.0));
+        let text_color = SyncValue::new(Color::new_rgba(0.0, 0.0, 0.0, 1.0));
         let font_size = SyncValue::new(22.0);
         let font_weight = SyncValue::new(400.0);
         let font_letter_spacing = SyncValue::new(0.0);

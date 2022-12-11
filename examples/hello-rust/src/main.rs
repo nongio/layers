@@ -1,4 +1,3 @@
-use gl::types::*;
 use gl_rs as gl;
 use glutin::{
     event::{Event, WindowEvent},
@@ -7,16 +6,14 @@ use glutin::{
     GlProfile,
 };
 
-use rand::*;
-use std::sync::Arc;
+use std::{f64::consts::PI, sync::Arc};
 
 use layers::{
     drawing::scene::DrawScene,
     engine::{
         animations::{Easing, Transition},
         node::RenderNode,
-        scene::Scene,
-        Engine, TransactionEventType,
+        Engine,
     },
     models::{layer::ModelLayer, text::ModelText},
     types::*,
@@ -43,7 +40,7 @@ fn main() {
 
     let windowed_context = cb.build_windowed(window, &events_loop).unwrap();
 
-    let mut windowed_context = unsafe { windowed_context.make_current().unwrap() };
+    let windowed_context = unsafe { windowed_context.make_current().unwrap() };
     let pixel_format = windowed_context.get_pixel_format();
 
     println!(
@@ -83,7 +80,7 @@ fn main() {
     let layer_id = engine.scene.add(root_layer.clone() as Arc<dyn RenderNode>);
 
     root_layer.set_size(
-        Point {
+        Size {
             x: 2000.0,
             y: 2000.0,
         },
@@ -93,7 +90,7 @@ fn main() {
 
     root_layer.set_background_color(
         PaintColor::Solid {
-            color: Color::new(0.6, 0.6, 0.6, 1.0),
+            color: Color::new_rgba255(180, 180, 180, 255),
         },
         None,
     );
@@ -101,6 +98,7 @@ fn main() {
     let mut layers: Vec<Arc<ModelLayer>> = Vec::new();
     // for n in 0..10 {
     let layer = ModelLayer::create();
+    layer.set_anchor_point(Point { x: 0.5, y: 0.5 }, None);
     layer.set_size(Point { x: 50.0, y: 50.0 }, None);
     layer.set_position(
         Point {
@@ -112,7 +110,7 @@ fn main() {
     layer.set_border_corner_radius(BorderRadius::new_single(15.0), None);
     layer.set_background_color(
         PaintColor::Solid {
-            color: Color::new(rand::random(), rand::random(), rand::random(), 1.0),
+            color: Color::new_rgba(rand::random(), rand::random(), rand::random(), 1.0),
         },
         None,
     );
@@ -163,26 +161,47 @@ fn main() {
                     ..
                 } => {
                     if button_state == winit::event::ElementState::Released {
-                        let i = 0;
+                        let _i = 0;
                         layers.iter().for_each(|layer| {
-                            let transition = layer.set_position(
+                            let _transition = layer.set_position(
                                 Point {
-                                    x: rand::random::<f64>() * 2000.0,
-                                    y: rand::random::<f64>() * 2000.0,
+                                    x: _mouse_x + rand::random::<f64>() * 0.0,
+                                    y: _mouse_y + rand::random::<f64>() * 0.0,
                                 },
                                 Some(Transition {
-                                    duration: 3.0,
+                                    duration: 1.0,
                                     delay: 0.0,
                                     timing: Easing::default(),
                                 }),
                             );
 
-                            engine.on_update(transition, move |p| {
-                                println!("({}): {}", transition.0, p);
-                            });
-                            engine.on_finish(transition, move |_p| {
-                                println!("transition finished {}", transition.0);
-                            });
+                            layer.set_scale(
+                                Point { x: 3.0, y: 3.0 },
+                                Some(Transition {
+                                    duration: 1.0,
+                                    delay: 0.0,
+                                    timing: Easing::default(),
+                                }),
+                            );
+
+                            // engine.on_update(transition, move |p| {
+                            //     println!("({}): {}", transition.0, p);
+                            // });
+                            // engine.on_finish(transition, move |_p| {
+                            //     println!("transition finished {}", transition.0);
+                            // });
+                            layer.set_rotation(
+                                Point3d {
+                                    x: 0.0,
+                                    y: 0.0,
+                                    z: PI * 2.0,
+                                },
+                                Some(Transition {
+                                    duration: 1.0,
+                                    delay: 0.0,
+                                    timing: Easing::default(),
+                                }),
+                            );
                         });
 
                         text.set_size(
@@ -196,6 +215,40 @@ fn main() {
                                 timing: Easing::default(),
                             }),
                         );
+                    } else {
+                        layers.iter().for_each(|layer| {
+                            let _transition = layer.set_position(
+                                Point {
+                                    x: _mouse_x + rand::random::<f64>() * 0.0,
+                                    y: _mouse_y + rand::random::<f64>() * 0.0,
+                                },
+                                Some(Transition {
+                                    duration: 1.0,
+                                    delay: 0.0,
+                                    timing: Easing::default(),
+                                }),
+                            );
+                            layer.set_scale(
+                                Point { x: 1.0, y: 1.0 },
+                                Some(Transition {
+                                    duration: 1.0,
+                                    delay: 0.0,
+                                    timing: Easing::default(),
+                                }),
+                            );
+                            layer.set_rotation(
+                                Point3d {
+                                    x: 0.0,
+                                    y: 0.0,
+                                    z: PI / 2.0,
+                                },
+                                Some(Transition {
+                                    duration: 1.0,
+                                    delay: 0.0,
+                                    timing: Easing::default(),
+                                }),
+                            );
+                        });
                     }
                 }
                 _ => (),

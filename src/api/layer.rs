@@ -23,7 +23,7 @@ pub extern "C" fn layer_backgroundcolor_to(
 ) {
     let layer = unsafe { &*layer };
     let bg = types::PaintColor::Solid {
-        color: types::Color::new(r, g, b, a),
+        color: types::Color::new_rgba(r, g, b, a),
     };
     layer.set_background_color(bg, Some(t));
 }
@@ -37,7 +37,7 @@ pub extern "C" fn layer_backgroundcolor_set(
 ) {
     let layer = unsafe { &*layer };
     let bg = types::PaintColor::Solid {
-        color: types::Color::new(r, g, b, a),
+        color: types::Color::new_rgba(r, g, b, a),
     };
     layer.set_background_color(bg, None);
 }

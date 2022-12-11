@@ -13,7 +13,7 @@ use crate::types::Point;
 
 use self::{
     animations::{Animation, Easing, Transition},
-    node::{DrawCacheManagement, RenderableFlags},
+    node::{ContainsPoint, DrawCacheManagement, RenderableFlags},
     scene::Scene,
     storage::{FlatStorage, FlatStorageId, TreeStorageId},
 };
@@ -42,7 +42,6 @@ pub struct AnimatedNodeChange {
 }
 
 /// A struct that contains the state of an animation.
-/// The state is the current progress of the animation.
 /// The f64 is the current progress of the animation.
 /// The bool is a flag that indicates if the animation is finished.
 #[derive(Clone)]
@@ -88,7 +87,7 @@ pub struct Engine {
 pub struct TransactionRef(pub FlatStorageId);
 #[derive(Clone)]
 pub struct AnimationRef(FlatStorageId);
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct NodeRef(pub TreeStorageId);
 #[derive(Clone)]
 pub struct HandlerRef(FlatStorageId);
@@ -175,8 +174,6 @@ impl Engine {
                 finished_animations.clone(),
                 |done, (id, AnimationState(animation, value, finished))| {
                     (*value, *finished) = animation.value(timestamp.0);
-                    // TODO: add support for update callbacks
-                    {}
                     if *finished {
                         done.clone().write().unwrap().push(*id);
                     }
@@ -280,7 +277,11 @@ impl Engine {
         let arena = arena.read().unwrap();
         let mut result = None;
         for node in arena.iter() {
-            let node = node.get();
+            let scene_node = node.get();
+            if scene_node.contains(point) {
+                let nodeid = arena.get_node_id(node).map(NodeRef);
+                result = nodeid;
+            }
         }
         result
     }
@@ -350,5 +351,5 @@ impl Default for Engine {
 
 /// A trait for objects that generates changes messages for an Engine
 pub trait ChangeProducer {
-    fn set_engine(&self, engine: Arc<Engine>, id: TreeStorageId);
+    fn set_engine(&self, engine: Arc<Engine>, id: NodeRef);
 }

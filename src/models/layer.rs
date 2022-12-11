@@ -1,3 +1,4 @@
+use skia_safe::V3;
 use skia_safe::{Canvas, Image, Matrix, M44};
 use std::sync::Arc;
 use std::sync::RwLock;
@@ -109,7 +110,7 @@ impl Default for ModelLayer {
     fn default() -> Self {
         let position = SyncValue::new(Point { x: 0.0, y: 0.0 });
         let size = SyncValue::new(Point { x: 100.0, y: 100.0 });
-        let anchor_point = SyncValue::new(size.value() * 0.5);
+        let anchor_point = SyncValue::new(Point { x: 0.0, y: 0.0 });
         let scale = SyncValue::new(Point { x: 1.0, y: 1.0 });
         let rotation = SyncValue::new(Point3d {
             x: 0.0,
@@ -117,18 +118,18 @@ impl Default for ModelLayer {
             z: 0.0,
         });
         let background_color = SyncValue::new(PaintColor::Solid {
-            color: Color::new(1.0, 1.0, 1.0, 1.0),
+            color: Color::new_rgba(1.0, 1.0, 1.0, 1.0),
         });
         let border_corner_radius = SyncValue::new(BorderRadius::new_single(0.0));
         let border_color = SyncValue::new(PaintColor::Solid {
-            color: Color::new(0.0, 0.0, 0.0, 1.0),
+            color: Color::new_rgba(0.0, 0.0, 0.0, 1.0),
         });
         let border_width = SyncValue::new(0.0);
         let matrix = M44::new_identity();
         let shadow_offset = SyncValue::new(Point { x: 0.0, y: 0.0 });
         let shadow_radius = SyncValue::new(0.0);
         let shadow_spread = SyncValue::new(0.0);
-        let shadow_color = SyncValue::new(Color::new(0.0, 0.0, 0.0, 1.0));
+        let shadow_color = SyncValue::new(Color::new_rgba(0.0, 0.0, 0.0, 1.0));
         let content = None;
         let blend_mode = BlendMode::Normal;
         let engine = RwLock::new(None);
@@ -160,11 +161,10 @@ impl Drawable for ModelLayer {
         draw_layer(canvas, &layer);
     }
     fn bounds(&self) -> Rectangle {
-        let p = self.position.value();
         let s = self.size.value();
         Rectangle {
-            x: p.x,
-            y: p.y,
+            x: 0.0,
+            y: 0.0,
             width: s.x,
             height: s.y,
         }
@@ -172,25 +172,55 @@ impl Drawable for ModelLayer {
     fn transform(&self) -> Matrix {
         let s = self.scale.value();
         let p = self.position.value();
+        let rotation = self.rotation.value();
+        let anchor_point = self.anchor_point.value();
+        let size = self.size.value();
+        let anchor_translate = M44::translate(
+            -anchor_point.x as f32 * size.x as f32,
+            -anchor_point.y as f32 * size.y as f32,
+            0.0,
+        );
+        let identity = M44::new_identity();
         let translate = M44::translate(p.x as f32, p.y as f32, 0.0);
         let scale = M44::scale(s.x as f32, s.y as f32, 1.0);
-        // let rotate = M44::rotate(
-        //     V3 {
-        //         x: 0.0,
-        //         y: 1.0,
-        //         z: 0.0,
-        //     },
-        //     (p.x / 100.0) as f32,
-        // );
-        let transform = skia_safe::M44::concat(&translate, &scale);
-        // let transform = skia_safe::M44::concat(&transform, &rotate);
+        let rotate_x = M44::rotate(
+            V3 {
+                x: 1.0,
+                y: 0.0,
+                z: 0.0,
+            },
+            rotation.x as f32,
+        );
+        let rotate_y = M44::rotate(
+            V3 {
+                x: 0.0,
+                y: 1.0,
+                z: 0.0,
+            },
+            rotation.y as f32,
+        );
+        let rotate_z = M44::rotate(
+            V3 {
+                x: 0.0,
+                y: 0.0,
+                z: 1.0,
+            },
+            rotation.z as f32,
+        );
+        // merge all transforms keeping into account the anchor point
+        let transform = M44::concat(&translate, &identity);
+        let transform = M44::concat(&transform, &scale);
+        let transform = M44::concat(&transform, &rotate_x);
+        let transform = M44::concat(&transform, &rotate_y);
+        let transform = M44::concat(&transform, &rotate_z);
+        let transform = M44::concat(&transform, &anchor_translate);
 
         transform.to_m33()
     }
 }
 
 impl ChangeProducer for ModelLayer {
-    fn set_engine(&self, engine: Arc<Engine>, id: TreeStorageId) {
+    fn set_engine(&self, engine: Arc<Engine>, id: NodeRef) {
         *self.engine.write().unwrap() = Some((id, engine));
     }
 }

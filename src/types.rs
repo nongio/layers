@@ -16,6 +16,9 @@ pub struct Point {
     pub y: f64,
 }
 
+#[allow(dead_code)]
+pub type Size = Point;
+
 #[derive(Clone, Copy, Debug)]
 #[repr(C)]
 pub struct Point3d {
@@ -113,7 +116,7 @@ impl Default for Color {
 
 impl Color {
     // Put in the public domain by Björn Ottosson 2020
-    pub fn new(r: f64, g: f64, b: f64, a: f64) -> Self {
+    pub fn new_rgba(r: f64, g: f64, b: f64, a: f64) -> Self {
         let l = 0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b;
         let m = 0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b;
         let s = 0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b;
@@ -128,6 +131,15 @@ impl Color {
             a: 0.0259040371 * l_ + 0.7827717662 * m_ - 0.8086757660 * s_,
             alpha: a,
         }
+    }
+
+    pub fn new_rgba255(r: u8, g: u8, b: u8, a: u8) -> Self {
+        Self::new_rgba(
+            r as f64 / 255.0,
+            g as f64 / 255.0,
+            b as f64 / 255.0,
+            a as f64 / 255.0,
+        )
     }
 }
 

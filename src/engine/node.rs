@@ -1,10 +1,12 @@
 use bitflags::bitflags;
 use indextree::{Arena, NodeId};
-use skia_safe::Picture;
+use skia_safe::{Picture, Point as SkiaPoint};
 use std::{
     fmt::Debug,
     sync::{Arc, RwLock},
 };
+
+use crate::types::{Point, Rectangle};
 
 use super::{
     rendering::{DrawToPicture, Drawable},
@@ -129,4 +131,30 @@ pub fn render_node_children(
         }
     });
     canvas.restore_to_count(sc);
+}
+
+pub trait ContainsPoint {
+    fn contains(&self, point: Point) -> bool;
+}
+
+impl ContainsPoint for SceneNode {
+    fn contains(&self, point: Point) -> bool {
+        let matrix = self.transformation.read().unwrap();
+        let inverse = matrix.invert().unwrap();
+        let point = inverse.map_point(SkiaPoint::new(point.x as f32, point.y as f32));
+        let point = Point {
+            x: point.x as f64,
+            y: point.y as f64,
+        };
+        self.model.bounds().contains(point)
+    }
+}
+
+impl ContainsPoint for Rectangle {
+    fn contains(&self, point: Point) -> bool {
+        self.x <= point.x
+            && self.y <= point.y
+            && self.x + self.width >= point.x
+            && self.y + self.height >= point.y
+    }
 }
