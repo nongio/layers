@@ -36,10 +36,10 @@ impl Scene {
         NodeRef(id)
     }
 
-    pub fn append_node_to(&self, children: TreeStorageId, parent: TreeStorageId) {
+    pub fn append_node_to(&self, children: NodeRef, parent: NodeRef) {
         let nodes = self.nodes.data();
         let mut nodes = nodes.write().unwrap();
-        parent.append(children, &mut nodes);
+        parent.append(*children, &mut nodes);
     }
     pub fn get_node(&self, id: TreeStorageId) -> Option<TreeStorageNode<SceneNode>> {
         self.nodes.get(id)

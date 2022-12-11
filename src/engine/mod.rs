@@ -7,7 +7,10 @@ pub mod scene;
 pub mod storage;
 
 use rayon::prelude::{IntoParallelRefIterator, IntoParallelRefMutIterator, ParallelIterator};
-use std::sync::{Arc, RwLock};
+use std::{
+    ops::Deref,
+    sync::{Arc, RwLock},
+};
 
 use crate::types::Point;
 
@@ -352,4 +355,12 @@ impl Default for Engine {
 /// A trait for objects that generates changes messages for an Engine
 pub trait ChangeProducer {
     fn set_engine(&self, engine: Arc<Engine>, id: NodeRef);
+}
+
+impl Deref for NodeRef {
+    type Target = TreeStorageId;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }
