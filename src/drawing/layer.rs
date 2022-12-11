@@ -7,8 +7,8 @@ use skia_safe::textlayout::*;
 use skia_safe::PaintStyle;
 use skia_safe::{BlurStyle, Canvas, ClipOp, MaskFilter, Point, RRect, Rect, TileMode};
 
-use crate::layers::layer::{BlendMode, Layer};
-use crate::layers::text::Text;
+use crate::models::layer::{BlendMode, Layer};
+use crate::models::text::Text;
 use crate::types::PaintColor;
 
 // impl Drawable for Layer {

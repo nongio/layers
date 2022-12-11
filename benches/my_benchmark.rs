@@ -1,11 +1,10 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
-use hello::{
+use layers::{
     engine::animations::{Easing, Transition},
     engine::node::RenderNode,
-    engine::scene::Scene,
     engine::Engine,
-    layers::layer::ModelLayer,
+    models::layer::ModelLayer,
     types::Point,
 };
 use std::sync::Arc;
@@ -22,7 +21,7 @@ fn criterion_benchmark(c: &mut Criterion) {
     }
 
     for model in models.iter() {
-        model.size(
+        model.set_size(
             Point { x: 100.0, y: 100.0 },
             Some(Transition {
                 duration: 10000.0,

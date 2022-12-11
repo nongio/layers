@@ -4,7 +4,7 @@ pub mod api;
 pub mod drawing;
 mod easing;
 pub mod engine;
-pub mod layers;
+pub mod models;
 pub mod types;
 
 use std::sync::*;
@@ -13,8 +13,8 @@ use drawing::scene::DrawScene;
 use engine::backend::SkiaRenderer;
 
 #[no_mangle]
-pub extern "C" fn create_text() -> *const layers::text::ModelText {
-    let text = layers::text::ModelText::create();
+pub extern "C" fn create_text() -> *const models::text::ModelText {
+    let text = models::text::ModelText::create();
     Arc::into_raw(text)
 }
 

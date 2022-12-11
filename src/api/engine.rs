@@ -6,7 +6,7 @@ use crate::{
         node::RenderNode,
         pointer::{ButtonState, PointerHandler},
     },
-    layers::{self},
+    models::{self},
 };
 
 #[no_mangle]
@@ -24,7 +24,7 @@ pub extern "C" fn engine_update(engine: *const engine::Engine, delta: f64) -> bo
 #[no_mangle]
 pub extern "C" fn engine_add_layer(
     engine: *const engine::Engine,
-    layer: *const layers::layer::ModelLayer,
+    layer: *const models::layer::ModelLayer,
 ) -> usize {
     let engine = unsafe { &*engine };
     let layer = unsafe { Arc::from_raw(layer) };
@@ -35,7 +35,7 @@ pub extern "C" fn engine_add_layer(
 #[no_mangle]
 pub extern "C" fn engine_add_text(
     engine: *const engine::Engine,
-    text: *const layers::text::ModelText,
+    text: *const models::text::ModelText,
 ) -> usize {
     let layer = unsafe { Arc::from_raw(text) };
     let engine = unsafe { &*engine };

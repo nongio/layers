@@ -9,7 +9,7 @@ use crate::engine::rendering::Drawable;
 use crate::engine::storage::TreeStorageId;
 use crate::engine::{ChangeProducer, Engine};
 use crate::engine::{NodeRef, TransactionRef};
-use crate::layers::*;
+use crate::models::*;
 use crate::types::*;
 
 use super::change_attr;
@@ -162,9 +162,7 @@ impl Drawable for ModelLayer {
     }
     fn bounds(&self) -> Rectangle {
         let p = self.position.value();
-
         let s = self.size.value();
-
         Rectangle {
             x: p.x,
             y: p.y,

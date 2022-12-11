@@ -18,7 +18,7 @@ use layers::{
         scene::Scene,
         Engine, TransactionEventType,
     },
-    layers::{layer::ModelLayer, text::ModelText},
+    models::{layer::ModelLayer, text::ModelText},
     types::*,
 };
 

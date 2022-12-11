@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::types;
 
 use super::super::engine::animations::{Easing, Transition};
-use super::super::layers::layer::ModelLayer;
+use super::super::models::layer::ModelLayer;
 use super::super::types::BorderRadius;
 
 #[no_mangle]
