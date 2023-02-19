@@ -4,7 +4,7 @@ use std::marker::Sync;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 
-use crate::easing::{bezier_easing_function, Interpolable};
+use crate::easing::bezier_easing_function;
 
 use super::command::{AnimatableValue, ValueChange};
 
@@ -92,12 +92,12 @@ impl fmt::Debug for Animation {
 static SYNC_VALUE_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
 #[derive(Debug, Clone)]
-pub struct SyncValue<V: Interpolable + Sync> {
+pub struct SyncValue<V: Sync> {
     pub id: usize,
     value: Arc<RwLock<V>>,
 }
 
-impl<V: Interpolable + Sync + Clone> SyncValue<V> {
+impl<V: Sync + Clone> SyncValue<V> {
     pub fn new(value: V) -> SyncValue<V> {
         let value = Arc::new(RwLock::new(value));
         Self {
@@ -124,7 +124,7 @@ impl<V: Interpolable + Sync + Clone> SyncValue<V> {
     }
 }
 
-impl<V: Interpolable + Sync + Clone> AnimatableValue<V> for SyncValue<V> {
+impl<V: Sync + Clone> AnimatableValue<V> for SyncValue<V> {
     fn to(&self, to: V, transition: Option<Transition<Easing>>) -> ValueChange<V> {
         ValueChange {
             from: self.value(),

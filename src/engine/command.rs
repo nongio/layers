@@ -1,4 +1,4 @@
-use crate::easing::Interpolable;
+// use crate::easing::Interpolable;
 
 use super::{
     animations::{Easing, SyncValue, Transition},
@@ -6,7 +6,7 @@ use super::{
 };
 
 #[derive(Clone, Debug)]
-pub struct ValueChange<V: Interpolable + Sync> {
+pub struct ValueChange<V: Sync> {
     pub from: V,
     pub to: V,
     pub target: SyncValue<V>,
@@ -14,11 +14,11 @@ pub struct ValueChange<V: Interpolable + Sync> {
 }
 
 #[derive(Clone, Debug)]
-pub struct ModelChange<T: Interpolable + Sync> {
+pub struct ModelChange<T: Sync> {
     pub value_change: ValueChange<T>,
     pub flag: RenderableFlags,
 }
 
-pub trait AnimatableValue<V: Interpolable + Sync> {
+pub trait AnimatableValue<V: Sync> {
     fn to(&self, to: V, transition: Option<Transition<Easing>>) -> ValueChange<V>;
 }

@@ -4,6 +4,8 @@ version = "0.1.0"
 edition = "2021"
 build = "build.rs"
 
+[toolchain]
+channel = "nightly"
 
 [lib]
 crate-type = ["lib", "cdylib"] # Creates dynamic lib

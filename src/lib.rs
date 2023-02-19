@@ -1,5 +1,9 @@
 #![deny(warnings)]
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
+// negative_impl is used to prevent the compiler from using the default implementation of
+// the trait Interpolable for PaintColor
+#![feature(negative_impls)]
+
 pub mod api;
 pub mod drawing;
 mod easing;

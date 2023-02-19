@@ -13,11 +13,15 @@ pub trait Interpolable:
     std::ops::Mul<f64, Output = Self>
     + std::ops::Add<Output = Self>
     + std::cmp::PartialEq
+    + Clone
     + Debug
     + Sized
 {
 }
 
+pub trait Interpolate {
+    fn interpolate(&self, to: &Self, f: f64) -> Self;
+}
 // implementation of Add trait for Point
 impl std::ops::Add for Point {
     type Output = Point;
@@ -143,6 +147,7 @@ impl std::ops::Add for Color {
     }
 }
 // implementation of Mul<f64> trait for PaintColor
+// TODO incomplete for GradientLinear and GradientRadial
 impl std::ops::Mul<f64> for PaintColor {
     type Output = PaintColor;
 
@@ -158,6 +163,8 @@ impl std::ops::Mul<f64> for PaintColor {
 }
 
 // implementation of Add trait for PaintColor
+// TODO incomplete for GradientLinear and GradientRadial
+
 impl std::ops::Add for PaintColor {
     type Output = PaintColor;
 
@@ -194,6 +201,8 @@ impl PartialEq for Color {
     }
 }
 // implementation of PartiallyEq trait for PaintColor
+// TODO incomplete for GradientLinear and GradientRadial
+
 impl std::cmp::PartialEq for PaintColor {
     fn eq(&self, other: &PaintColor) -> bool {
         match (self, other) {
@@ -222,11 +231,38 @@ impl Interpolable for f64 {}
 impl Interpolable for crate::types::Point {}
 impl Interpolable for crate::types::Point3d {}
 impl Interpolable for crate::types::BorderRadius {}
-impl Interpolable for crate::types::PaintColor {}
 impl Interpolable for crate::types::Color {}
+// this negative impl is needed to avoid the default implementation of Interpolate
+// for PaintColor which is not correct
+impl !Interpolable for crate::types::PaintColor {}
 
-pub fn interpolate<T: Interpolable>(p1: T, p2: T, f: f64) -> T {
-    p1 * (1.0 - f) + p2 * f
+impl<V: Interpolable> Interpolate for V {
+    fn interpolate(&self, other: &Self, f: f64) -> Self {
+        let o = other.to_owned();
+        let s = self.to_owned();
+        s * (1.0 - f) + (o * f)
+    }
+}
+
+impl Interpolate for PaintColor {
+    fn interpolate(&self, other: &PaintColor, f: f64) -> PaintColor {
+        match (self, other) {
+            (PaintColor::Solid { color: c1 }, PaintColor::Solid { color: c2 }) => {
+                PaintColor::Solid {
+                    color: c1.interpolate(c2, f),
+                }
+            }
+            _ => {
+                // if we are not interpolating between two solid colors, we just return the first
+                // or the second based on the value of f
+                if f < 0.5 {
+                    self.to_owned()
+                } else {
+                    other.to_owned()
+                }
+            }
+        }
+    }
 }
 
 // easing version of the bezier 1d with p0 = 0 and p3 = 1

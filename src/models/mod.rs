@@ -1,4 +1,4 @@
-use crate::easing::{interpolate, Interpolable};
+use crate::easing::Interpolate;
 
 use crate::engine::{
     animations::*, command::*, node::*, Command, CommandWithTransition, WithTransition,
@@ -30,22 +30,21 @@ macro_rules! change_attr {
     };
 }
 
-impl<T: Interpolable + Sync> WithTransition for ModelChange<T> {
+impl<T: Sync> WithTransition for ModelChange<T> {
     fn transition(&self) -> Option<Transition<Easing>> {
         self.value_change.transition
     }
 }
 
-impl<T: Interpolable + Sync + Clone + Sized + 'static> Command for ModelChange<T> {
+impl<I: Interpolate + Sync + Clone + 'static> Command for ModelChange<I> {
     fn execute(&self, progress: f64) -> RenderableFlags {
         let ModelChange {
             value_change, flag, ..
         } = &self;
-        value_change.target.set(interpolate(
-            value_change.from.clone(),
-            value_change.to.clone(),
-            progress,
-        ));
+
+        value_change
+            .target
+            .set(value_change.from.interpolate(&value_change.to, progress));
         *flag
     }
     fn value_id(&self) -> usize {
@@ -53,7 +52,7 @@ impl<T: Interpolable + Sync + Clone + Sized + 'static> Command for ModelChange<T
     }
 }
 
-impl<T: Interpolable + Sync + Send + Clone + Sized + 'static> CommandWithTransition
+impl<T: Interpolate + Sync + Send + Clone + Sized + 'static> CommandWithTransition
     for ModelChange<T>
 {
 }

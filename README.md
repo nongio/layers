@@ -16,6 +16,7 @@ more about Oklab in Björn Ottosson (blog)[https://bottosson.github.io/posts/okl
 # Build the library
 At the moment the project requires to setup skia-safe configuration variables before building. See `Cargo.toml`. Once configured the library can be built using cargo.
 The C header will be generated in the `target` folder.
+The project requires nightly rust to use the negative_impl feature.
 ```
 cargo build
 ```
