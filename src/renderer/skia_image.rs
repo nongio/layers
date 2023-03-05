@@ -32,8 +32,8 @@ impl SkiaImageRenderer {
         Cell::new(Self::new(width, height, filename.into()))
     }
 
-    pub fn surface(&mut self) -> &mut Surface {
-        &mut self.surface
+    pub fn surface(&self) -> Surface {
+        self.surface.clone()
     }
 
     pub fn save(&mut self) {
@@ -45,8 +45,9 @@ impl SkiaImageRenderer {
 }
 
 impl DrawScene for SkiaImageRenderer {
-    fn draw_scene(&mut self, scene: &Scene) {
-        let surface = self.surface();
+    fn draw_scene(&self, scene: &Scene) {
+        let mut surface = self.surface();
+
         let c = surface.canvas();
         draw_scene(c, scene);
         surface.flush_and_submit();
