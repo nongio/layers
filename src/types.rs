@@ -195,3 +195,41 @@ impl From<Point3d> for skia_safe::Point3 {
         }
     }
 }
+
+impl From<(u32, u32)> for Point {
+    fn from(point: (u32, u32)) -> Self {
+        Point {
+            x: point.0 as f64,
+            y: point.1 as f64,
+        }
+    }
+}
+
+impl From<(usize, usize)> for Point {
+    fn from(point: (usize, usize)) -> Self {
+        Point {
+            x: point.0 as f64,
+            y: point.1 as f64,
+        }
+    }
+}
+impl From<(f64, f64)> for Point {
+    fn from(point: (f64, f64)) -> Self {
+        Point {
+            x: point.0,
+            y: point.1,
+        }
+    }
+}
+
+impl From<Color> for PaintColor {
+    fn from(color: Color) -> Self {
+        PaintColor::Solid { color }
+    }
+}
+
+impl From<f64> for BorderRadius {
+    fn from(radius: f64) -> Self {
+        BorderRadius::new_single(radius)
+    }
+}
