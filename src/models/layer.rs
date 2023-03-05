@@ -1,5 +1,7 @@
-use skia_safe::V3;
-use skia_safe::{Canvas, Image, Matrix, M44};
+use skia_safe::gpu::BackendTexture;
+use skia_safe::image::CachingHint;
+use skia_safe::{Bitmap, Canvas, Image, Matrix, Pixmap, M44, V3};
+
 use std::sync::Arc;
 use std::sync::RwLock;
 
@@ -47,7 +49,7 @@ pub struct Layer {
     pub shadow_color: Color,
     pub shadow_spread: f64,
     pub matrix: Matrix,
-    pub content: Option<SkiaImage>,
+    pub content: Option<Image>,
     pub blend_mode: BlendMode,
 }
 // #[derive(Clone)]
@@ -67,7 +69,9 @@ pub struct ModelLayer {
     pub shadow_color: SyncValue<Color>,
     pub matrix: M44,
 
-    pub content: Option<Image>,
+    pub content: SyncValue<Option<Image>>,
+    pub _backend_texture: RwLock<Option<BackendTexture>>,
+
     pub blend_mode: BlendMode,
 
     pub engine: RwLock<Option<(NodeRef, Arc<Engine>)>>,
@@ -102,9 +106,95 @@ impl ModelLayer {
     change_attr!(shadow_radius, f64, RenderableFlags::NEEDS_PAINT);
     change_attr!(shadow_spread, f64, RenderableFlags::NEEDS_PAINT);
     change_attr!(shadow_color, Color, RenderableFlags::NEEDS_PAINT);
-}
+    change_attr!(content, Option<Image>, RenderableFlags::NEEDS_PAINT);
 
-//api_change_attr!(ModelLayer, position, Point);
+    pub fn set_content_from_file(&self, file_path: &str) {
+        // read jpg file
+        let data = std::fs::read(file_path).unwrap();
+        unsafe {
+            let data = skia_safe::Data::new_bytes(data.as_slice());
+            let content = Image::from_encoded(data);
+
+            self.set_content(content.clone(), None);
+        }
+    }
+    pub fn set_content_from_data_raster_rgba8(&self, data: Vec<u8>, width: i32, height: i32) {
+        unsafe {
+            let image_info = skia_safe::ImageInfo::new(
+                skia_safe::ISize::new(width, height),
+                skia_safe::ColorType::RGBA8888,
+                skia_safe::AlphaType::Premul,
+                None,
+            );
+
+            let data = skia_safe::Data::new_bytes(data.as_slice());
+            let row_bytes = (width as usize * image_info.bytes_per_pixel()) as usize;
+            let pixmap = Pixmap::new(&image_info, data.as_bytes(), row_bytes);
+
+            let mut bitmap = Bitmap::new();
+            bitmap.install_pixels(&image_info, pixmap.writable_addr(), row_bytes);
+            let content = Image::from_bitmap(&bitmap);
+
+            // let content = Image::from_raster_data(&image_info, data, width as usize * 4);
+
+            if let Some(image) = content {
+                self.set_content(Some(image), None);
+            }
+        }
+    }
+
+    pub fn set_content_from_data_encoded(&self, data: Vec<u8>) {
+        unsafe {
+            let data = skia_safe::Data::new_bytes(data.as_slice());
+
+            let content = Image::from_encoded(data);
+            if let Some(image) = content {
+                let image = image.to_raster_image(None);
+                println!("image size: {:?}", image);
+                self.set_content(image, None);
+            }
+        }
+    }
+    // set content from gl texture
+    pub fn set_content_from_texture(
+        &self,
+        texture_id: u32,
+        target: skia_safe::gpu::gl::Enum,
+        _format: skia_safe::gpu::gl::Enum,
+        size: impl Into<Point>,
+    ) {
+        let size = size.into();
+        unsafe {
+            let mut gr_context: skia_safe::gpu::DirectContext =
+                skia_safe::gpu::DirectContext::new_gl(None, None).unwrap();
+
+            let mut texture_info =
+                skia_safe::gpu::gl::TextureInfo::from_target_and_id(target, texture_id);
+            texture_info.format = skia_safe::gpu::gl::Format::RGBA8.into();
+
+            let texture = BackendTexture::new_gl(
+                (size.x as i32, size.y as i32),
+                skia_safe::gpu::MipMapped::Yes,
+                texture_info,
+            );
+
+            let image = Image::from_texture(
+                &mut gr_context,
+                &texture.clone(),
+                skia_safe::gpu::SurfaceOrigin::TopLeft,
+                skia_safe::ColorType::RGBA8888,
+                skia_safe::AlphaType::Opaque,
+                None,
+            )
+            .unwrap()
+            .clone();
+
+            let image = image.to_raster_image(CachingHint::Allow).unwrap();
+
+            self.set_content(Some(image), None);
+        }
+    }
+}
 
 impl Default for ModelLayer {
     fn default() -> Self {
@@ -130,9 +220,10 @@ impl Default for ModelLayer {
         let shadow_radius = SyncValue::new(0.0);
         let shadow_spread = SyncValue::new(0.0);
         let shadow_color = SyncValue::new(Color::new_rgba(0.0, 0.0, 0.0, 1.0));
-        let content = None;
+        let content = SyncValue::new(None);
         let blend_mode = BlendMode::Normal;
         let engine = RwLock::new(None);
+
         Self {
             anchor_point,
             position,
@@ -151,6 +242,7 @@ impl Default for ModelLayer {
             matrix,
             blend_mode,
             engine,
+            _backend_texture: RwLock::new(None),
         }
     }
 }
@@ -169,6 +261,17 @@ impl Drawable for ModelLayer {
             height: s.y,
         }
     }
+    fn scaled_bounds(&self) -> Rectangle {
+        let s = self.size.value();
+        let scale = self.scale.value();
+
+        Rectangle {
+            x: 0.0,
+            y: 0.0,
+            width: s.x * scale.x,
+            height: s.y * scale.y,
+        }
+    }
     fn transform(&self) -> Matrix {
         let s = self.scale.value();
         let p = self.position.value();
@@ -182,7 +285,7 @@ impl Drawable for ModelLayer {
         );
         let identity = M44::new_identity();
         let translate = M44::translate(p.x as f32, p.y as f32, 0.0);
-        let scale = M44::scale(s.x as f32, s.y as f32, 1.0);
+        let _scale = M44::scale(s.x as f32, s.y as f32, 1.0);
         let rotate_x = M44::rotate(
             V3 {
                 x: 1.0,
@@ -209,13 +312,17 @@ impl Drawable for ModelLayer {
         );
         // merge all transforms keeping into account the anchor point
         let transform = M44::concat(&translate, &identity);
-        let transform = M44::concat(&transform, &scale);
+        // let transform = M44::concat(&transform, &scale);
         let transform = M44::concat(&transform, &rotate_x);
         let transform = M44::concat(&transform, &rotate_y);
         let transform = M44::concat(&transform, &rotate_z);
         let transform = M44::concat(&transform, &anchor_translate);
 
         transform.to_m33()
+    }
+    fn scale(&self) -> (f32, f32) {
+        let s = self.scale.value();
+        (s.x as f32, s.y as f32)
     }
 }
 
@@ -241,9 +348,7 @@ impl From<&ModelLayer> for Layer {
         let shadow_spread = model.shadow_spread.value();
         let shadow_color = model.shadow_color.value();
         let matrix = model.transform();
-        let content = model.content.clone().map(|image| SkiaImage {
-            data: Box::new(image),
-        });
+        let content = model.content.value();
 
         Self {
             size,
@@ -275,10 +380,11 @@ impl From<Layer> for ModelLayer {
         let shadow_spread = layer.shadow_spread;
         let shadow_color = layer.shadow_color;
         let matrix = M44::new_identity();
-        let content = layer.content.map(|image| {
-            let i = image.data;
-            *i
-        });
+        let content = match layer.content {
+            None => SyncValue::new(None),
+            Some(image) => SyncValue::new(Some(Image::from(image))),
+        };
+
         let blend_mode = layer.blend_mode;
 
         let (x, y) = (
@@ -307,6 +413,7 @@ impl From<Layer> for ModelLayer {
             matrix,
             blend_mode,
             engine: RwLock::new(None),
+            _backend_texture: RwLock::new(None),
         }
     }
 }
