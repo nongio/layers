@@ -81,7 +81,7 @@ impl<V: Clone + Send + Sync> FlatStorage<V> {
         self.data.clone()
     }
 
-    pub fn remove_at(&mut self, id: &FlatStorageId) {
+    pub fn remove_at(&self, id: &FlatStorageId) {
         self.data.write().unwrap().remove(id);
     }
 }
