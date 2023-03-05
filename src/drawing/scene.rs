@@ -6,7 +6,7 @@ use crate::engine::{
 };
 
 pub trait DrawScene {
-    fn draw_scene(&mut self, scene: &Scene);
+    fn draw_scene(&self, scene: &Scene);
 }
 
 pub(crate) fn draw_scene(canvas: &mut Canvas, scene: &Scene) {
