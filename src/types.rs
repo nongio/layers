@@ -1,3 +1,4 @@
+use oklab::{oklab_to_srgb, srgb_to_oklab, Oklab, RGB};
 use skia_safe::Color4f;
 
 #[derive(Clone, Copy, Debug)]
@@ -116,20 +117,18 @@ impl Default for Color {
 
 impl Color {
     // Put in the public domain by Björn Ottosson 2020
-    pub fn new_rgba(r: f64, g: f64, b: f64, a: f64) -> Self {
-        let l = 0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b;
-        let m = 0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b;
-        let s = 0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b;
-
-        let l_ = libm::cbrt(l);
-        let m_ = libm::cbrt(m);
-        let s_ = libm::cbrt(s);
+    pub fn new_rgba(r: f64, g: f64, b: f64, alpha: f64) -> Self {
+        let Oklab { l, a, b } = srgb_to_oklab(RGB {
+            r: (r * 255.0) as u8,
+            g: (g * 255.0) as u8,
+            b: (b * 255.0) as u8,
+        });
 
         Color {
-            l: 0.2104542553 * l_ + 0.7936177850 * m_ - 0.0040720468 * s_,
-            b: 1.9779984951 * l_ - 2.4285922050 * m_ + 0.4505937099 * s_,
-            a: 0.0259040371 * l_ + 0.7827717662 * m_ - 0.8086757660 * s_,
-            alpha: a,
+            l: l as f64,
+            a: a as f64,
+            b: b as f64,
+            alpha,
         }
     }
 
@@ -160,19 +159,18 @@ impl Color {
 
 impl From<Color> for Color4f {
     fn from(color: Color) -> Self {
-        let l_ = color.l + 0.3963377774 * color.a + 0.2158037573 * color.b;
-        let m_ = color.l - 0.1055613458 * color.a - 0.0638541728 * color.b;
-        let s_ = color.l - 0.0894841775 * color.a - 1.2914855480 * color.b;
-
-        let l = l_ * l_ * l_;
-        let m = m_ * m_ * m_;
-        let s = s_ * s_ * s_;
+        let Color { l, a, b, alpha } = color;
+        let rgb = oklab_to_srgb(Oklab {
+            l: l as f32,
+            a: a as f32,
+            b: b as f32,
+        });
 
         Self {
-            r: (4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s) as f32,
-            g: (-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s) as f32,
-            b: (-0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s) as f32,
-            a: color.alpha as f32,
+            r: (rgb.r as f32 / 255.0) as f32,
+            g: (rgb.g as f32 / 255.0) as f32,
+            b: (rgb.b as f32 / 255.0) as f32,
+            a: alpha as f32,
         }
     }
 }
