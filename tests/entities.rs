@@ -12,7 +12,7 @@ pub fn change_layer_position() {
 
     let layer = ModelLayer::create();
 
-    let _id = scene.add(layer.clone() as Arc<dyn RenderNode>);
+    let _id = engine.scene.add(layer.clone() as Arc<dyn RenderNode>);
 
     assert_eq!(layer.position.value().x, 0.0);
 
