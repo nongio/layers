@@ -9,15 +9,16 @@ macro_rules! change_attr {
         paste::paste! {
             pub fn [<set_ $variable_name>](
                 &self,
-                value: $variable_type,
+                value: impl Into<$variable_type>,
                 transition: Option<Transition<Easing>>,
             )  -> TransactionRef {
-
+                let value:$variable_type = value.into();
                 let maybe_engine = self.engine.read().unwrap().clone();
+                let flags = $flags;
 
                 let change: Arc<ModelChange<$variable_type>> = Arc::new(ModelChange {
                     value_change: self.$variable_name.to(value.clone(), transition),
-                    flag: $flags,
+                    flag: flags,
                 });
                 if let Some((id, engine)) = maybe_engine {
                     engine.add_change(id, change.clone())
