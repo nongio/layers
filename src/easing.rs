@@ -3,6 +3,7 @@ use std::fmt::Debug;
 use crate::types::{
     BorderRadius, Color, GradientLinear, GradientRadial, PaintColor, Point, Point3d,
 };
+use skia_safe::Image;
 
 #[allow(dead_code)]
 fn linspace(steps: u64, step: u64) -> f64 {
@@ -235,6 +236,7 @@ impl Interpolable for crate::types::Color {}
 // this negative impl is needed to avoid the default implementation of Interpolate
 // for PaintColor which is not correct
 impl !Interpolable for crate::types::PaintColor {}
+impl !Interpolable for Option<Image> {}
 
 impl<V: Interpolable> Interpolate for V {
     fn interpolate(&self, other: &Self, f: f64) -> Self {
@@ -265,6 +267,15 @@ impl Interpolate for PaintColor {
     }
 }
 
+impl Interpolate for Option<Image> {
+    fn interpolate(&self, other: &Option<Image>, f: f64) -> Option<Image> {
+        if f < 0.5 {
+            self.clone().to_owned()
+        } else {
+            other.clone().to_owned()
+        }
+    }
+}
 // easing version of the bezier 1d with p0 = 0 and p3 = 1
 fn bezier_easing_1d(p1: f64, p2: f64, f: f64) -> f64 {
     let f2 = f * f;
