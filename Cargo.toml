@@ -24,17 +24,20 @@ oklab = "1.0.0"
 
 [dependencies.skia-safe]
 version = "0"
-# git = "https://github.com/rust-skia/rust-skia"
-# tag = "0.56.0"
+
+# this set of features is required for enabling to use the pre-built
+# binaries of skia-safe
 features = [
     "binary-cache",
-    "embed-icudtl",
-    "textlayout",
     "egl",
     "gl",
+    "svg",
+    "textlayout",
+    "vulkan",
     "wayland",
+    "webp",
+    "x11",
 ]
-# other features ["egl", "wayland"]
 
 [dev-dependencies]
 criterion = "0.3"
