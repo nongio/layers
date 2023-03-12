@@ -1,5 +1,5 @@
 [package]
-name = "hello-rust"
+name = "hello-dom"
 version = "0.1.0"
 edition = "2021"
 
@@ -9,6 +9,7 @@ edition = "2021"
 glutin = "0.28"
 winit = "0.26.1"
 gl-rs = { package = "gl", version = "0.14.0" }
-layers = { path = "../../", features = ["export-taffy"] }
+layers = { path = "../../" }
 rand = "0.8.5"
 image = "0.24.5"
+mt-dom = "0.21.1"

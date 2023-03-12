@@ -270,9 +270,9 @@ impl Interpolate for PaintColor {
 impl Interpolate for Option<Image> {
     fn interpolate(&self, other: &Option<Image>, f: f64) -> Option<Image> {
         if f < 0.5 {
-            self.clone().to_owned()
+            self.clone()
         } else {
-            other.clone().to_owned()
+            other.clone()
         }
     }
 }

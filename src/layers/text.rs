@@ -1,8 +1,9 @@
 use skia_safe::{Canvas, Matrix, M44};
 use std::sync::{Arc, RwLock};
+use taffy::prelude::Node;
 
 use crate::{
-    drawing::layer::draw_text,
+    drawing::text::draw_text,
     engine::{
         animations::SyncValue,
         node::{RenderNode, RenderableFlags},
@@ -16,7 +17,7 @@ use crate::{
     types::{Color, PaintColor, Point, Rectangle},
 };
 
-use super::change_attr;
+use super::change_model;
 use crate::engine::{animations::*, command::*};
 #[derive(Clone, Debug)]
 pub struct Text {
@@ -138,12 +139,6 @@ impl Drawable for ModelText {
     }
 }
 
-// impl ChangeProducer for ModelText {
-//     fn set_engine(&self, engine: Arc<Engine>, id: NodeRef) {
-//         *self.engine.write().unwrap() = Some((id, engine));
-//     }
-// }
-
 impl RenderNode for ModelText {}
 
 // Conversion helpers
@@ -181,25 +176,26 @@ pub struct TextLayer {
     engine: Arc<Engine>,
     pub id: Arc<RwLock<Option<NodeRef>>>,
     pub model: Arc<ModelText>,
+    pub layout: Node,
 }
 
 impl TextLayer {
     pub fn set_id(&self, id: NodeRef) {
         self.id.write().unwrap().replace(id);
     }
-    change_attr!(position, Point, RenderableFlags::NEEDS_LAYOUT);
-    change_attr!(
+    change_model!(position, Point, RenderableFlags::NEEDS_LAYOUT);
+    change_model!(
         size,
         Point,
         RenderableFlags::NEEDS_PAINT | RenderableFlags::NEEDS_LAYOUT
     );
 
-    change_attr!(
+    change_model!(
         font_size,
         f64,
         RenderableFlags::NEEDS_PAINT | RenderableFlags::NEEDS_LAYOUT
     );
-    change_attr!(
+    change_model!(
         font_weight,
         f64,
         RenderableFlags::NEEDS_PAINT | RenderableFlags::NEEDS_LAYOUT

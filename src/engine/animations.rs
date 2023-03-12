@@ -4,11 +4,12 @@ use std::marker::Sync;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 
+use super::command::{AnimatableValue, ValueChange};
 use crate::easing::bezier_easing_function;
 
-use super::command::{AnimatableValue, ValueChange};
+/// This module contains the animation related data structures
 
-// A trait for interpolating across time
+/// A trait for interpolating across time
 pub trait TimingFunction {
     fn value_at(&self, t: f64) -> f64;
 }

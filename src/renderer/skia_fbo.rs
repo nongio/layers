@@ -1,15 +1,24 @@
+#![allow(warnings)]
+use indextree::{Arena, NodeId};
 use skia_safe::{
     gpu::{gl::FramebufferInfo, BackendRenderTarget, SurfaceOrigin},
-    ColorType, Surface,
+    ColorType, Image, Surface,
 };
 use std::cell::Cell;
 
-use crate::drawing::scene::{draw_scene, DrawScene};
-use crate::engine::scene::Scene;
+use crate::engine::{
+    node::{DrawCacheManagement, RenderableFlags, SceneNode},
+    rendering::{render_node, render_node_children, render_node_to_image},
+    scene::Scene,
+    storage::TreeStorage,
+    NodeRef,
+};
+use crate::{drawing::scene::DrawScene, engine::storage::FlatStorage};
 
 pub struct SkiaFboRenderer {
     pub gr_context: skia_safe::gpu::DirectContext,
     pub surface: Surface,
+    pub raster_cache: FlatStorage<Image>,
 }
 impl SkiaFboRenderer {
     pub fn new(
@@ -41,9 +50,11 @@ impl SkiaFboRenderer {
         )
         .unwrap();
 
+        let raster_cache: FlatStorage<Image> = FlatStorage::new();
         Self {
             gr_context,
             surface,
+            raster_cache,
         }
     }
 
@@ -57,16 +68,92 @@ impl SkiaFboRenderer {
         Cell::new(Self::new(width, height, sample_count, stencil_bits, fboid))
     }
 
-    pub fn surface(&mut self) -> &mut Surface {
-        &mut self.surface
+    pub fn surface(&self) -> Surface {
+        self.surface.clone()
+    }
+    fn draw_node_children(
+        &self,
+        node_id: NodeRef,
+        arena: &Arena<SceneNode>,
+        canvas: &mut skia_safe::Canvas,
+    ) {
+        let node_id: NodeId = node_id.into();
+        node_id.children(arena).for_each(|child_id| {
+            let childindex: usize = child_id.into();
+            let node = arena.get(child_id).unwrap().get();
+
+            let flags = node.flags.read().unwrap();
+
+            // FIXME we can't raster because shadows are being cropped
+            let can_raster = !flags.contains(RenderableFlags::ANIMATING);
+
+            drop(flags);
+            // TODO find a logic to decide when to raster
+
+            // node rastering should me moved to a separate thread
+            // if node.need_raster() && can_raster {
+            //     let img = render_node_to_image(node);
+            //     if let Some(img) = img {
+            //         self.raster_cache.insert_with_id(img.clone(), childindex);
+            //         node.set_need_raster(false);
+            //     }
+            //     //     // println!("rastering child: {}", childindex);
+            // }
+
+            let matrix = node.transformation.read().unwrap().clone();
+
+            let s = canvas.save();
+            canvas.concat(&matrix);
+            let mut cached = false;
+
+            if can_raster {
+                if let Some(image) = self.raster_cache.get(&childindex) {
+                    canvas.draw_image(&image, (0, 0), None);
+                    // println!(
+                    //     "using cache for child: {} animating {}",
+                    //     childindex, !can_raster
+                    // );
+                    cached = true;
+                }
+            }
+            if !cached {
+                // println!(
+                //     "no raster for child: {} animating {}",
+                //     childindex, !can_raster
+                // );
+                // node.set_need_raster(true);
+                let draw_cache = node.draw_cache.read().unwrap();
+                if let Some(draw_cache) = &*draw_cache {
+                    canvas.draw_picture(draw_cache.picture(), None, None);
+                } else {
+                    node.set_need_repaint(true);
+                    println!("no picture for child: {}", childindex);
+                }
+            }
+            self.draw_node_children(NodeRef(child_id), &arena, canvas);
+            canvas.restore_to_count(s);
+        });
     }
 }
 
 impl DrawScene for SkiaFboRenderer {
-    fn draw_scene(&mut self, scene: &Scene) {
-        let surface = self.surface();
-        let c = surface.canvas();
-        draw_scene(c, scene);
+    fn draw_scene(&self, scene: &Scene, root_id: NodeRef) {
+        let mut surface = self.surface();
+        let canvas = surface.canvas();
+
+        let arena = scene.nodes.data();
+        let arena = &*arena.read().unwrap();
+        if let Some(root) = scene.get_node(root_id) {
+            let root = arena.get(root_id.into()).unwrap().get();
+            render_node(root, canvas);
+            let matrix = root.transformation.read().unwrap().clone();
+            let sc = canvas.save();
+            canvas.concat(&matrix);
+
+            self.draw_node_children(root_id, arena, canvas);
+            canvas.restore_to_count(sc);
+        }
+
         surface.flush_and_submit();
     }
 }

@@ -2,21 +2,22 @@ use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
 use layers::{
     engine::animations::{Easing, Transition},
-    engine::node::RenderNode,
-    engine::Engine,
-    models::layer::ModelLayer,
+    engine::LayersEngine,
+    layers::layer::Layer,
     types::Point,
 };
-use std::sync::Arc;
+
 pub struct Timestamp(f64);
 
 fn criterion_benchmark(c: &mut Criterion) {
-    let engine = Engine::create();
+    let engine = LayersEngine::new();
 
-    let mut models = Vec::<Arc<ModelLayer>>::new();
+    let root = engine.new_layer();
+    engine.scene_set_root(root);
+    let mut models = Vec::<Layer>::new();
     for _ in 0..1000 {
-        let model = ModelLayer::create();
-        engine.scene.add(model.clone() as Arc<dyn RenderNode>);
+        let model = engine.new_layer();
+        engine.scene_add_layer(model.clone());
         models.push(model);
     }
 

@@ -4,9 +4,8 @@
 //! The scene is a tree of renderable nodes (implementing the `Renderable` trait).
 //! The tree is stored in a memory arena using IndexTree, which allow fast read/write and thread safe parallel iterations.
 
-// use stretch::Stretch;
-
-use crate::layers::layer::ModelLayer;
+use std::sync::Arc;
+use taffy::prelude::Node;
 
 use super::{
     node::{RenderNode, SceneNode},
@@ -14,11 +13,8 @@ use super::{
     // Engine,
     NodeRef,
 };
-
 pub struct Scene {
     pub nodes: TreeStorage<SceneNode>,
-    pub root: RwLock<TreeStorageId>,
-    // pub engine: RwLock<Option<Arc<Engine>>>,
 }
 
 impl Scene {
@@ -31,59 +27,46 @@ impl Scene {
         Arc::new(Self::new())
     }
 
-    /// Add a new node to the scene by default append it to root
-    fn insert_node(&self, node: &SceneNode) -> NodeRef {
-        let id = self.nodes.insert(node.clone());
-
-        let nodes = self.nodes.data();
-        let mut nodes = nodes.write().unwrap();
-        let root = self.root.read().unwrap();
-        root.append(id, &mut nodes);
-
-        NodeRef(id)
-    }
-
-    pub fn get_node(&self, id: TreeStorageId) -> Option<TreeStorageNode<SceneNode>> {
-        self.nodes.get(id)
-    }
     pub fn append_node_to(&self, children: NodeRef, parent: NodeRef) {
         let nodes = self.nodes.data();
         let mut nodes = nodes.write().unwrap();
         parent.append(*children, &mut nodes);
     }
-    pub fn set_root<R: Into<Arc<dyn RenderNode>>>(&self, renderable: R) -> NodeRef {
-        let renderable: Arc<dyn RenderNode> = renderable.into();
-        let node = SceneNode::with_renderable(renderable.clone());
-        let id = self.insert_node(&node);
-
-        let mut root = self.root.write().unwrap();
-        *root = id.0;
-
-        id
+    /// Add a new node to the scene
+    fn insert_node(&self, node: &SceneNode, parent: Option<NodeRef>) -> NodeRef {
+        let id = self.nodes.insert(node.clone());
+        if let Some(parent) = parent {
+            self.append_node_to(NodeRef(id), parent);
+        }
+        NodeRef(id)
     }
-    pub fn add<R: Into<Arc<dyn RenderNode>>>(&self, renderable: R) -> NodeRef {
-        let renderable: Arc<dyn RenderNode> = renderable.into();
-        let node = SceneNode::with_renderable(renderable.clone());
-        let id = self.insert_node(&node);
 
-        id
+    pub fn get_node(&self, id: impl Into<TreeStorageId>) -> Option<TreeStorageNode<SceneNode>> {
+        let id = id.into();
+        self.nodes.get(id)
     }
-    // pub fn set_engine(&self, engine: Arc<Engine>) {
-    //     self.engine.write().unwrap().replace(engine);
-    // }
+
+    pub fn add<R: Into<Arc<dyn RenderNode>>>(&self, renderable: R, layout: Node) -> NodeRef {
+        let renderable: Arc<dyn RenderNode> = renderable.into();
+        let node = SceneNode::with_renderable_and_layout(renderable.clone(), layout);
+        self.insert_node(&node, None)
+    }
+    pub fn append<R: Into<Arc<dyn RenderNode>>>(
+        &self,
+        parent: NodeRef,
+        renderable: R,
+        layout: Node,
+    ) -> NodeRef {
+        let renderable: Arc<dyn RenderNode> = renderable.into();
+        let node = SceneNode::with_renderable_and_layout(renderable.clone(), layout);
+        self.insert_node(&node, Some(parent))
+    }
 }
 
 impl Default for Scene {
     fn default() -> Self {
         let nodes = TreeStorage::new();
-        let root = ModelLayer::create();
-        let node = SceneNode::with_renderable(root);
-        let rootid = nodes.insert(node);
 
-        Scene {
-            nodes,
-            root: RwLock::new(rootid),
-            // engine: RwLock::new(None),
-        }
+        Scene { nodes }
     }
 }

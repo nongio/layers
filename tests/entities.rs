@@ -1,24 +1,18 @@
-use layers::engine::node::RenderNode;
-use layers::engine::Engine;
-use layers::models::layer::ModelLayer;
-use layers::types::Point;
-use std::sync::Arc;
+use layers::{engine::LayersEngine, types::Point};
 
 #[test]
 pub fn change_layer_position() {
-    let engine = Engine::create();
+    let engine = LayersEngine::new();
 
-    let scene = engine.scene.clone();
+    let layer = engine.new_layer();
 
-    let layer = ModelLayer::create();
+    let _id = engine.scene_add_layer(layer.clone());
 
-    let _id = engine.scene.add(layer.clone() as Arc<dyn RenderNode>);
-
-    assert_eq!(layer.position.value().x, 0.0);
+    assert_eq!(layer.position().x, 0.0);
 
     layer.set_position(Point { x: 200.0, y: 100.0 }, None);
 
     engine.update(0.01);
 
-    assert_eq!(layer.position.value().x, 200.0);
+    assert_eq!(layer.position().x, 200.0);
 }

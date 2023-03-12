@@ -1,12 +1,10 @@
-// use std::sync::Arc;
-
+//! Internal models representing the Layers and their animatable properties.
 use crate::easing::Interpolate;
-
 use crate::engine::{
     animations::*, command::*, node::*, Command, CommandWithTransition, NodeRef, WithTransition,
 };
 
-macro_rules! change_attr {
+macro_rules! change_model {
     ($variable_name:ident, $variable_type:ty, $flags:expr) => {
         paste::paste! {
             pub fn [<set_ $variable_name>](
@@ -23,11 +21,14 @@ macro_rules! change_attr {
                 });
                 let id:Option<NodeRef> = *self.id.read().unwrap();
                 if let Some(id) = id {
-                    self.engine.add_change(id, change.clone());
+                    self.engine.schedule_change(id, change.clone());
                 } else {
                     self.model.$variable_name.set(value.clone());
                 }
                 change
+            }
+            pub fn $variable_name(&self) -> $variable_type {
+                self.model.$variable_name.value()
             }
         }
     };
@@ -60,7 +61,8 @@ impl<T: Interpolate + Sync + Send + Clone + Sized + 'static> CommandWithTransiti
 {
 }
 
-pub(crate) use change_attr;
+pub(crate) use change_model;
+use taffy::prelude::Node;
 
 use self::layer::Layer;
 use self::text::TextLayer;
@@ -76,8 +78,8 @@ pub enum Layers {
 impl Layers {
     pub fn id(&self) -> Option<NodeRef> {
         match self {
-            Layers::Layer(layer) => layer.id.read().unwrap().clone(),
-            Layers::TextLayer(layer) => layer.id.read().unwrap().clone(),
+            Layers::Layer(layer) => *layer.id.read().unwrap(),
+            Layers::TextLayer(layer) => *layer.id.read().unwrap(),
         }
     }
     pub fn set_id(&self, id: NodeRef) {
@@ -86,8 +88,13 @@ impl Layers {
             Layers::TextLayer(layer) => layer.set_id(id),
         }
     }
+    pub fn layout_node(&self) -> Node {
+        match self {
+            Layers::Layer(layer) => layer.layout,
+            Layers::TextLayer(layer) => layer.layout,
+        }
+    }
 }
-
 
 impl From<Layer> for Layers {
     fn from(layer: Layer) -> Self {

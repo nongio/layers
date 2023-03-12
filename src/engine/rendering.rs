@@ -4,8 +4,10 @@ use crate::types::Rectangle;
 
 use indextree::{Arena, NodeId};
 
-use skia_safe::{Canvas, Color4f, Matrix, Rect};
+use skia_safe::{Canvas, Color4f, ColorSpace, Image, Matrix, Paint, Rect};
 use skia_safe::{Picture, PictureRecorder};
+
+use super::NodeRef;
 
 /// A trait for objects that can be drawn to a canvas.
 pub trait Drawable {
@@ -13,7 +15,9 @@ pub trait Drawable {
     fn draw(&self, canvas: &mut Canvas);
     /// Returns the area that this drawable occupies.
     fn bounds(&self) -> Rectangle;
+    fn scaled_bounds(&self) -> Rectangle;
     fn transform(&self) -> Matrix;
+    fn scale(&self) -> (f32, f32);
 }
 
 /// A trait for objects that can be drawn to a PictureRecorder.
@@ -31,7 +35,12 @@ where
         let r = self.bounds();
 
         let canvas = recorder.begin_recording(
-            Rect::from_xywh(0.0, 0.0, r.width as f32, r.height as f32),
+            Rect::from_xywh(
+                -50.0,
+                -50.0,
+                (r.width + 100.0) as f32,
+                (r.height + 100.0) as f32,
+            ),
             None,
         );
         self.draw(canvas);
@@ -40,10 +49,11 @@ where
 }
 
 pub fn draw_single_scene_node(canvas: &mut Canvas, node: &SceneNode) {
-    if let Some(picture) = node.draw_cache.read().unwrap().picture.clone() {
+    let draw_cache = node.draw_cache.read().unwrap();
+    if let Some(draw_cache) = &*draw_cache {
         let transform = node.model.transform();
         canvas.concat(&transform);
-        canvas.draw_picture(picture, None, None);
+        canvas.draw_picture(draw_cache.picture(), None, None);
     } else {
         node.model.draw(canvas);
     }
@@ -64,4 +74,65 @@ pub fn draw(canvas: &mut Canvas, _: &Scene) {
     canvas.clear(Color4f::new(1.0, 1.0, 1.0, 1.0));
 
     // draw_tree_on_canvas(canvas, &scene.nodes, &scene.root);
+}
+
+pub fn render_node(node: &SceneNode, canvas: &mut skia_safe::Canvas) {
+    let draw_cache = node.draw_cache.read().unwrap();
+    let matrix = node.transformation.read().unwrap();
+
+    if let Some(draw_cache) = &*draw_cache {
+        canvas.draw_picture(draw_cache.picture(), Some(&matrix), None);
+    }
+}
+
+pub fn render_node_to_image(node: &SceneNode) -> Option<Image> {
+    let draw_cache = node.draw_cache.read().unwrap();
+    // let matrix = node.transformation.read().unwrap().clone();
+    let mut image = None;
+    if let Some(draw_cache) = &*draw_cache {
+        let picture = draw_cache.picture();
+
+        let mut p = Paint::default();
+        let (sx, sy) = *node.scale.read().unwrap();
+
+        let mut m = skia_safe::Matrix::scale((sx, sy));
+        m.set_translate_x(0.0);
+        m.set_translate_y(0.0);
+        p.set_anti_alias(false);
+
+        let img = Image::from_picture(
+            picture,
+            (
+                node.model.scaled_bounds().width as i32 + 200,
+                node.model.scaled_bounds().height as i32 + 200,
+            ),
+            Some(&m),
+            Some(&p),
+            skia_safe::image::BitDepth::F16,
+            ColorSpace::new_srgb(),
+        );
+        let img = img.unwrap();
+        // println!("img id: {}", img.unique_id());
+        let img = img;
+        image = Some(img)
+    }
+    image
+}
+
+pub fn render_node_children(
+    node_id: NodeRef,
+    arena: &Arena<SceneNode>,
+    canvas: &mut skia_safe::Canvas,
+) {
+    let node_id = node_id.into();
+    let node = arena.get(node_id).unwrap().get();
+    let sc = canvas.save();
+    let matrix = *node.transformation.read().unwrap();
+    canvas.concat(&matrix);
+    node_id.children(arena).for_each(|child_id| {
+        if let Some(child) = arena.get(child_id) {
+            render_node(child.get(), canvas);
+        }
+    });
+    canvas.restore_to_count(sc);
 }

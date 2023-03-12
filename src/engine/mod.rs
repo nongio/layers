@@ -16,16 +16,22 @@ pub mod scene;
 pub mod storage;
 
 use rayon::prelude::{IntoParallelRefIterator, IntoParallelRefMutIterator, ParallelIterator};
+use taffy::prelude::{Size, *};
+
 use std::{
     ops::Deref,
     sync::{Arc, RwLock},
 };
 
-use crate::types::Point;
+use crate::{
+    layers::layer::{Layer, ModelLayer},
+    layers::Layers,
+    types::Point,
+};
 
 use self::{
     animations::{Animation, Easing, Transition},
-    node::{ContainsPoint, DrawCacheManagement, RenderableFlags},
+    node::{ContainsPoint, DrawCacheManagement, RenderNode, RenderableFlags},
     scene::Scene,
     storage::{FlatStorage, FlatStorageId, TreeStorageId},
 };
@@ -56,6 +62,8 @@ pub struct AnimatedNodeChange {
 /// A struct that contains the state of an animation.
 /// The f64 is the current progress of the animation.
 /// The bool is a flag that indicates if the animation is finished.
+/// the progres can not be used to determine if the animation is finished
+/// because the animation could be reversed or looped
 #[derive(Clone)]
 pub struct AnimationState(Animation, f64, bool);
 
@@ -88,34 +96,144 @@ impl Default for TransitionCallbacks {
     }
 }
 
-pub struct Engine {
+pub(crate) struct Engine {
     pub scene: Arc<Scene>,
+    scene_root: RwLock<Option<NodeRef>>,
     transactions: FlatStorage<AnimatedNodeChange>,
     animations: FlatStorage<AnimationState>,
     pub timestamp: RwLock<Timestamp>,
     transaction_handlers: FlatStorage<TransitionCallbacks>,
+    layout_tree: RwLock<Taffy>,
+    layout_root: RwLock<taffy::node::Node>,
 }
 #[derive(Clone, Copy)]
 pub struct TransactionRef(pub FlatStorageId);
 #[derive(Clone)]
 pub struct AnimationRef(FlatStorageId);
+
+/// An identifier for a node in the three storage
 #[derive(Clone, Copy)]
 pub struct NodeRef(pub TreeStorageId);
+
 #[derive(Clone)]
 pub struct HandlerRef(FlatStorageId);
 
+impl From<NodeRef> for TreeStorageId {
+    fn from(node_ref: NodeRef) -> Self {
+        node_ref.0
+    }
+}
+pub struct LayersEngine {
+    pub(crate) engine: Arc<Engine>,
+}
+
+impl LayersEngine {
+    pub fn new() -> Self {
+        Self {
+            engine: Engine::create(),
+        }
+    }
+
+    pub fn new_layer(&self) -> Layer {
+        let model = Arc::new(ModelLayer::default());
+
+        let mut lt = self.engine.layout_tree.write().unwrap();
+
+        let layout = lt
+            .new_leaf(Style {
+                ..Default::default()
+            })
+            .unwrap();
+
+        Layer {
+            engine: self.engine.clone(),
+            model,
+            id: Arc::new(RwLock::new(None)),
+            layout,
+        }
+    }
+    pub fn update(&self, dt: f64) -> bool {
+        self.engine.update(dt)
+    }
+    pub fn scene_add_layer(&self, layer: impl Into<Layers>) -> NodeRef {
+        self.engine.scene_add_layer(layer)
+    }
+    pub fn scene_set_root(&self, layer: impl Into<Layers>) -> NodeRef {
+        self.engine.scene_set_root(layer)
+    }
+    pub fn scene(&self) -> &Arc<Scene> {
+        &self.engine.scene
+    }
+    pub fn scene_root(&self) -> Option<NodeRef> {
+        *self.engine.scene_root.read().unwrap()
+    }
+    pub fn step_time(&self, dt: f64) {
+        self.engine.step_time(dt)
+    }
+}
+
+impl Default for LayersEngine {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 impl Engine {
     fn new() -> Self {
         Default::default()
     }
     pub fn create() -> Arc<Self> {
         let new_engine = Self::new();
-        let engine_handle = Arc::new(new_engine);
-
-        engine_handle.scene.set_engine(engine_handle.clone());
-
-        engine_handle
+        Arc::new(new_engine)
     }
+    pub fn scene_set_root(&self, layer: impl Into<Layers>) -> NodeRef {
+        let layer: Layers = layer.into();
+        let renderable = match layer.clone() {
+            Layers::Layer(layer) => layer.model as Arc<dyn RenderNode>,
+            Layers::TextLayer(text_layer) => text_layer.model as Arc<dyn RenderNode>,
+        };
+        let id = self.scene.add(renderable, layer.layout_node());
+        // self.scene_root =
+        layer.set_id(id);
+        id
+    }
+
+    pub fn scene_add_layer(&self, layer: impl Into<Layers>) -> NodeRef {
+        let layer: Layers = layer.into();
+        let mut layout = self.layout_tree.write().unwrap();
+
+        let (id, layer_layout) = match layer {
+            Layers::Layer(layer) => {
+                let id = self
+                    .scene
+                    .add(layer.model.clone() as Arc<dyn RenderNode>, layer.layout);
+                layer.set_id(id);
+                (id, layer.layout)
+            }
+            Layers::TextLayer(text_layer) => {
+                let id = self.scene.add(
+                    text_layer.model.clone() as Arc<dyn RenderNode>,
+                    text_layer.layout,
+                );
+                text_layer.set_id(id);
+
+                (id, text_layer.layout)
+            }
+        };
+        let mut scene_root = self.scene_root.write().unwrap();
+        let layout_root = *self.layout_root.read().unwrap();
+        if scene_root.is_none() {
+            *scene_root = Some(id);
+            layout.remove(layout_root).unwrap();
+            *self.layout_root.write().unwrap() = layer_layout;
+        } else {
+            let scene_root = *scene_root.unwrap();
+            self.scene.append_node_to(id, NodeRef(scene_root));
+            layout.add_child(layout_root, layer_layout).unwrap();
+        }
+
+        id
+    }
+
     pub fn create_animation_from_transition(&self, transition: Transition<Easing>) -> AnimationRef {
         let start = self.timestamp.read().unwrap().0 + transition.delay;
 
@@ -162,37 +280,43 @@ impl Engine {
         }
     }
 
-    pub fn add_change(
+    pub fn schedule_change(
         &self,
         target_id: NodeRef,
         change: Arc<dyn CommandWithTransition>,
     ) -> TransactionRef {
         self.add_change_with_animation(target_id, change, None)
     }
-
+    pub fn step_time(&self, dt: f64) {
+        let mut timestamp = self.timestamp.write().unwrap();
+        *timestamp = Timestamp(timestamp.0 + dt);
+    }
     pub fn update(&self, dt: f64) -> bool {
         let mut timestamp = self.timestamp.write().unwrap();
         *timestamp = Timestamp(timestamp.0 + dt);
+        // println!("timestamp: {} {}", timestamp.0, dt);
 
         // supporting arrays for cleanup at a later stage
         let finished_animations = Arc::new(RwLock::new(Vec::<FlatStorageId>::new()));
         let finished_commands = Arc::new(RwLock::new(Vec::<FlatStorageId>::new()));
 
-        // Update animations to the current timestamp
+        // 1.1 Update animations to the current timestamp
         {
             let animations = self.animations.data();
-
-            animations.write().unwrap().par_iter_mut().for_each_with(
-                finished_animations.clone(),
-                |done, (id, AnimationState(animation, value, finished))| {
-                    (*value, *finished) = animation.value(timestamp.0);
-                    if *finished {
-                        done.clone().write().unwrap().push(*id);
-                    }
-                },
-            );
+            let mut animations = animations.write().unwrap();
+            if animations.len() > 0 {
+                animations.par_iter_mut().for_each_with(
+                    finished_animations.clone(),
+                    |done, (id, AnimationState(animation, value, finished))| {
+                        (*value, *finished) = animation.value(timestamp.0);
+                        if *finished {
+                            done.clone().write().unwrap().push(*id);
+                        }
+                    },
+                );
+            }
         }
-        // Execute transactions using the updated animations
+        // 1.2 Execute transactions using the updated animations
 
         let transactions = self.transactions.data();
         let mut transactions = transactions.write().unwrap();
@@ -201,6 +325,9 @@ impl Engine {
         // are transactions to be executed
         let needs_redraw = transactions.len() > 0;
 
+        let animations = &self.animations;
+        let transaction_handlers = &self.transaction_handlers;
+        let scene = self.scene.clone();
         transactions.par_iter().for_each_with(
             finished_commands.clone(),
             |done_commands, (id, command)| {
@@ -208,12 +335,11 @@ impl Engine {
                     .animation_id
                     .as_ref()
                     .map(|id| {
-                        let update = self
-                            .animations
+                        let update = animations
                             .get(&id.0)
                             .map(|AnimationState(_, value, done)| (value, done))
                             .unwrap_or((1.0, true));
-                        if let Some(ch) = self.transaction_handlers.get(&id.0) {
+                        if let Some(ch) = transaction_handlers.get(&id.0) {
                             let callbacks = &ch.on_update;
                             callbacks.iter().for_each(|callback| {
                                 let callback = callback.clone();
@@ -225,23 +351,66 @@ impl Engine {
                     .unwrap_or((1.0, true));
 
                 let flags = command.change.execute(progress);
-                if let Some(node) = self.scene.get_node(command.node_id.0) {
-                    node.get().insert_flags(flags);
-                }
 
+                if let Some(node) = scene.get_node(command.node_id.0) {
+                    {
+                        let node = node.get();
+                        if flags.contains(RenderableFlags::NEEDS_LAYOUT) {
+                            let bounds = node.model.bounds();
+                            let size = crate::types::Size {
+                                x: bounds.width,
+                                y: bounds.height,
+                            };
+                            self.set_node_layout_size(node.layout_node, size);
+                        }
+                        if done {
+                            // println!("done: {:?}", command.node_id.0);
+                            node.remove_flags(RenderableFlags::ANIMATING);
+                            // println!("flags: {:?}", flags);
+                        }
+                    }
+                    // {
+                    node.get().insert_flags(flags);
+                    // }
+                }
                 if done {
                     done_commands.write().unwrap().push(*id);
                 }
             },
         );
 
+        let mut layout = self.layout_tree.write().unwrap();
+        let layout_root = *self.layout_root.read().unwrap();
+        let scene_root = *self.scene_root.read().unwrap().unwrap();
+        let scene_root = self.scene.get_node(scene_root).unwrap();
+        let scene_root = scene_root.get();
+        let bounds = scene_root.model.bounds();
+        if layout.dirty(layout_root).unwrap() {
+            layout
+                .compute_layout(
+                    layout_root,
+                    Size {
+                        width: points(bounds.width as f32),
+                        height: points(bounds.height as f32),
+                    },
+                )
+                .unwrap();
+        }
+        // we are done writing to the layout tree, so we can
+        // drop the lock
+        drop(layout);
+
+        let layout = self.layout_tree.read().unwrap();
         // iterate in parallel over the nodes and
-        // repaint if necessary
+        // 2., 3. repaint if necessary
         let arena = self.scene.nodes.data();
         let arena = arena.read().unwrap();
-        arena.par_iter().for_each(|node| {
+        arena.iter().for_each(|node| {
             let node = node.get();
-            node.layout_if_needed();
+            // println!("{:?}", node.layout_node);
+            let l = layout.layout(node.layout_node).unwrap();
+
+            node.layout_if_needed(l);
             node.repaint_if_needed();
         });
 
@@ -282,6 +451,26 @@ impl Engine {
         }
 
         needs_redraw
+    }
+
+    pub fn get_node_layout_style(&self, node: Node) -> Style {
+        let layout = self.layout_tree.read().unwrap();
+        layout.style(node).unwrap().clone()
+    }
+    pub fn set_node_layout_style(&self, node: Node, style: Style) {
+        let mut layout = self.layout_tree.write().unwrap();
+        layout.set_style(node, style).unwrap();
+    }
+
+    pub fn set_node_layout_size(&self, node: Node, size: crate::types::Size) {
+        let mut layout = self.layout_tree.write().unwrap();
+        let mut style = layout.style(node).unwrap().clone();
+
+        style.size = taffy::geometry::Size {
+            width: points(size.x as f32),
+            height: points(size.y as f32),
+        };
+        layout.set_style(node, style).unwrap();
     }
 
     pub fn layer_at(&self, point: Point) -> Option<NodeRef> {
@@ -349,21 +538,30 @@ impl Engine {
 
 impl Default for Engine {
     fn default() -> Self {
-        let scene = Scene::create();
+        let mut layout_tree = Taffy::new();
+        let layout_root = RwLock::new(
+            layout_tree
+                .new_leaf(Style {
+                    display: Display::Flex,
+                    flex_direction: FlexDirection::Column,
+                    ..Default::default()
+                })
+                .unwrap(),
+        );
 
+        let scene = Scene::create();
+        let scene_root = RwLock::new(None);
         Engine {
             scene,
             transactions: FlatStorage::new(),
             animations: FlatStorage::new(),
             timestamp: RwLock::new(Timestamp(0.0)),
             transaction_handlers: FlatStorage::new(),
+            layout_tree: RwLock::new(layout_tree),
+            layout_root,
+            scene_root,
         }
     }
-}
-
-/// A trait for objects that generates changes messages for an Engine
-pub trait ChangeProducer {
-    fn set_engine(&self, engine: Arc<Engine>, id: NodeRef);
 }
 
 impl Deref for NodeRef {

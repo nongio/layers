@@ -5,6 +5,8 @@ use glutin::{
     window::WindowBuilder,
     GlProfile,
 };
+use mt_dom::{attr, diff, diff_with_key, element, leaf};
+use std::{f64::consts::PI, sync::Arc};
 
 use layers::{
     drawing::scene::DrawScene,
@@ -12,10 +14,17 @@ use layers::{
         animations::{Easing, Transition},
         LayersEngine,
     },
-    layers::layer::Layer,
-    taffy::prelude::*,
+    layers::*,
+    taffy::{
+        style::{AlignItems, Display, FlexDirection, FlexWrap, JustifyContent, Style},
+        style_helpers::points,
+        Taffy,
+    },
     types::*,
 };
+
+pub type MyNode =
+    mt_dom::Node<&'static str, &'static str, &'static str, &'static str, &'static str>;
 
 fn main() {
     type WindowedContext = glutin::ContextWrapper<glutin::PossiblyCurrent, glutin::window::Window>;
@@ -75,20 +84,19 @@ fn main() {
     }
     let env = Env { windowed_context };
     let engine = LayersEngine::new();
-    let root_layer = engine.new_layer();
 
+    let root_layer = engine.new_layer();
     root_layer.set_layout_style(Style {
         display: Display::Flex,
         flex_direction: FlexDirection::Row,
         justify_content: Some(JustifyContent::FlexStart),
         flex_wrap: FlexWrap::Wrap,
         align_items: Some(AlignItems::Center),
-        gap: points(30.0),
         ..Default::default()
     });
 
     root_layer.set_size(
-        layers::types::Size {
+        Size {
             x: window_width as f64 * 2.0,
             y: window_height as f64 * 2.0,
         },
@@ -102,40 +110,13 @@ fn main() {
         },
         None,
     );
-    root_layer.set_border_corner_radius(10.0, None);
-
     engine.scene_add_layer(root_layer.clone());
 
-    let mut layers: Vec<Layer> = Vec::new();
-    let image = image::open("./assets/fill.png").unwrap();
-    let image = image.into_rgba8();
-    let w = image.width() as i32;
-    let h = image.height() as i32;
-    let data = image.into_vec();
-    for n in 0..5 {
-        let layer = engine.new_layer();
-        layer.set_anchor_point(Point { x: 0.5, y: 0.5 }, None);
-        layer.set_size(Point { x: 200.0, y: 200.0 }, None);
-        layer.set_position(Point { x: 100.0, y: 100.0 }, None);
-        layer.set_border_corner_radius(40.0, None);
-        layer.set_background_color(Color::new_hex("#4043D1"), None);
-        layer.set_shadow_color(Color::new_rgba(0.0, 0.0, 0.0, 0.5), None);
-        layer.set_shadow_offset(Point { x: 10.0, y: 10.0 }, None);
-        layer.set_shadow_radius(10.0, None);
-        layer.set_content_from_data_raster_rgba8(&data, w.clone(), h.clone());
-        layer.set_layout_style(Style {
-            flex_grow: 0.0,
-            size: layers::taffy::prelude::Size {
-                width: points(200.0),
-                height: points(200.0),
-            },
-            ..Default::default()
-        });
-
-        layers.push(layer.clone());
-
-        engine.scene_add_layer(layer);
-    }
+    let div1: MyNode = element("layer", [attr("key", "1"), attr("value", "1")], []);
+    let div2: MyNode = element("layer", [attr("key", "1"), attr("value", "2")], []);
+    let diff = diff_with_key(&div1, &div2, &"key");
+    println!("{:#?}", diff);
+    return;
     let instant = std::time::Instant::now();
     let mut last_instant = 0.0;
 
@@ -177,65 +158,12 @@ fn main() {
                     _mouse_y = position.y;
                 }
                 WindowEvent::MouseInput {
-                    state: button_state,
+                    state: _button_state,
                     ..
                 } => {
-                    if button_state == winit::event::ElementState::Released {
-                        let _i = 0;
-
-                        // layers[0].set_content_from_data_raster_rgba8(
-                        //     data.clone(),
-                        //     w as i32,
-                        //     h as i32,
-                        // );
-
-                        layers.iter().for_each(|layer| {
-                            let _transition = layer.set_position(
-                                Point {
-                                    x: _mouse_x + rand::random::<f64>() * 1000.0,
-                                    y: _mouse_y + rand::random::<f64>() * 1000.0,
-                                },
-                                Some(Transition {
-                                    duration: 1.0,
-                                    delay: 0.0,
-                                    timing: Easing::default(),
-                                }),
-                            );
-                            let _transition = layer.set_size(
-                                Point { x: 200.0, y: 200.0 },
-                                Some(Transition {
-                                    duration: 1.0,
-                                    delay: 0.0,
-                                    timing: Easing::default(),
-                                }),
-                            );
-                        });
-                    } else {
-                        layers.iter().for_each(|layer| {
-                            let _transition = layer.set_size(
-                                Point { x: 250.0, y: 250.0 },
-                                Some(Transition {
-                                    duration: 1.0,
-                                    delay: 0.0,
-                                    timing: Easing::default(),
-                                }),
-                            );
-                            let c = Color::new_rgba(
-                                rand::random::<f64>(),
-                                rand::random::<f64>(),
-                                rand::random::<f64>(),
-                                1.0,
-                            );
-                            layer.set_background_color(
-                                c,
-                                Some(Transition {
-                                    duration: 2.0,
-                                    delay: 0.0,
-                                    timing: Easing::default(),
-                                }),
-                            );
-                        });
-                    }
+                    // if button_state == winit::event::ElementState::Released {
+                    // } else {
+                    // }
                 }
                 _ => (),
             },
@@ -255,7 +183,7 @@ fn main() {
                     skia_renderer.draw_scene(&engine.scene(), root);
                 }
 
-                let delta = instant.elapsed().as_secs_f64() - now;
+                let _delta = instant.elapsed().as_secs_f64() - now;
                 // println!("draw time: {}ms", delta * 1000.0);
                 // this will be blocking until the GPU is done with the frame
                 env.windowed_context.swap_buffers().unwrap();
