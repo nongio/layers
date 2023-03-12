@@ -7,14 +7,17 @@ use crate::{
         animations::SyncValue,
         node::{RenderNode, RenderableFlags},
         rendering::Drawable,
-        ChangeProducer, Engine,
+        Engine,
+        NodeRef,
+        // TransactionRef,
+        // ChangeProducer, Engine,
+        // NodeRef,
     },
     types::{Color, PaintColor, Point, Rectangle},
 };
 
 use super::change_attr;
 use crate::engine::{animations::*, command::*};
-use crate::engine::{NodeRef, TransactionRef};
 #[derive(Clone, Debug)]
 pub struct Text {
     pub matrix: Matrix,
@@ -35,12 +38,13 @@ pub struct ModelText {
     pub size: SyncValue<Point>,
     pub background_color: SyncValue<PaintColor>,
     pub text_color: SyncValue<Color>,
+    pub font_family: String,
     pub font_size: SyncValue<f64>,
 
     pub font_weight: SyncValue<f64>,
     pub font_letter_spacing: SyncValue<f64>,
     pub text: RwLock<String>,
-    pub engine: RwLock<Option<(NodeRef, Arc<Engine>)>>,
+    // pub engine: RwLock<Option<(NodeRef, Arc<Engine>)>>,
 }
 
 impl ModelText {
@@ -50,19 +54,6 @@ impl ModelText {
     pub fn create() -> Arc<Self> {
         Arc::new(Self::new())
     }
-
-    change_attr!(position, Point, RenderableFlags::NEEDS_LAYOUT);
-    change_attr!(
-        size,
-        Point,
-        RenderableFlags::NEEDS_PAINT | RenderableFlags::NEEDS_LAYOUT
-    );
-
-    change_attr!(
-        font_size,
-        f64,
-        RenderableFlags::NEEDS_PAINT | RenderableFlags::NEEDS_LAYOUT
-    );
 }
 impl Default for ModelText {
     fn default() -> Self {
@@ -75,23 +66,24 @@ impl Default for ModelText {
         });
 
         let text_color = SyncValue::new(Color::new_rgba(0.0, 0.0, 0.0, 1.0));
+        let font_family = "Noto Sans".to_string();
         let font_size = SyncValue::new(22.0);
         let font_weight = SyncValue::new(400.0);
         let font_letter_spacing = SyncValue::new(0.0);
         let text = RwLock::new(String::from("Hello World"));
-
-        let engine = RwLock::new(None);
+        // let engine = RwLock::new(None);
         Self {
             position,
             scale,
             size,
             background_color,
             text_color,
+            font_family,
             font_size,
             font_weight,
             font_letter_spacing,
             text,
-            engine,
+            // engine,
         }
     }
 }
@@ -109,6 +101,17 @@ impl Drawable for ModelText {
             y: p.y,
             width: s.x,
             height: s.y,
+        }
+    }
+    fn scaled_bounds(&self) -> Rectangle {
+        let s = self.size.value();
+        let scale = self.scale.value();
+
+        Rectangle {
+            x: 0.0,
+            y: 0.0,
+            width: s.x * scale.x,
+            height: s.y * scale.y,
         }
     }
     fn transform(&self) -> Matrix {
@@ -129,13 +132,17 @@ impl Drawable for ModelText {
 
         transform.to_m33()
     }
-}
-
-impl ChangeProducer for ModelText {
-    fn set_engine(&self, engine: Arc<Engine>, id: NodeRef) {
-        *self.engine.write().unwrap() = Some((id, engine));
+    fn scale(&self) -> (f32, f32) {
+        let s = self.scale.value();
+        (s.x as f32, s.y as f32)
     }
 }
+
+// impl ChangeProducer for ModelText {
+//     fn set_engine(&self, engine: Arc<Engine>, id: NodeRef) {
+//         *self.engine.write().unwrap() = Some((id, engine));
+//     }
+// }
 
 impl RenderNode for ModelText {}
 
@@ -149,7 +156,7 @@ impl From<&ModelText> for Text {
         let text_color = mt.text_color.value();
         let background_color = mt.background_color.value();
         let font_size = mt.font_size.value();
-        let font_family = "Noto Sans".to_string();
+        let font_family = mt.font_family.clone();
         let font_weight = mt.font_weight.value();
         let font_style = "normal".to_string();
         let font_letter_spacing = mt.font_letter_spacing.value();
@@ -167,4 +174,34 @@ impl From<&ModelText> for Text {
             font_letter_spacing,
         }
     }
+}
+
+#[derive(Clone)]
+pub struct TextLayer {
+    engine: Arc<Engine>,
+    pub id: Arc<RwLock<Option<NodeRef>>>,
+    pub model: Arc<ModelText>,
+}
+
+impl TextLayer {
+    pub fn set_id(&self, id: NodeRef) {
+        self.id.write().unwrap().replace(id);
+    }
+    change_attr!(position, Point, RenderableFlags::NEEDS_LAYOUT);
+    change_attr!(
+        size,
+        Point,
+        RenderableFlags::NEEDS_PAINT | RenderableFlags::NEEDS_LAYOUT
+    );
+
+    change_attr!(
+        font_size,
+        f64,
+        RenderableFlags::NEEDS_PAINT | RenderableFlags::NEEDS_LAYOUT
+    );
+    change_attr!(
+        font_weight,
+        f64,
+        RenderableFlags::NEEDS_PAINT | RenderableFlags::NEEDS_LAYOUT
+    );
 }

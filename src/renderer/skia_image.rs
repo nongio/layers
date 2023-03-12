@@ -9,6 +9,7 @@ use std::cell::Cell;
 
 use crate::drawing::scene::{draw_scene, DrawScene};
 use crate::engine::scene::Scene;
+use crate::engine::NodeRef;
 
 /// A scene renderer that renders to an image file.
 /// Image encoding is currently hard-coded to PNG.
@@ -45,11 +46,11 @@ impl SkiaImageRenderer {
 }
 
 impl DrawScene for SkiaImageRenderer {
-    fn draw_scene(&self, scene: &Scene) {
+    fn draw_scene(&self, scene: &Scene, root_id: NodeRef) {
         let mut surface = self.surface();
 
         let c = surface.canvas();
-        draw_scene(c, scene);
+        draw_scene(c, scene, root_id);
         surface.flush_and_submit();
     }
 }

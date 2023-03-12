@@ -1,17 +1,20 @@
 use std::sync::{Arc, RwLock};
 
-use crate::models::layer::ModelLayer;
+// use stretch::Stretch;
+
+use crate::layers::layer::ModelLayer;
 
 use super::{
     node::{RenderNode, SceneNode},
     storage::{TreeStorage, TreeStorageId, TreeStorageNode},
-    Engine, NodeRef,
+    // Engine,
+    NodeRef,
 };
 
 pub struct Scene {
     pub nodes: TreeStorage<SceneNode>,
     pub root: RwLock<TreeStorageId>,
-    pub engine: RwLock<Option<Arc<Engine>>>,
+    // pub engine: RwLock<Option<Arc<Engine>>>,
 }
 
 impl Scene {
@@ -36,28 +39,34 @@ impl Scene {
         NodeRef(id)
     }
 
+    pub fn get_node(&self, id: TreeStorageId) -> Option<TreeStorageNode<SceneNode>> {
+        self.nodes.get(id)
+    }
     pub fn append_node_to(&self, children: NodeRef, parent: NodeRef) {
         let nodes = self.nodes.data();
         let mut nodes = nodes.write().unwrap();
         parent.append(*children, &mut nodes);
     }
-    pub fn get_node(&self, id: TreeStorageId) -> Option<TreeStorageNode<SceneNode>> {
-        self.nodes.get(id)
-    }
+    pub fn set_root<R: Into<Arc<dyn RenderNode>>>(&self, renderable: R) -> NodeRef {
+        let renderable: Arc<dyn RenderNode> = renderable.into();
+        let node = SceneNode::with_renderable(renderable.clone());
+        let id = self.insert_node(&node);
 
+        let mut root = self.root.write().unwrap();
+        *root = id.0;
+
+        id
+    }
     pub fn add<R: Into<Arc<dyn RenderNode>>>(&self, renderable: R) -> NodeRef {
         let renderable: Arc<dyn RenderNode> = renderable.into();
         let node = SceneNode::with_renderable(renderable.clone());
         let id = self.insert_node(&node);
 
-        if let Some(engine) = self.engine.read().unwrap().clone() {
-            renderable.set_engine(engine, id);
-        }
         id
     }
-    pub fn set_engine(&self, engine: Arc<Engine>) {
-        self.engine.write().unwrap().replace(engine);
-    }
+    // pub fn set_engine(&self, engine: Arc<Engine>) {
+    //     self.engine.write().unwrap().replace(engine);
+    // }
 }
 
 impl Default for Scene {
@@ -66,10 +75,11 @@ impl Default for Scene {
         let root = ModelLayer::create();
         let node = SceneNode::with_renderable(root);
         let rootid = nodes.insert(node);
+
         Scene {
             nodes,
             root: RwLock::new(rootid),
-            engine: RwLock::new(None),
+            // engine: RwLock::new(None),
         }
     }
 }
