@@ -1,3 +1,4 @@
+//! Types used in the library to describe Layers properties
 use oklab::{oklab_to_srgb, srgb_to_oklab, Oklab, RGB};
 use skia_safe::Color4f;
 
@@ -155,6 +156,11 @@ impl Color {
     }
 }
 
+impl Default for Point {
+    fn default() -> Self {
+        Point { x: 0.0, y: 0.0 }
+    }
+}
 // skia conversions
 
 impl From<Color> for Color4f {
@@ -167,9 +173,9 @@ impl From<Color> for Color4f {
         });
 
         Self {
-            r: (rgb.r as f32 / 255.0) as f32,
-            g: (rgb.g as f32 / 255.0) as f32,
-            b: (rgb.b as f32 / 255.0) as f32,
+            r: (rgb.r as f32 / 255.0),
+            g: (rgb.g as f32 / 255.0),
+            b: (rgb.b as f32 / 255.0),
             a: alpha as f32,
         }
     }

@@ -1,4 +1,8 @@
-use std::sync::{Arc, RwLock};
+//! The Scene is the data structure to represent the tree of nodes to be rendered.
+//! It enables the traversing and manipulation of the nodes.
+//!
+//! The scene is a tree of renderable nodes (implementing the `Renderable` trait).
+//! The tree is stored in a memory arena using IndexTree, which allow fast read/write and thread safe parallel iterations.
 
 // use stretch::Stretch;
 

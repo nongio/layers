@@ -1,3 +1,12 @@
+#![allow(dead_code)]
+
+//! Contains all the logic for running the animations, execute the scheduled changes
+//! to the models, and prepare the render tree
+//! The scene is drawn in 4 stages:
+//! - The *layout* step calculates the dimensions and position of a node and generates a transformation Matrix
+//! - The *draw* step generates a displaylist
+//! - The *render* step uses the displaylist to generate a texture of the node
+//! - The *compose* step generates the final image using the textures
 pub mod animations;
 pub mod command;
 pub mod node;
