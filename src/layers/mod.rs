@@ -47,7 +47,7 @@ impl<T: Sync> WithTransition for ModelChange<T> {
 }
 
 impl<I: Interpolate + Sync + Clone + 'static> Command for ModelChange<I> {
-    fn execute(&self, progress: f64) -> RenderableFlags {
+    fn execute(&self, progress: f32) -> RenderableFlags {
         let ModelChange {
             value_change, flag, ..
         } = &self;

@@ -81,8 +81,8 @@ impl SkiaFboRenderer {
         let bounds = Rect::from_xywh(
             0.0, //bounds.x as f32,
             0.0, //bounds.y as f32,
-            bounds.width as f32,
-            bounds.height as f32,
+            bounds.width,
+            bounds.height,
         );
 
         canvas.clip_rect(bounds, None, None);

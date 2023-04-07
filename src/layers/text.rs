@@ -26,11 +26,11 @@ pub struct Text {
     pub text: String,
     pub text_color: Color,
     pub background_color: PaintColor,
-    pub font_size: f64,
+    pub font_size: f32,
     pub font_family: String,
-    pub font_weight: f64,
+    pub font_weight: f32,
     pub font_style: String,
-    pub font_letter_spacing: f64,
+    pub font_letter_spacing: f32,
 }
 
 pub struct ModelText {
@@ -40,10 +40,10 @@ pub struct ModelText {
     pub background_color: SyncValue<PaintColor>,
     pub text_color: SyncValue<Color>,
     pub font_family: String,
-    pub font_size: SyncValue<f64>,
+    pub font_size: SyncValue<f32>,
 
-    pub font_weight: SyncValue<f64>,
-    pub font_letter_spacing: SyncValue<f64>,
+    pub font_weight: SyncValue<f32>,
+    pub font_letter_spacing: SyncValue<f32>,
     pub text: RwLock<String>,
     // pub engine: RwLock<Option<(NodeRef, Arc<Engine>)>>,
 }
@@ -118,15 +118,15 @@ impl Drawable for ModelText {
     fn transform(&self) -> Matrix {
         let s = self.scale.value();
         let p = self.position.value();
-        let translate = M44::translate(p.x as f32, p.y as f32, 0.0);
-        let scale = M44::scale(s.x as f32, s.y as f32, 1.0);
+        let translate = M44::translate(p.x, p.y, 0.0);
+        let scale = M44::scale(s.x, s.y, 1.0);
         // let rotate = M44::rotate(
         //     V3 {
         //         x: 0.0,
         //         y: 1.0,
         //         z: 0.0,
         //     },
-        //     (p.x / 100.0) as f32,
+        //     (p.x / 100.0),
         // );
         let transform = skia_safe::M44::concat(&translate, &scale);
         // let transform = skia_safe::M44::concat(&transform, &rotate);
@@ -135,7 +135,7 @@ impl Drawable for ModelText {
     }
     fn scale(&self) -> (f32, f32) {
         let s = self.scale.value();
-        (s.x as f32, s.y as f32)
+        (s.x, s.y)
     }
 }
 
@@ -190,12 +190,12 @@ impl TextLayer {
 
     change_model!(
         font_size,
-        f64,
+        f32,
         RenderableFlags::NEEDS_PAINT | RenderableFlags::NEEDS_LAYOUT
     );
     change_model!(
         font_weight,
-        f64,
+        f32,
         RenderableFlags::NEEDS_PAINT | RenderableFlags::NEEDS_LAYOUT
     );
 }

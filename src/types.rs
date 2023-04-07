@@ -5,17 +5,17 @@ use skia_safe::Color4f;
 #[derive(Clone, Copy, Debug)]
 #[repr(C)]
 pub struct Color {
-    pub l: f64,
-    pub a: f64,
-    pub b: f64,
-    pub alpha: f64,
+    pub l: f32,
+    pub a: f32,
+    pub b: f32,
+    pub alpha: f32,
 }
 
 #[derive(Clone, Copy, Debug)]
 #[repr(C)]
 pub struct Point {
-    pub x: f64,
-    pub y: f64,
+    pub x: f32,
+    pub y: f32,
 }
 
 #[allow(dead_code)]
@@ -24,28 +24,28 @@ pub type Size = Point;
 #[derive(Clone, Copy, Debug)]
 #[repr(C)]
 pub struct Point3d {
-    pub x: f64,
-    pub y: f64,
-    pub z: f64,
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
 }
 #[derive(Clone, Copy, Debug)]
 #[repr(C)]
 pub struct Rectangle {
-    pub x: f64,
-    pub y: f64,
-    pub width: f64,
-    pub height: f64,
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
 }
 
 #[derive(Clone, Debug)]
 pub struct GradientLinear {
     pub colors: Vec<Color>,
-    pub points: Vec<f64>,
+    pub points: Vec<f32>,
 }
 #[derive(Clone, Debug)]
 pub struct GradientRadial {
     pub center: Point,
-    pub radius: f64,
+    pub radius: f32,
     pub colors: Vec<Color>,
     pub points: Vec<Point>,
 }
@@ -71,14 +71,14 @@ pub enum BorderStyle {
 #[derive(Clone, Copy, Debug)]
 #[repr(C)]
 pub struct BorderRadius {
-    pub top_left: f64,
-    pub top_right: f64,
-    pub bottom_right: f64,
-    pub bottom_left: f64,
+    pub top_left: f32,
+    pub top_right: f32,
+    pub bottom_right: f32,
+    pub bottom_left: f32,
 }
 
 impl BorderRadius {
-    pub fn new_single(r: f64) -> Self {
+    pub fn new_single(r: f32) -> Self {
         BorderRadius {
             top_left: r,
             top_right: r,
@@ -87,7 +87,7 @@ impl BorderRadius {
         }
     }
     #[allow(dead_code)]
-    fn set(mut self, radius: f64) -> Self {
+    fn set(mut self, radius: f32) -> Self {
         self.top_left = radius;
         self.top_right = radius;
         self.bottom_right = radius;
@@ -118,27 +118,22 @@ impl Default for Color {
 
 impl Color {
     // Put in the public domain by Björn Ottosson 2020
-    pub fn new_rgba(r: f64, g: f64, b: f64, alpha: f64) -> Self {
+    pub fn new_rgba(r: f32, g: f32, b: f32, alpha: f32) -> Self {
         let Oklab { l, a, b } = srgb_to_oklab(RGB {
             r: (r * 255.0) as u8,
             g: (g * 255.0) as u8,
             b: (b * 255.0) as u8,
         });
 
-        Color {
-            l: l as f64,
-            a: a as f64,
-            b: b as f64,
-            alpha,
-        }
+        Color { l, a, b, alpha }
     }
 
     pub fn new_rgba255(r: u8, g: u8, b: u8, a: u8) -> Self {
         Self::new_rgba(
-            r as f64 / 255.0,
-            g as f64 / 255.0,
-            b as f64 / 255.0,
-            a as f64 / 255.0,
+            r as f32 / 255.0,
+            g as f32 / 255.0,
+            b as f32 / 255.0,
+            a as f32 / 255.0,
         )
     }
 
@@ -166,17 +161,13 @@ impl Default for Point {
 impl From<Color> for Color4f {
     fn from(color: Color) -> Self {
         let Color { l, a, b, alpha } = color;
-        let rgb = oklab_to_srgb(Oklab {
-            l: l as f32,
-            a: a as f32,
-            b: b as f32,
-        });
+        let rgb = oklab_to_srgb(Oklab { l, a, b });
 
         Self {
             r: (rgb.r as f32 / 255.0),
             g: (rgb.g as f32 / 255.0),
             b: (rgb.b as f32 / 255.0),
-            a: alpha as f32,
+            a: alpha,
         }
     }
 }
@@ -184,8 +175,8 @@ impl From<Color> for Color4f {
 impl From<Point> for skia_safe::Point {
     fn from(point: Point) -> Self {
         skia_safe::Point {
-            x: point.x as f32,
-            y: point.y as f32,
+            x: point.x,
+            y: point.y,
         }
     }
 }
@@ -193,9 +184,9 @@ impl From<Point> for skia_safe::Point {
 impl From<Point3d> for skia_safe::Point3 {
     fn from(point: Point3d) -> Self {
         skia_safe::Point3 {
-            x: point.x as f32,
-            y: point.y as f32,
-            z: point.z as f32,
+            x: point.x,
+            y: point.y,
+            z: point.z,
         }
     }
 }
@@ -203,8 +194,8 @@ impl From<Point3d> for skia_safe::Point3 {
 impl From<(u32, u32)> for Point {
     fn from(point: (u32, u32)) -> Self {
         Point {
-            x: point.0 as f64,
-            y: point.1 as f64,
+            x: point.0 as f32,
+            y: point.1 as f32,
         }
     }
 }
@@ -212,13 +203,13 @@ impl From<(u32, u32)> for Point {
 impl From<(usize, usize)> for Point {
     fn from(point: (usize, usize)) -> Self {
         Point {
-            x: point.0 as f64,
-            y: point.1 as f64,
+            x: point.0 as f32,
+            y: point.1 as f32,
         }
     }
 }
-impl From<(f64, f64)> for Point {
-    fn from(point: (f64, f64)) -> Self {
+impl From<(f32, f32)> for Point {
+    fn from(point: (f32, f32)) -> Self {
         Point {
             x: point.0,
             y: point.1,
@@ -232,8 +223,8 @@ impl From<Color> for PaintColor {
     }
 }
 
-impl From<f64> for BorderRadius {
-    fn from(radius: f64) -> Self {
+impl From<f32> for BorderRadius {
+    fn from(radius: f32) -> Self {
         BorderRadius::new_single(radius)
     }
 }

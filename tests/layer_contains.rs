@@ -33,8 +33,8 @@ pub fn scene_node_contains() {
     layer.set_anchor_point(Point { x: 0.5, y: 0.5 }, None);
     layer.set_size(
         Point {
-            x: RECT_WIDTH as f64,
-            y: RECT_HEIGHT as f64,
+            x: RECT_WIDTH as f32,
+            y: RECT_HEIGHT as f32,
         },
         None,
     );

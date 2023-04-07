@@ -11,11 +11,11 @@ use crate::easing::bezier_easing_function;
 
 /// A trait for interpolating across time
 pub trait TimingFunction {
-    fn value_at(&self, t: f64) -> f64;
+    fn value_at(&self, t: f32) -> f32;
 }
 
 impl TimingFunction for Easing {
-    fn value_at(&self, t: f64) -> f64 {
+    fn value_at(&self, t: f32) -> f32 {
         let Easing { x1, x2, y1, y2 } = *self;
         bezier_easing_function(x1, x2, y1, y2, t)
     }
@@ -24,10 +24,10 @@ impl TimingFunction for Easing {
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct Easing {
-    pub x1: f64,
-    pub y1: f64,
-    pub x2: f64,
-    pub y2: f64,
+    pub x1: f32,
+    pub y1: f32,
+    pub x2: f32,
+    pub y2: f32,
 }
 
 // default for Easing
@@ -46,8 +46,8 @@ impl Default for Easing {
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct Transition<T: TimingFunction> {
-    pub duration: f64,
-    pub delay: f64,
+    pub duration: f32,
+    pub delay: f32,
     // easing
     pub timing: T,
 }
@@ -64,14 +64,14 @@ impl Default for Transition<Easing> {
 #[derive(Clone)]
 
 pub struct Animation {
-    pub start: f64,
-    pub duration: f64,
+    pub start: f32,
+    pub duration: f32,
     pub timing: Easing,
 }
 
 // getter for Animation value
 impl Animation {
-    pub fn value(&self, t: f64) -> (f64, bool) {
+    pub fn value(&self, t: f32) -> (f32, bool) {
         let Animation {
             start,
             duration,

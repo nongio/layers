@@ -16,7 +16,7 @@ pub extern "C" fn create_engine() -> *const engine::LayersEngine {
 }
 
 #[no_mangle]
-pub extern "C" fn engine_update(engine: *const engine::LayersEngine, delta: f64) -> bool {
+pub extern "C" fn engine_update(engine: *const engine::LayersEngine, delta: f32) -> bool {
     let engine = unsafe { &*engine };
     engine.update(delta)
 }

@@ -46,10 +46,10 @@ pub struct Transaction {
 }
 
 impl Transaction {
-    pub fn on_start<F: Fn(f64) + Send + Sync + 'static>(&self, handler: F) {
+    pub fn on_start<F: Fn(f32) + Send + Sync + 'static>(&self, handler: F) {
         self.engine.on_start(self.id, handler);
     }
-    pub fn on_update<F: Fn(f64) + Send + Sync + 'static>(&self, handler: F) {
+    pub fn on_update<F: Fn(f32) + Send + Sync + 'static>(&self, handler: F) {
         self.engine.on_update(self.id, handler);
     }
 }

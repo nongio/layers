@@ -143,8 +143,8 @@ impl DrawCacheManagement for SceneNode {
             let identity = M44::new_identity();
             let bounds = self.model.bounds();
             let translate = M44::translate(
-                layout.location.x + bounds.x as f32,
-                layout.location.y + bounds.y as f32,
+                layout.location.x + bounds.x,
+                layout.location.y + bounds.y,
                 0.0,
             );
             let transform = M44::concat(&translate, &identity);
@@ -197,10 +197,10 @@ impl ContainsPoint for SceneNode {
     fn contains(&self, point: Point) -> bool {
         let matrix = self.transformation.read().unwrap();
         let inverse = matrix.invert().unwrap();
-        let point = inverse.map_point(SkiaPoint::new(point.x as f32, point.y as f32));
+        let point = inverse.map_point(SkiaPoint::new(point.x, point.y));
         let point = Point {
-            x: point.x as f64,
-            y: point.y as f64,
+            x: point.x,
+            y: point.y,
         };
         self.model.bounds().contains(point)
     }

@@ -39,11 +39,11 @@ use self::{
     storage::{FlatStorage, FlatStorageId, TreeStorageId},
 };
 #[derive(Clone)]
-pub struct Timestamp(f64);
+pub struct Timestamp(f32);
 
 /// A trait for objects that can be exectuded by the engine.
 pub trait Command {
-    fn execute(&self, progress: f64) -> RenderableFlags;
+    fn execute(&self, progress: f32) -> RenderableFlags;
     fn value_id(&self) -> usize;
 }
 
@@ -63,14 +63,14 @@ pub struct AnimatedNodeChange {
 }
 
 /// A struct that contains the state of an animation.
-/// The f64 is the current progress of the animation.
+/// The f32 is the current progress of the animation.
 /// The bool is a flag that indicates if the animation is finished.
 /// the progres can not be used to determine if the animation is finished
 /// because the animation could be reversed or looped
 #[derive(Clone)]
-pub struct AnimationState(Animation, f64, bool);
+pub struct AnimationState(Animation, f32, bool);
 
-type FnCallback = Arc<dyn 'static + Fn(f64) + Send + Sync>;
+type FnCallback = Arc<dyn 'static + Fn(f32) + Send + Sync>;
 
 pub enum TransactionEventType {
     Start,
@@ -155,7 +155,7 @@ impl LayersEngine {
             layout,
         }
     }
-    pub fn update(&self, dt: f64) -> bool {
+    pub fn update(&self, dt: f32) -> bool {
         self.engine.update(dt)
     }
     pub fn scene_add_layer(&self, layer: impl Into<Layers>) -> NodeRef {
@@ -173,7 +173,7 @@ impl LayersEngine {
     pub fn scene_root(&self) -> Option<NodeRef> {
         *self.engine.scene_root.read().unwrap()
     }
-    pub fn step_time(&self, dt: f64) {
+    pub fn step_time(&self, dt: f32) {
         self.engine.step_time(dt)
     }
 
@@ -310,11 +310,11 @@ impl Engine {
     ) -> TransactionRef {
         self.add_change_with_animation(target_id, change, None)
     }
-    pub fn step_time(&self, dt: f64) {
+    pub fn step_time(&self, dt: f32) {
         let mut timestamp = self.timestamp.write().unwrap();
         *timestamp = Timestamp(timestamp.0 + dt);
     }
-    pub fn update(&self, dt: f64) -> bool {
+    pub fn update(&self, dt: f32) -> bool {
         let mut timestamp = self.timestamp.write().unwrap();
         *timestamp = Timestamp(timestamp.0 + dt);
 
@@ -354,8 +354,8 @@ impl Engine {
         let mut style = layout.style(node).unwrap().clone();
 
         style.size = taffy::geometry::Size {
-            width: points(size.x as f32),
-            height: points(size.y as f32),
+            width: points(size.x),
+            height: points(size.y),
         };
         // println!("set_node_layout_size: {:?}", style.size);
         layout.set_style(node, style).unwrap();
@@ -375,7 +375,7 @@ impl Engine {
         result
     }
 
-    fn add_transaction_handler<F: Fn(f64) + Send + Sync + 'static>(
+    fn add_transaction_handler<F: Fn(f32) + Send + Sync + 'static>(
         &self,
         transaction: TransactionRef,
         event_type: TransactionEventType,
@@ -399,7 +399,7 @@ impl Engine {
         }
     }
 
-    pub fn on_start<F: Fn(f64) + Send + Sync + 'static>(
+    pub fn on_start<F: Fn(f32) + Send + Sync + 'static>(
         &self,
         transaction: TransactionRef,
         handler: F,
@@ -407,7 +407,7 @@ impl Engine {
         self.add_transaction_handler(transaction, TransactionEventType::Start, handler);
     }
 
-    pub fn on_finish<F: Fn(f64) + Send + Sync + 'static>(
+    pub fn on_finish<F: Fn(f32) + Send + Sync + 'static>(
         &self,
         transaction: TransactionRef,
         handler: F,
@@ -415,7 +415,7 @@ impl Engine {
         self.add_transaction_handler(transaction, TransactionEventType::Finish, handler);
     }
 
-    pub fn on_update<F: Fn(f64) + Send + Sync + 'static>(
+    pub fn on_update<F: Fn(f32) + Send + Sync + 'static>(
         &self,
         transaction: TransactionRef,
         handler: F,

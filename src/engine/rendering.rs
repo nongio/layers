@@ -35,12 +35,7 @@ where
         let r = self.bounds();
 
         let canvas = recorder.begin_recording(
-            Rect::from_xywh(
-                -50.0,
-                -50.0,
-                (r.width + 100.0) as f32,
-                (r.height + 100.0) as f32,
-            ),
+            Rect::from_xywh(-50.0, -50.0, r.width + 100.0, r.height + 100.0),
             None,
         );
         self.draw(canvas);

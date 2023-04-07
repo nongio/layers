@@ -112,8 +112,8 @@ pub(crate) fn update_layout_tree(engine: &Engine) {
             .compute_layout(
                 layout_root,
                 Size {
-                    width: points(bounds.width as f32),
-                    height: points(bounds.height as f32),
+                    width: points(bounds.width),
+                    height: points(bounds.height),
                 },
             )
             .unwrap();

@@ -6,12 +6,12 @@ use crate::types::{
 use skia_safe::Image;
 
 #[allow(dead_code)]
-fn linspace(steps: u64, step: u64) -> f64 {
-    step as f64 / (steps as f64 - 1.0)
+fn linspace(steps: u64, step: u64) -> f32 {
+    step as f32 / (steps as f32 - 1.0)
 }
 
 pub trait Interpolable:
-    std::ops::Mul<f64, Output = Self>
+    std::ops::Mul<f32, Output = Self>
     + std::ops::Add<Output = Self>
     + std::cmp::PartialEq
     + Clone
@@ -21,7 +21,7 @@ pub trait Interpolable:
 }
 
 pub trait Interpolate {
-    fn interpolate(&self, to: &Self, f: f64) -> Self;
+    fn interpolate(&self, to: &Self, f: f32) -> Self;
 }
 // implementation of Add trait for Point
 impl std::ops::Add for Point {
@@ -34,11 +34,11 @@ impl std::ops::Add for Point {
         }
     }
 }
-// implementation of Mul<f64> trait for Point
-impl std::ops::Mul<f64> for Point {
+// implementation of Mul<f32> trait for Point
+impl std::ops::Mul<f32> for Point {
     type Output = Point;
 
-    fn mul(self, other: f64) -> Point {
+    fn mul(self, other: f32) -> Point {
         Point {
             x: self.x * other,
             y: self.y * other,
@@ -59,11 +59,11 @@ impl std::ops::Add for Point3d {
     }
 }
 
-// implementation of Mul<f64> trait for Point
-impl std::ops::Mul<f64> for Point3d {
+// implementation of Mul<f32> trait for Point
+impl std::ops::Mul<f32> for Point3d {
     type Output = Point3d;
 
-    fn mul(self, other: f64) -> Point3d {
+    fn mul(self, other: f32) -> Point3d {
         Point3d {
             x: self.x * other,
             y: self.y * other,
@@ -108,11 +108,11 @@ impl std::ops::Add for BorderRadius {
         }
     }
 }
-// implementation of Mul<f64> trait for BorderRadius
-impl std::ops::Mul<f64> for BorderRadius {
+// implementation of Mul<f32> trait for BorderRadius
+impl std::ops::Mul<f32> for BorderRadius {
     type Output = BorderRadius;
 
-    fn mul(self, other: f64) -> BorderRadius {
+    fn mul(self, other: f32) -> BorderRadius {
         BorderRadius {
             top_left: self.top_left * other,
             top_right: self.top_right * other,
@@ -121,11 +121,11 @@ impl std::ops::Mul<f64> for BorderRadius {
         }
     }
 }
-// implementation of Mul<f64> trait for Color
-impl std::ops::Mul<f64> for Color {
+// implementation of Mul<f32> trait for Color
+impl std::ops::Mul<f32> for Color {
     type Output = Color;
 
-    fn mul(self, other: f64) -> Color {
+    fn mul(self, other: f32) -> Color {
         Color {
             l: self.l * other,
             a: self.a * other,
@@ -147,12 +147,12 @@ impl std::ops::Add for Color {
         }
     }
 }
-// implementation of Mul<f64> trait for PaintColor
+// implementation of Mul<f32> trait for PaintColor
 // TODO incomplete for GradientLinear and GradientRadial
-impl std::ops::Mul<f64> for PaintColor {
+impl std::ops::Mul<f32> for PaintColor {
     type Output = PaintColor;
 
-    fn mul(self, other: f64) -> PaintColor {
+    fn mul(self, other: f32) -> PaintColor {
         match self {
             PaintColor::Solid { color } => PaintColor::Solid {
                 color: color * other,
@@ -228,7 +228,7 @@ impl std::cmp::PartialEq for GradientRadial {
     }
 }
 
-impl Interpolable for f64 {}
+impl Interpolable for f32 {}
 impl Interpolable for crate::types::Point {}
 impl Interpolable for crate::types::Point3d {}
 impl Interpolable for crate::types::BorderRadius {}
@@ -239,7 +239,7 @@ impl !Interpolable for crate::types::PaintColor {}
 impl !Interpolable for Option<Image> {}
 
 impl<V: Interpolable> Interpolate for V {
-    fn interpolate(&self, other: &Self, f: f64) -> Self {
+    fn interpolate(&self, other: &Self, f: f32) -> Self {
         let o = other.to_owned();
         let s = self.to_owned();
         s * (1.0 - f) + (o * f)
@@ -247,7 +247,7 @@ impl<V: Interpolable> Interpolate for V {
 }
 
 impl Interpolate for PaintColor {
-    fn interpolate(&self, other: &PaintColor, f: f64) -> PaintColor {
+    fn interpolate(&self, other: &PaintColor, f: f32) -> PaintColor {
         match (self, other) {
             (PaintColor::Solid { color: c1 }, PaintColor::Solid { color: c2 }) => {
                 PaintColor::Solid {
@@ -268,7 +268,7 @@ impl Interpolate for PaintColor {
 }
 
 impl Interpolate for Option<Image> {
-    fn interpolate(&self, other: &Option<Image>, f: f64) -> Option<Image> {
+    fn interpolate(&self, other: &Option<Image>, f: f32) -> Option<Image> {
         if f < 0.5 {
             self.clone()
         } else {
@@ -277,20 +277,20 @@ impl Interpolate for Option<Image> {
     }
 }
 // easing version of the bezier 1d with p0 = 0 and p3 = 1
-fn bezier_easing_1d(p1: f64, p2: f64, f: f64) -> f64 {
+fn bezier_easing_1d(p1: f32, p2: f32, f: f32) -> f32 {
     let f2 = f * f;
     let f3 = f2 * f;
     f3 + 3.0 * f3 * p1 - 3.0 * f3 * p2 + 3.0 * f2 * p2 - 6.0 * f2 * p1 + 3.0 * f * p1
 }
 
 // derivative of the easing version of the bezier 1d with p0 = 0 and p3 = 1
-fn bezier_easing_1d_prime(p1: f64, p2: f64, f: f64) -> f64 {
+fn bezier_easing_1d_prime(p1: f32, p2: f32, f: f32) -> f32 {
     let f2 = f * f;
     3.0 * f2 + 9.0 * f2 * p1 - 9.0 * f2 * p2 + 6.0 * f * p2 - 12.0 * f * p1 + 3.0 * p1
 }
 
 // newthon method to find the roots
-fn find_root(p1: f64, p2: f64, target: f64) -> f64 {
+fn find_root(p1: f32, p2: f32, target: f32) -> f32 {
     let mut p0 = 0.5;
     let tolerance = 1e-9;
     let epsilon = 1e-14;
@@ -308,10 +308,10 @@ fn find_root(p1: f64, p2: f64, target: f64) -> f64 {
         p0 = p_next;
     }
     // numerical difficulties
-    f64::NAN
+    f32::NAN
 }
 
-pub fn bezier_easing_function(x1: f64, y1: f64, x2: f64, y2: f64, f: f64) -> f64 {
+pub fn bezier_easing_function(x1: f32, y1: f32, x2: f32, y2: f32, f: f32) -> f32 {
     assert!((0.0..=1.0).contains(&x1));
     assert!((0.0..=1.0).contains(&x1));
     assert!((0.0..=1.0).contains(&f));

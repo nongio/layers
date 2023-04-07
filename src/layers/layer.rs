@@ -42,14 +42,14 @@ impl PartialEq for BlendMode {
 pub struct RenderLayer {
     pub background_color: PaintColor,
     pub border_color: PaintColor,
-    pub border_width: f64,
+    pub border_width: f32,
     pub border_style: BorderStyle,
     pub border_corner_radius: BorderRadius,
     pub size: Point,
     pub shadow_offset: Point,
-    pub shadow_radius: f64,
+    pub shadow_radius: f32,
     pub shadow_color: Color,
-    pub shadow_spread: f64,
+    pub shadow_spread: f32,
     pub matrix: Matrix,
     pub content: Option<Image>,
     pub blend_mode: BlendMode,
@@ -64,10 +64,10 @@ pub(crate) struct ModelLayer {
     pub background_color: SyncValue<PaintColor>,
     pub border_corner_radius: SyncValue<BorderRadius>,
     pub border_color: SyncValue<PaintColor>,
-    pub border_width: SyncValue<f64>,
+    pub border_width: SyncValue<f32>,
     pub shadow_offset: SyncValue<Point>,
-    pub shadow_radius: SyncValue<f64>,
-    pub shadow_spread: SyncValue<f64>,
+    pub shadow_radius: SyncValue<f32>,
+    pub shadow_spread: SyncValue<f32>,
     pub shadow_color: SyncValue<Color>,
 
     pub content: SyncValue<Option<Image>>,
@@ -155,21 +155,18 @@ impl Drawable for ModelLayer {
         let rotation = self.rotation.value();
         let anchor_point = self.anchor_point.value();
         let size = self.size.value();
-        let anchor_translate = M44::translate(
-            -anchor_point.x as f32 * size.x as f32,
-            -anchor_point.y as f32 * size.y as f32,
-            0.0,
-        );
+        let anchor_translate =
+            M44::translate(-anchor_point.x * size.x, -anchor_point.y * size.y, 0.0);
         let identity = M44::new_identity();
-        let translate = M44::translate(p.x as f32, p.y as f32, 0.0);
-        let _scale = M44::scale(s.x as f32, s.y as f32, 1.0);
+        let translate = M44::translate(p.x, p.y, 0.0);
+        let _scale = M44::scale(s.x, s.y, 1.0);
         let rotate_x = M44::rotate(
             V3 {
                 x: 1.0,
                 y: 0.0,
                 z: 0.0,
             },
-            rotation.x as f32,
+            rotation.x,
         );
         let rotate_y = M44::rotate(
             V3 {
@@ -177,7 +174,7 @@ impl Drawable for ModelLayer {
                 y: 1.0,
                 z: 0.0,
             },
-            rotation.y as f32,
+            rotation.y,
         );
         let rotate_z = M44::rotate(
             V3 {
@@ -185,7 +182,7 @@ impl Drawable for ModelLayer {
                 y: 0.0,
                 z: 1.0,
             },
-            rotation.z as f32,
+            rotation.z,
         );
         // merge all transforms keeping into account the anchor point
         let transform = M44::concat(&translate, &identity);
@@ -199,7 +196,7 @@ impl Drawable for ModelLayer {
     }
     fn scale(&self) -> (f32, f32) {
         let s = self.scale.value();
-        (s.x as f32, s.y as f32)
+        (s.x, s.y)
     }
 }
 
@@ -257,10 +254,7 @@ impl From<RenderLayer> for ModelLayer {
 
         let blend_mode = layer.blend_mode;
 
-        let (x, y) = (
-            layer.matrix.translate_x() as f64,
-            layer.matrix.translate_y() as f64,
-        );
+        let (x, y) = (layer.matrix.translate_x(), layer.matrix.translate_y());
         Self {
             anchor_point: SyncValue::new(Point { x: 0.0, y: 0.0 }),
             position: SyncValue::new(Point { x, y }),
@@ -318,10 +312,10 @@ impl Layer {
         RenderableFlags::NEEDS_PAINT
     );
     change_model!(border_color, PaintColor, RenderableFlags::NEEDS_PAINT);
-    change_model!(border_width, f64, RenderableFlags::NEEDS_PAINT);
+    change_model!(border_width, f32, RenderableFlags::NEEDS_PAINT);
     change_model!(shadow_offset, Point, RenderableFlags::NEEDS_PAINT);
-    change_model!(shadow_radius, f64, RenderableFlags::NEEDS_PAINT);
-    change_model!(shadow_spread, f64, RenderableFlags::NEEDS_PAINT);
+    change_model!(shadow_radius, f32, RenderableFlags::NEEDS_PAINT);
+    change_model!(shadow_spread, f32, RenderableFlags::NEEDS_PAINT);
     change_model!(shadow_color, Color, RenderableFlags::NEEDS_PAINT);
     change_model!(content, Option<Image>, RenderableFlags::NEEDS_PAINT);
 

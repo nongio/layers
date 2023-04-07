@@ -20,12 +20,12 @@ pub fn draw_text(canvas: &mut Canvas, layer: &Text) {
     // }
 
     // font.set_subpixel(true);
-    // font.set_size(layer.font_size as f32);
+    // font.set_size(layer.font_size);
     let mut paint = Paint::new(Color4f::from(layer.text_color), None);
     paint.set_style(PaintStyle::Stroke);
     // DEBUG
     canvas.draw_rect(
-        Rect::from_xywh(0.0, 0.0, layer.size.x as f32, layer.size.y as f32),
+        Rect::from_xywh(0.0, 0.0, layer.size.x, layer.size.y),
         &paint,
     );
 
@@ -38,7 +38,7 @@ pub fn draw_text(canvas: &mut Canvas, layer: &Text) {
 
     // DEBUG
     // canvas.draw_rect(
-    //     Rect::from_xywh(0.0, 0.0, layer.size.x as f32, layer.size.y as f32),
+    //     Rect::from_xywh(0.0, 0.0, layer.size.x, layer.size.y),
     //     &background_paint,
     // );
     paint.set_style(PaintStyle::Fill);
@@ -50,14 +50,14 @@ pub fn draw_text(canvas: &mut Canvas, layer: &Text) {
     let mut paragraph_builder = ParagraphBuilder::new(&paragraph_style, font_collection);
     let mut ts = TextStyle::new();
     ts.set_font_families(&[layer.font_family.as_str()]);
-    ts.set_font_size(layer.font_size as f32);
+    ts.set_font_size(layer.font_size);
     ts.set_foreground_color(&paint);
 
     paragraph_builder.push_style(&ts);
 
     paragraph_builder.add_text(layer.text.as_str());
     let mut paragraph = paragraph_builder.build();
-    paragraph.layout(layer.size.x as f32);
+    paragraph.layout(layer.size.x);
     paragraph.paint(canvas, Point { x: 0.0, y: 0.0 });
 }
 

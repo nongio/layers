@@ -9,25 +9,25 @@ use crate::layers::layer::{BlendMode, RenderLayer};
 use crate::types::PaintColor;
 
 pub fn draw_layer(canvas: &mut Canvas, layer: &RenderLayer) {
-    let rect = Rect::from_point_and_size((0.0, 0.0), (layer.size.x as f32, layer.size.y as f32));
+    let rect = Rect::from_point_and_size((0.0, 0.0), (layer.size.x, layer.size.y));
     let rrect = RRect::new_rect_radii(
         rect,
         &[
             Point::new(
-                layer.border_corner_radius.top_left as f32,
-                layer.border_corner_radius.top_left as f32,
+                layer.border_corner_radius.top_left,
+                layer.border_corner_radius.top_left,
             ),
             Point::new(
-                layer.border_corner_radius.top_right as f32,
-                layer.border_corner_radius.top_right as f32,
+                layer.border_corner_radius.top_right,
+                layer.border_corner_radius.top_right,
             ),
             Point::new(
-                layer.border_corner_radius.bottom_left as f32,
-                layer.border_corner_radius.bottom_left as f32,
+                layer.border_corner_radius.bottom_left,
+                layer.border_corner_radius.bottom_left,
             ),
             Point::new(
-                layer.border_corner_radius.bottom_right as f32,
-                layer.border_corner_radius.bottom_right as f32,
+                layer.border_corner_radius.bottom_right,
+                layer.border_corner_radius.bottom_right,
             ),
         ],
     );
@@ -41,25 +41,25 @@ pub fn draw_layer(canvas: &mut Canvas, layer: &RenderLayer) {
     background_paint.set_anti_alias(true);
     background_paint.set_style(PaintStyle::Fill);
 
-    let bounds = Rect::from_xywh(0.0, 0.0, (layer.size.x) as f32, (layer.size.y) as f32);
+    let bounds = Rect::from_xywh(0.0, 0.0, layer.size.x, layer.size.y);
     let rrbounds = RRect::new_rect_radii(
         bounds,
         &[
             Point::new(
-                layer.border_corner_radius.top_left as f32,
-                layer.border_corner_radius.top_left as f32,
+                layer.border_corner_radius.top_left,
+                layer.border_corner_radius.top_left,
             ),
             Point::new(
-                layer.border_corner_radius.top_right as f32,
-                layer.border_corner_radius.top_right as f32,
+                layer.border_corner_radius.top_right,
+                layer.border_corner_radius.top_right,
             ),
             Point::new(
-                layer.border_corner_radius.bottom_left as f32,
-                layer.border_corner_radius.bottom_left as f32,
+                layer.border_corner_radius.bottom_left,
+                layer.border_corner_radius.bottom_left,
             ),
             Point::new(
-                layer.border_corner_radius.bottom_right as f32,
-                layer.border_corner_radius.bottom_right as f32,
+                layer.border_corner_radius.bottom_right,
+                layer.border_corner_radius.bottom_right,
             ),
         ],
     );
@@ -96,20 +96,20 @@ pub fn draw_layer(canvas: &mut Canvas, layer: &RenderLayer) {
 
         shadow_paint.set_mask_filter(MaskFilter::blur(
             BlurStyle::Normal,
-            layer.shadow_radius as f32,
+            layer.shadow_radius,
             false,
         ));
         shadow_paint.set_anti_alias(true);
 
         let shadow_rrect = RRect::new_rect_xy(
             Rect::from_xywh(
-                layer.shadow_offset.x as f32,
-                layer.shadow_offset.y as f32,
-                (layer.size.x) as f32,
-                (layer.size.y) as f32,
+                layer.shadow_offset.x,
+                layer.shadow_offset.y,
+                layer.size.x,
+                layer.size.y,
             ),
-            layer.border_corner_radius.top_left as f32,
-            layer.border_corner_radius.top_right as f32,
+            layer.border_corner_radius.top_left,
+            layer.border_corner_radius.top_right,
         );
         let save_count = canvas.save();
         canvas.clip_rrect(rrbounds, Some(ClipOp::Difference), Some(true));
@@ -124,7 +124,7 @@ pub fn draw_layer(canvas: &mut Canvas, layer: &RenderLayer) {
         };
 
         border_paint.set_style(PaintStyle::Stroke);
-        border_paint.set_stroke_width(layer.border_width as f32);
+        border_paint.set_stroke_width(layer.border_width);
         canvas.draw_rrect(rrect, &border_paint);
     }
     // Draw content if any
@@ -145,7 +145,7 @@ pub fn draw_layer(canvas: &mut Canvas, layer: &RenderLayer) {
         canvas.draw_image_rect_with_sampling_options(
             content,
             None,
-            Rect::from_xywh(0.0, 0.0, layer.size.x as f32, layer.size.y as f32),
+            Rect::from_xywh(0.0, 0.0, layer.size.x, layer.size.y),
             SamplingOptions::default(),
             &paint,
         );
