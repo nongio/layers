@@ -13,10 +13,9 @@ pub mod node;
 pub mod pointer;
 pub mod rendering;
 pub mod scene;
+mod stages;
 pub mod storage;
-
-use rayon::prelude::{IntoParallelRefIterator, IntoParallelRefMutIterator, ParallelIterator};
-use taffy::prelude::{Size, *};
+use taffy::prelude::*;
 
 use std::{
     ops::Deref,
@@ -31,11 +30,15 @@ use crate::{
 
 use self::{
     animations::{Animation, Easing, Transition},
-    node::{ContainsPoint, DrawCacheManagement, RenderNode, RenderableFlags},
+    node::{ContainsPoint, RenderNode, RenderableFlags},
     scene::Scene,
+    stages::{
+        cleanup_animations, cleanup_transactions, execute_transactions, trigger_callbacks,
+        update_animations, update_layout_tree, update_nodes,
+    },
     storage::{FlatStorage, FlatStorageId, TreeStorageId},
 };
-
+#[derive(Clone)]
 pub struct Timestamp(f64);
 
 /// A trait for objects that can be exectuded by the engine.
@@ -156,7 +159,10 @@ impl LayersEngine {
         self.engine.update(dt)
     }
     pub fn scene_add_layer(&self, layer: impl Into<Layers>) -> NodeRef {
-        self.engine.scene_add_layer(layer)
+        self.engine.scene_add_layer(layer, None)
+    }
+    pub fn scene_add_layer_to(&self, layer: impl Into<Layers>, parent: Option<NodeRef>) -> NodeRef {
+        self.engine.scene_add_layer(layer, parent)
     }
     pub fn scene_set_root(&self, layer: impl Into<Layers>) -> NodeRef {
         self.engine.scene_set_root(layer)
@@ -170,6 +176,10 @@ impl LayersEngine {
     pub fn step_time(&self, dt: f64) {
         self.engine.step_time(dt)
     }
+
+    pub fn scene_layer_at(&self, point: Point) -> Option<NodeRef> {
+        self.engine.layer_at(point)
+    }
 }
 
 impl Default for LayersEngine {
@@ -179,6 +189,10 @@ impl Default for LayersEngine {
 }
 impl Engine {
     fn new() -> Self {
+        // rayon::ThreadPoolBuilder::new()
+        //     .num_threads(2)
+        //     .build_global()
+        //     .unwrap();
         Default::default()
     }
     pub fn create() -> Arc<Self> {
@@ -192,25 +206,27 @@ impl Engine {
             Layers::TextLayer(text_layer) => text_layer.model as Arc<dyn RenderNode>,
         };
         let id = self.scene.add(renderable, layer.layout_node());
-        // self.scene_root =
         layer.set_id(id);
         id
     }
 
-    pub fn scene_add_layer(&self, layer: impl Into<Layers>) -> NodeRef {
+    pub fn scene_add_layer(&self, layer: impl Into<Layers>, parent: Option<NodeRef>) -> NodeRef {
         let layer: Layers = layer.into();
-        let mut layout = self.layout_tree.write().unwrap();
+        let mut layout_tree = self.layout_tree.write().unwrap();
 
         let (id, layer_layout) = match layer {
             Layers::Layer(layer) => {
-                let id = self
-                    .scene
-                    .add(layer.model.clone() as Arc<dyn RenderNode>, layer.layout);
+                let id = self.scene.append(
+                    parent,
+                    layer.model.clone() as Arc<dyn RenderNode>,
+                    layer.layout,
+                );
                 layer.set_id(id);
                 (id, layer.layout)
             }
             Layers::TextLayer(text_layer) => {
-                let id = self.scene.add(
+                let id = self.scene.append(
+                    parent,
                     text_layer.model.clone() as Arc<dyn RenderNode>,
                     text_layer.layout,
                 );
@@ -219,16 +235,23 @@ impl Engine {
                 (id, text_layer.layout)
             }
         };
-        let mut scene_root = self.scene_root.write().unwrap();
-        let layout_root = *self.layout_root.read().unwrap();
-        if scene_root.is_none() {
-            *scene_root = Some(id);
-            layout.remove(layout_root).unwrap();
-            *self.layout_root.write().unwrap() = layer_layout;
+
+        if let Some(parent) = parent {
+            let parent_layout = self.scene.get_node(parent).unwrap().get().layout_node;
+            self.scene.append_node_to(id, parent);
+            layout_tree.add_child(parent_layout, layer_layout).unwrap();
         } else {
-            let scene_root = *scene_root.unwrap();
-            self.scene.append_node_to(id, NodeRef(scene_root));
-            layout.add_child(layout_root, layer_layout).unwrap();
+            let mut scene_root = self.scene_root.write().unwrap();
+            let layout_root = *self.layout_root.read().unwrap();
+            if scene_root.is_none() {
+                *scene_root = Some(id);
+                layout_tree.remove(layout_root).unwrap();
+                *self.layout_root.write().unwrap() = layer_layout;
+            } else {
+                let scene_root = *scene_root.unwrap();
+                self.scene.append_node_to(id, NodeRef(scene_root));
+                layout_tree.add_child(layout_root, layer_layout).unwrap();
+            }
         }
 
         id
@@ -294,162 +317,26 @@ impl Engine {
     pub fn update(&self, dt: f64) -> bool {
         let mut timestamp = self.timestamp.write().unwrap();
         *timestamp = Timestamp(timestamp.0 + dt);
-        // println!("timestamp: {} {}", timestamp.0, dt);
-
-        // supporting arrays for cleanup at a later stage
-        let finished_animations = Arc::new(RwLock::new(Vec::<FlatStorageId>::new()));
-        let finished_commands = Arc::new(RwLock::new(Vec::<FlatStorageId>::new()));
 
         // 1.1 Update animations to the current timestamp
-        {
-            let animations = self.animations.data();
-            let mut animations = animations.write().unwrap();
-            if animations.len() > 0 {
-                animations.par_iter_mut().for_each_with(
-                    finished_animations.clone(),
-                    |done, (id, AnimationState(animation, value, finished))| {
-                        (*value, *finished) = animation.value(timestamp.0);
-                        if *finished {
-                            done.clone().write().unwrap().push(*id);
-                        }
-                    },
-                );
-            }
-        }
+        let finished_animations = update_animations(self, timestamp.clone());
         // 1.2 Execute transactions using the updated animations
+        let (updated_nodes, finished_transations, needs_redraw) = execute_transactions(self);
 
-        let transactions = self.transactions.data();
-        let mut transactions = transactions.write().unwrap();
+        // 2.0 update the layout tree using taffy
+        update_layout_tree(self);
 
-        // TODO review this, we assume we should redraw the scene if there
-        // are transactions to be executed
-        let needs_redraw = transactions.len() > 0;
+        // 3.0 update render nodes and trigger repaint
+        update_nodes(self, updated_nodes);
 
-        let animations = &self.animations;
-        let transaction_handlers = &self.transaction_handlers;
-        let scene = self.scene.clone();
-        transactions.par_iter().for_each_with(
-            finished_commands.clone(),
-            |done_commands, (id, command)| {
-                let (progress, done) = command
-                    .animation_id
-                    .as_ref()
-                    .map(|id| {
-                        let update = animations
-                            .get(&id.0)
-                            .map(|AnimationState(_, value, done)| (value, done))
-                            .unwrap_or((1.0, true));
-                        if let Some(ch) = transaction_handlers.get(&id.0) {
-                            let callbacks = &ch.on_update;
-                            callbacks.iter().for_each(|callback| {
-                                let callback = callback.clone();
-                                callback(update.0);
-                            });
-                        }
-                        update
-                    })
-                    .unwrap_or((1.0, true));
+        // 4.0 update render nodes and trigger repaint
+        trigger_callbacks(self);
 
-                let flags = command.change.execute(progress);
-
-                if let Some(node) = scene.get_node(command.node_id.0) {
-                    {
-                        let node = node.get();
-                        if flags.contains(RenderableFlags::NEEDS_LAYOUT) {
-                            let bounds = node.model.bounds();
-                            let size = crate::types::Size {
-                                x: bounds.width,
-                                y: bounds.height,
-                            };
-                            self.set_node_layout_size(node.layout_node, size);
-                        }
-                        if done {
-                            // println!("done: {:?}", command.node_id.0);
-                            node.remove_flags(RenderableFlags::ANIMATING);
-                            // println!("flags: {:?}", flags);
-                        }
-                    }
-                    // {
-                    node.get().insert_flags(flags);
-                    // }
-                }
-                if done {
-                    done_commands.write().unwrap().push(*id);
-                }
-            },
-        );
-
-        let mut layout = self.layout_tree.write().unwrap();
-        let layout_root = *self.layout_root.read().unwrap();
-        let scene_root = *self.scene_root.read().unwrap().unwrap();
-        let scene_root = self.scene.get_node(scene_root).unwrap();
-        let scene_root = scene_root.get();
-        let bounds = scene_root.model.bounds();
-        if layout.dirty(layout_root).unwrap() {
-            layout
-                .compute_layout(
-                    layout_root,
-                    Size {
-                        width: points(bounds.width as f32),
-                        height: points(bounds.height as f32),
-                    },
-                )
-                .unwrap();
-        }
-        // we are done writing to the layout tree, so we can
-        // drop the lock
-        drop(layout);
-
-        let layout = self.layout_tree.read().unwrap();
-        // iterate in parallel over the nodes and
-        // 2., 3. repaint if necessary
-        let arena = self.scene.nodes.data();
-        let arena = arena.read().unwrap();
-        arena.iter().for_each(|node| {
-            let node = node.get();
-            // println!("{:?}", node.layout_node);
-            let l = layout.layout(node.layout_node).unwrap();
-
-            node.layout_if_needed(l);
-            node.repaint_if_needed();
-        });
-
-        // trigger animations callbacks
-        {
-            let animations = self.animations.data();
-            let animations = animations.read().unwrap();
-            animations
-                .iter()
-                .filter(|(_, AnimationState(_, _, finished))| *finished)
-                .for_each(|(id, AnimationState(_animation, _, _))| {
-                    if let Some(handler) = self.transaction_handlers.get(id) {
-                        let callbacks = &handler.on_finish;
-                        callbacks.iter().for_each(|callback| {
-                            let callback = callback.clone();
-                            callback(1.0);
-                        });
-                    }
-                });
-        }
-
-        // cleanup the animations marked as done and
+        // 5.0 cleanup the animations marked as done and
         // transactions already exectured
-        let animations = self.animations.data();
-        let mut animations = animations.write().unwrap();
+        cleanup_animations(self, finished_animations);
 
-        let animations_finished_to_remove = finished_animations.read().unwrap();
-        for animation_id in animations_finished_to_remove.iter() {
-            animations.remove(animation_id);
-        }
-
-        let commands_finished_to_remove = finished_commands.read().unwrap();
-        let handlers = self.transaction_handlers.data();
-        let mut handlers = handlers.write().unwrap();
-        for command_id in commands_finished_to_remove.iter() {
-            transactions.remove(command_id);
-            handlers.remove(command_id);
-        }
-
+        cleanup_transactions(self, finished_transations);
         needs_redraw
     }
 
@@ -470,6 +357,7 @@ impl Engine {
             width: points(size.x as f32),
             height: points(size.y as f32),
         };
+        // println!("set_node_layout_size: {:?}", style.size);
         layout.set_style(node, style).unwrap();
     }
 
