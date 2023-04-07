@@ -53,13 +53,13 @@ impl Scene {
     }
     pub fn append<R: Into<Arc<dyn RenderNode>>>(
         &self,
-        parent: NodeRef,
+        parent: Option<NodeRef>,
         renderable: R,
         layout: Node,
     ) -> NodeRef {
         let renderable: Arc<dyn RenderNode> = renderable.into();
         let node = SceneNode::with_renderable_and_layout(renderable.clone(), layout);
-        self.insert_node(&node, Some(parent))
+        self.insert_node(&node, parent)
     }
 }
 

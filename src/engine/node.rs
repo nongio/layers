@@ -141,7 +141,12 @@ impl DrawCacheManagement for SceneNode {
             .contains(RenderableFlags::NEEDS_LAYOUT)
         {
             let identity = M44::new_identity();
-            let translate = M44::translate(layout.location.x, layout.location.y, 0.0);
+            let bounds = self.model.bounds();
+            let translate = M44::translate(
+                layout.location.x + bounds.x as f32,
+                layout.location.y + bounds.y as f32,
+                0.0,
+            );
             let transform = M44::concat(&translate, &identity);
             // let transform = M44::concat(&transform, &scale);
             // let transform = M44::concat(&transform, &rotate_x);

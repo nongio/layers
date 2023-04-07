@@ -19,7 +19,6 @@ use crate::engine::rendering::Drawable;
 use crate::engine::Engine;
 use crate::engine::NodeRef;
 // use crate::engine::{Engine};
-// use crate::engine::TransactionRef;
 use crate::layers::*;
 use crate::types::*;
 
@@ -131,9 +130,10 @@ impl Drawable for ModelLayer {
     }
     fn bounds(&self) -> Rectangle {
         let s = self.size.value();
+        let p = self.position.value();
         Rectangle {
-            x: 0.0,
-            y: 0.0,
+            x: p.x,
+            y: p.y,
             width: s.x,
             height: s.y,
         }
@@ -303,6 +303,10 @@ impl Layer {
     pub fn set_id(&self, id: NodeRef) {
         self.id.write().unwrap().replace(id);
     }
+    pub fn id(&self) -> Option<NodeRef> {
+        let id = *self.id.read().unwrap();
+        id
+    }
     change_model!(position, Point, RenderableFlags::NEEDS_LAYOUT);
     change_model!(background_color, PaintColor, RenderableFlags::NEEDS_PAINT);
     change_model!(scale, Point, RenderableFlags::NEEDS_LAYOUT);
@@ -444,6 +448,14 @@ impl Layer {
     //         self.set_content(Some(image), None);
     //     }
     // }
+
+    pub fn bounds(&self) -> Rectangle {
+        self.model.bounds()
+    }
+
+    pub fn add_sublayer(&self, layer: Layer) -> NodeRef {
+        self.engine.scene_add_layer(layer, self.id())
+    }
 }
 
 impl From<Layer> for Arc<dyn RenderNode> {

@@ -1,5 +1,6 @@
 //! Internal models representing the Layers and their animatable properties.
 use crate::easing::Interpolate;
+
 use crate::engine::{
     animations::*, command::*, node::*, Command, CommandWithTransition, NodeRef, WithTransition,
 };
@@ -11,7 +12,7 @@ macro_rules! change_model {
                 &self,
                 value: impl Into<$variable_type>,
                 transition: Option<Transition<Easing>>,
-            )  -> Arc<ModelChange<$variable_type>> {
+            )  -> Transaction {
                 let value:$variable_type = value.into();
                 let flags = $flags;
 
@@ -19,13 +20,18 @@ macro_rules! change_model {
                     value_change: self.model.$variable_name.to(value.clone(), transition),
                     flag: flags,
                 });
+                let mut tr = crate::engine::TransactionRef(0);
                 let id:Option<NodeRef> = *self.id.read().unwrap();
                 if let Some(id) = id {
-                    self.engine.schedule_change(id, change.clone());
+                    tr = self.engine.schedule_change(id, change.clone());
                 } else {
                     self.model.$variable_name.set(value.clone());
                 }
-                change
+                let transaction = Transaction {
+                    engine: self.engine.clone(),
+                    id: tr,
+                };
+                transaction
             }
             pub fn $variable_name(&self) -> $variable_type {
                 self.model.$variable_name.value()

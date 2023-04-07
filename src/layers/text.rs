@@ -141,8 +141,6 @@ impl Drawable for ModelText {
 
 impl RenderNode for ModelText {}
 
-// Conversion helpers
-
 impl From<&ModelText> for Text {
     fn from(mt: &ModelText) -> Self {
         let matrix = mt.transform();
