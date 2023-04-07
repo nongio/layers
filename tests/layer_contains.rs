@@ -1,13 +1,8 @@
 use std::f64::consts::PI;
-use std::sync::Arc;
 
-use layers::drawing::scene::DrawScene;
-use layers::engine::node::{ContainsPoint, RenderNode};
-use layers::engine::rendering::Drawable;
+use layers::engine::node::ContainsPoint;
 use layers::engine::LayersEngine;
-use layers::layers::layer::ModelLayer;
-use layers::types::{BorderRadius, Color, PaintColor, Point, Point3d};
-use skia_safe::{Color4f, Paint, Rect};
+use layers::types::{Point, Point3d};
 
 #[test]
 pub fn layer_contains() {
@@ -50,7 +45,7 @@ pub fn scene_node_contains() {
 
     let point = Point { x: 200.0, y: 200.0 };
 
-    let node = engine.layer_at(point);
+    let node = engine.scene_layer_at(point);
 
     assert!(node.is_some());
 
@@ -63,6 +58,6 @@ pub fn scene_node_contains() {
         None,
     );
     engine.update(0.0);
-    let node = engine.layer_at(point);
+    let node = engine.scene_layer_at(point);
     assert!(node.is_none());
 }

@@ -1,16 +1,14 @@
-#![allow(warnings)]
 use indextree::{Arena, NodeId};
 use skia_safe::{
     gpu::{gl::FramebufferInfo, BackendRenderTarget, SurfaceOrigin},
-    ColorType, Image, Surface,
+    ColorType, Image, Rect, Surface,
 };
 use std::cell::Cell;
 
 use crate::engine::{
     node::{DrawCacheManagement, RenderableFlags, SceneNode},
-    rendering::{render_node, render_node_children, render_node_to_image},
+    rendering::render_node,
     scene::Scene,
-    storage::TreeStorage,
     NodeRef,
 };
 use crate::{drawing::scene::DrawScene, engine::storage::FlatStorage};
@@ -78,6 +76,17 @@ impl SkiaFboRenderer {
         canvas: &mut skia_safe::Canvas,
     ) {
         let node_id: NodeId = node_id.into();
+        let layer = arena.get(node_id).unwrap().get();
+        let bounds = layer.model.bounds();
+        let bounds = Rect::from_xywh(
+            0.0, //bounds.x as f32,
+            0.0, //bounds.y as f32,
+            bounds.width as f32,
+            bounds.height as f32,
+        );
+
+        canvas.clip_rect(bounds, None, None);
+
         node_id.children(arena).for_each(|child_id| {
             let childindex: usize = child_id.into();
             let node = arena.get(child_id).unwrap().get();
@@ -100,7 +109,7 @@ impl SkiaFboRenderer {
             //     //     // println!("rastering child: {}", childindex);
             // }
 
-            let matrix = node.transformation.read().unwrap().clone();
+            let matrix = node.transformation.read().unwrap();
 
             let s = canvas.save();
             canvas.concat(&matrix);
@@ -130,7 +139,7 @@ impl SkiaFboRenderer {
                     println!("no picture for child: {}", childindex);
                 }
             }
-            self.draw_node_children(NodeRef(child_id), &arena, canvas);
+            self.draw_node_children(NodeRef(child_id), arena, canvas);
             canvas.restore_to_count(s);
         });
     }
@@ -143,10 +152,10 @@ impl DrawScene for SkiaFboRenderer {
 
         let arena = scene.nodes.data();
         let arena = &*arena.read().unwrap();
-        if let Some(root) = scene.get_node(root_id) {
+        if let Some(_root) = scene.get_node(root_id) {
             let root = arena.get(root_id.into()).unwrap().get();
             render_node(root, canvas);
-            let matrix = root.transformation.read().unwrap().clone();
+            let matrix = root.transformation.read().unwrap();
             let sc = canvas.save();
             canvas.concat(&matrix);
 
