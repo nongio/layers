@@ -7,7 +7,7 @@ use layers::{
     types::Point,
 };
 
-pub struct Timestamp(f64);
+pub struct Timestamp(f32);
 
 fn criterion_benchmark(c: &mut Criterion) {
     let engine = LayersEngine::new();
