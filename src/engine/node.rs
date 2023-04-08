@@ -67,6 +67,7 @@ impl SceneNode {
             flags: Arc::new(RwLock::new(
                 RenderableFlags::NEEDS_PAINT
                     | RenderableFlags::NEEDS_LAYOUT
+                    | RenderableFlags::NEEDS_PAINT
                     | RenderableFlags::NEEDS_RASTER,
             )),
             layout_node,

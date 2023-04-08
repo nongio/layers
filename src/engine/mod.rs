@@ -30,6 +30,7 @@ use crate::{
 
 use self::{
     animations::{Animation, Easing, Transition},
+    command::NoopChange,
     node::{ContainsPoint, RenderNode, RenderableFlags},
     scene::Scene,
     stages::{
@@ -253,7 +254,8 @@ impl Engine {
                 layout_tree.add_child(layout_root, layer_layout).unwrap();
             }
         }
-
+        let change = Arc::new(NoopChange::new(id.0.into()));
+        self.schedule_change(id, change);
         id
     }
 

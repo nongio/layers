@@ -329,7 +329,7 @@ impl Layer {
         &self,
         value: impl Into<Point>,
         transition: Option<Transition<Easing>>,
-    ) -> Arc<ModelChange<Point>> {
+    ) -> &Self {
         let value: Point = value.into();
         let flags = RenderableFlags::NEEDS_LAYOUT | RenderableFlags::NEEDS_PAINT;
 
@@ -339,18 +339,22 @@ impl Layer {
         });
         let id: Option<NodeRef> = *self.id.read().unwrap();
         if let Some(id) = id {
-            self.engine.schedule_change(id, change.clone());
+            self.engine.schedule_change(id, change);
         } else {
             self.model.size.set(value);
             self.engine.set_node_layout_size(self.layout, value);
         }
-        change
+        self
     }
 
     pub fn set_layout_style(&self, style: Style) {
         self.engine.set_node_layout_style(self.layout, style);
     }
 
+    pub fn into_render_layer(&self) -> RenderLayer {
+        let model = &*self.model.clone();
+        model.into()
+    }
     // pub fn set_content_from_file(&self, file_path: &str) {
     //     // read jpg file
     //     let data = std::fs::read(file_path).unwrap();

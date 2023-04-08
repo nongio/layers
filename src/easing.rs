@@ -277,20 +277,20 @@ impl Interpolate for Option<Image> {
     }
 }
 // easing version of the bezier 1d with p0 = 0 and p3 = 1
-fn bezier_easing_1d(p1: f32, p2: f32, f: f32) -> f32 {
+fn bezier_easing_1d(p1: f64, p2: f64, f: f64) -> f64 {
     let f2 = f * f;
     let f3 = f2 * f;
     f3 + 3.0 * f3 * p1 - 3.0 * f3 * p2 + 3.0 * f2 * p2 - 6.0 * f2 * p1 + 3.0 * f * p1
 }
 
 // derivative of the easing version of the bezier 1d with p0 = 0 and p3 = 1
-fn bezier_easing_1d_prime(p1: f32, p2: f32, f: f32) -> f32 {
+fn bezier_easing_1d_prime(p1: f64, p2: f64, f: f64) -> f64 {
     let f2 = f * f;
     3.0 * f2 + 9.0 * f2 * p1 - 9.0 * f2 * p2 + 6.0 * f * p2 - 12.0 * f * p1 + 3.0 * p1
 }
 
 // newthon method to find the roots
-fn find_root(p1: f32, p2: f32, target: f32) -> f32 {
+fn find_root(p1: f64, p2: f64, target: f64) -> f64 {
     let mut p0 = 0.5;
     let tolerance = 1e-9;
     let epsilon = 1e-14;
@@ -308,10 +308,10 @@ fn find_root(p1: f32, p2: f32, target: f32) -> f32 {
         p0 = p_next;
     }
     // numerical difficulties
-    f32::NAN
+    f64::NAN
 }
 
-pub fn bezier_easing_function(x1: f32, y1: f32, x2: f32, y2: f32, f: f32) -> f32 {
+pub fn bezier_easing_function(x1: f64, y1: f64, x2: f64, y2: f64, f: f64) -> f64 {
     assert!((0.0..=1.0).contains(&x1));
     assert!((0.0..=1.0).contains(&x1));
     assert!((0.0..=1.0).contains(&f));

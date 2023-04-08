@@ -12,7 +12,7 @@ use std::sync::Arc;
 use super::{
     animations::{Easing, SyncValue, Transition},
     node::RenderableFlags,
-    Engine, TransactionRef,
+    Command, CommandWithTransition, Engine, TransactionRef, WithTransition,
 };
 
 /// A representation of a change to a property, including an optional transition
@@ -53,3 +53,26 @@ impl Transaction {
         self.engine.on_update(self.id, handler);
     }
 }
+
+pub struct NoopChange(usize);
+impl NoopChange {
+    pub fn new(id: usize) -> Self {
+        Self(id)
+    }
+}
+impl Command for NoopChange {
+    fn execute(&self, _progress: f32) -> RenderableFlags {
+        RenderableFlags::NEEDS_PAINT | RenderableFlags::NEEDS_LAYOUT
+    }
+    fn value_id(&self) -> usize {
+        self.0
+    }
+}
+
+impl WithTransition for NoopChange {
+    fn transition(&self) -> Option<Transition<Easing>> {
+        None
+    }
+}
+
+impl CommandWithTransition for NoopChange {}
