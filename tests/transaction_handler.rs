@@ -66,7 +66,7 @@ pub fn call_update_transaction() {
     let engine = LayersEngine::new();
     let layer = engine.new_layer();
     engine.scene_add_layer(layer.clone());
-    
+
     let called = Arc::new(RwLock::new(0));
     let c = called.clone();
     let transaction = layer.set_position(

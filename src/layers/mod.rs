@@ -1,74 +1,8 @@
 //! Internal models representing the Layers and their animatable properties.
-use crate::easing::Interpolate;
 
-use crate::engine::{
-    animations::*, command::*, node::*, Command, CommandWithTransition, NodeRef, WithTransition,
-};
-
-macro_rules! change_model {
-    ($variable_name:ident, $variable_type:ty, $flags:expr) => {
-        paste::paste! {
-            pub fn [<set_ $variable_name>](
-                &self,
-                value: impl Into<$variable_type>,
-                transition: Option<Transition<Easing>>,
-            )  -> Transaction {
-                let value:$variable_type = value.into();
-                let flags = $flags;
-
-                let change: Arc<ModelChange<$variable_type>> = Arc::new(ModelChange {
-                    value_change: self.model.$variable_name.to(value.clone(), transition),
-                    flag: flags,
-                });
-                let mut tr = crate::engine::TransactionRef(0);
-                let id:Option<NodeRef> = *self.id.read().unwrap();
-                if let Some(id) = id {
-                    tr = self.engine.schedule_change(id, change.clone());
-                } else {
-                    self.model.$variable_name.set(value.clone());
-                }
-                let transaction = Transaction {
-                    engine: self.engine.clone(),
-                    id: tr,
-                };
-                transaction
-            }
-            pub fn $variable_name(&self) -> $variable_type {
-                self.model.$variable_name.value()
-            }
-        }
-    };
-}
-
-impl<T: Sync> WithTransition for ModelChange<T> {
-    fn transition(&self) -> Option<Transition<Easing>> {
-        self.value_change.transition
-    }
-}
-
-impl<I: Interpolate + Sync + Clone + 'static> Command for ModelChange<I> {
-    fn execute(&self, progress: f32) -> RenderableFlags {
-        let ModelChange {
-            value_change, flag, ..
-        } = &self;
-
-        value_change
-            .target
-            .set(value_change.from.interpolate(&value_change.to, progress));
-        *flag
-    }
-    fn value_id(&self) -> usize {
-        self.value_change.target.id
-    }
-}
-
-impl<T: Interpolate + Sync + Send + Clone + Sized + 'static> CommandWithTransition
-    for ModelChange<T>
-{
-}
-
-pub(crate) use change_model;
 use taffy::prelude::Node;
+
+use crate::engine::NodeRef;
 
 use self::layer::Layer;
 use self::text::TextLayer;

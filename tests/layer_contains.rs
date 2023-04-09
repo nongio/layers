@@ -53,7 +53,7 @@ pub fn scene_node_contains() {
         Point3d {
             x: 0.0,
             y: 0.0,
-            z: PI / 4.0,
+            z: PI as f32 / 4.0,
         },
         None,
     );

@@ -4,8 +4,7 @@ use crate::types::Rectangle;
 
 use indextree::{Arena, NodeId};
 
-use skia_safe::{Canvas, Color4f, ColorSpace, Image, Matrix, Paint, Rect};
-use skia_safe::{Picture, PictureRecorder};
+use skia_safe::{Canvas, Color4f, ColorSpace, Image, Matrix, Paint};
 
 use super::NodeRef;
 
@@ -15,32 +14,12 @@ pub trait Drawable {
     fn draw(&self, canvas: &mut Canvas);
     /// Returns the area that this drawable occupies.
     fn bounds(&self) -> Rectangle;
+    /// Returns the area that this drawable occupies after applying the transform.
     fn scaled_bounds(&self) -> Rectangle;
+    /// Returns the transformation matrix for this drawable.
     fn transform(&self) -> Matrix;
+    /// Returns the scale of this drawable.
     fn scale(&self) -> (f32, f32);
-}
-
-/// A trait for objects that can be drawn to a PictureRecorder.
-pub trait DrawToPicture {
-    fn draw_to_picture(&self) -> Option<Picture>;
-}
-
-impl<T> DrawToPicture for T
-where
-    T: Drawable,
-{
-    fn draw_to_picture(&self) -> Option<Picture> {
-        let mut recorder = PictureRecorder::new();
-
-        let r = self.bounds();
-
-        let canvas = recorder.begin_recording(
-            Rect::from_xywh(-50.0, -50.0, r.width + 100.0, r.height + 100.0),
-            None,
-        );
-        self.draw(canvas);
-        recorder.finish_recording_as_picture(None)
-    }
 }
 
 pub fn draw_single_scene_node(canvas: &mut Canvas, node: &SceneNode) {

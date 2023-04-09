@@ -8,19 +8,14 @@ use crate::{
         animations::SyncValue,
         node::{RenderNode, RenderableFlags},
         rendering::Drawable,
-        Engine,
-        NodeRef,
-        // TransactionRef,
-        // ChangeProducer, Engine,
-        // NodeRef,
+        Engine, NodeRef,
     },
-    types::{Color, PaintColor, Point, Rectangle},
+    types::*,
 };
 
-use super::change_model;
 use crate::engine::{animations::*, command::*};
 #[derive(Clone, Debug)]
-pub struct Text {
+pub struct RenderText {
     pub matrix: Matrix,
     pub size: Point,
     pub text: String,
@@ -45,7 +40,6 @@ pub struct ModelText {
     pub font_weight: SyncValue<f32>,
     pub font_letter_spacing: SyncValue<f32>,
     pub text: RwLock<String>,
-    // pub engine: RwLock<Option<(NodeRef, Arc<Engine>)>>,
 }
 
 impl ModelText {
@@ -72,7 +66,7 @@ impl Default for ModelText {
         let font_weight = SyncValue::new(400.0);
         let font_letter_spacing = SyncValue::new(0.0);
         let text = RwLock::new(String::from("Hello World"));
-        // let engine = RwLock::new(None);
+
         Self {
             position,
             scale,
@@ -84,7 +78,6 @@ impl Default for ModelText {
             font_weight,
             font_letter_spacing,
             text,
-            // engine,
         }
     }
 }

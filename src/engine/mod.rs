@@ -9,12 +9,14 @@
 //! - The *compose* step generates the final image using the textures
 pub mod animations;
 pub mod command;
+mod draw_to_picture;
 pub mod node;
 pub mod pointer;
 pub mod rendering;
 pub mod scene;
 mod stages;
 pub mod storage;
+
 use taffy::prelude::*;
 
 use std::{

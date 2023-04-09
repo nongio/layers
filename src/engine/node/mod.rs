@@ -1,15 +1,19 @@
 use bitflags::bitflags;
 
-use skia_safe::{Picture, Point as SkiaPoint, M44};
 use std::{
     fmt::Debug,
     sync::{Arc, RwLock},
 };
 use taffy::prelude::{Layout, Node};
 
-use crate::types::{Point, Rectangle, Size};
+use crate::types::*;
 
-use super::rendering::{DrawToPicture, Drawable};
+use super::{draw_to_picture::DrawToPicture, rendering::Drawable};
+pub(crate) mod contains_point;
+pub(crate) mod draw_cache_management;
+
+pub use contains_point::ContainsPoint;
+pub use draw_cache_management::DrawCacheManagement;
 
 /// SceneNode is the main data structure for the engine. It contains a model
 /// that can be rendered, and a layout node that can be used to layout the
@@ -86,16 +90,6 @@ impl SceneNodeHandle {
     pub fn new(node: SceneNode) -> Self {
         Self(Arc::new(node))
     }
-}
-
-/// A trait for Nodes to expose their cache management
-pub trait DrawCacheManagement {
-    fn repaint_if_needed(&self);
-    fn set_need_repaint(&self, value: bool);
-    fn layout_if_needed(&self, layout: &Layout);
-    fn set_need_layout(&self, value: bool);
-    fn set_need_raster(&self, value: bool);
-    fn need_raster(&self) -> bool;
 }
 
 impl DrawCacheManagement for SceneNode {
@@ -185,33 +179,5 @@ impl DrawCacheManagement for SceneNode {
             .read()
             .unwrap()
             .contains(RenderableFlags::NEEDS_RASTER)
-    }
-}
-
-impl SceneNode {}
-
-pub trait ContainsPoint {
-    fn contains(&self, point: Point) -> bool;
-}
-
-impl ContainsPoint for SceneNode {
-    fn contains(&self, point: Point) -> bool {
-        let matrix = self.transformation.read().unwrap();
-        let inverse = matrix.invert().unwrap();
-        let point = inverse.map_point(SkiaPoint::new(point.x, point.y));
-        let point = Point {
-            x: point.x,
-            y: point.y,
-        };
-        self.model.bounds().contains(point)
-    }
-}
-
-impl ContainsPoint for Rectangle {
-    fn contains(&self, point: Point) -> bool {
-        self.x <= point.x
-            && self.y <= point.y
-            && self.x + self.width >= point.x
-            && self.y + self.height >= point.y
     }
 }

@@ -35,10 +35,10 @@ pub mod api;
 pub mod drawing;
 mod easing;
 pub mod engine;
-pub mod layers;
+mod layers;
+pub mod prelude;
 pub mod renderer;
 pub mod types;
-
 #[cfg(feature = "export-skia")]
 pub extern crate skia_safe as skia;
 #[cfg(feature = "export-taffy")]

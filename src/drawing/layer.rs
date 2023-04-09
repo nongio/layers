@@ -5,8 +5,8 @@ use skia_safe::image_filters::{blur, CropRect};
 use skia_safe::PaintStyle;
 use skia_safe::{BlurStyle, Canvas, ClipOp, MaskFilter, Point, RRect, Rect, TileMode};
 
-use crate::layers::layer::{BlendMode, RenderLayer};
-use crate::types::PaintColor;
+use crate::layers::layer::render_layer::RenderLayer;
+use crate::types::{BlendMode, PaintColor};
 
 pub fn draw_layer(canvas: &mut Canvas, layer: &RenderLayer) {
     let rect = Rect::from_point_and_size((0.0, 0.0), (layer.size.x, layer.size.y));
@@ -129,17 +129,8 @@ pub fn draw_layer(canvas: &mut Canvas, layer: &RenderLayer) {
     }
     // Draw content if any
     if let Some(content) = &layer.content {
-        // let mut paint = Paint::new(Color4f::new(1.0, 1.0, 1.0, 1.0), None);
         let paint = Paint::default();
-        // paint.set_style(PaintStyle::Fill);
-        // let image = &*content.data;
-        // let data = std::fs::read("./assets/fill.png").unwrap();
-        // unsafe {
-        // let data = skia_safe::Data::new_bytes(data.as_slice());
-        // let content = Image::from_encoded(data).unwrap();
-        // self.content.set(Some(content));
-        // self.set_content(Some(content), None);
-        // canvas.draw_image(content, (0, 0), Some(&paint));
+
         canvas.clip_rrect(rrbounds, Some(ClipOp::Intersect), Some(true));
 
         canvas.draw_image_rect_with_sampling_options(

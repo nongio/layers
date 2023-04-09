@@ -2,6 +2,8 @@
 use oklab::{oklab_to_srgb, srgb_to_oklab, Oklab, RGB};
 use skia_safe::Color4f;
 
+pub use skia_safe::{Image, Matrix, Picture, M44, V3};
+
 #[derive(Clone, Copy, Debug)]
 #[repr(C)]
 pub struct Color {
@@ -20,6 +22,18 @@ pub struct Point {
 
 #[allow(dead_code)]
 pub type Size = Point;
+
+use core::ops::Sub;
+impl Sub for &Point {
+    type Output = Point;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        Point {
+            x: self.x - rhs.x,
+            y: self.y - rhs.y,
+        }
+    }
+}
 
 #[derive(Clone, Copy, Debug)]
 #[repr(C)]
@@ -60,7 +74,7 @@ pub enum PaintColor {
 }
 
 #[allow(dead_code)]
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, diff::Diff, PartialEq)]
 #[repr(u32)]
 pub enum BorderStyle {
     Solid,
@@ -68,7 +82,7 @@ pub enum BorderStyle {
     Dashed,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, diff::Diff)]
 #[repr(C)]
 pub struct BorderRadius {
     pub top_left: f32,
@@ -156,6 +170,20 @@ impl Default for Point {
         Point { x: 0.0, y: 0.0 }
     }
 }
+
+#[derive(Clone, Debug)]
+#[repr(u32)]
+pub enum BlendMode {
+    Normal,
+    BackgroundBlur,
+}
+
+impl PartialEq for BlendMode {
+    fn eq(&self, other: &Self) -> bool {
+        core::mem::discriminant(self) == core::mem::discriminant(other)
+    }
+}
+
 // skia conversions
 
 impl From<Color> for Color4f {
