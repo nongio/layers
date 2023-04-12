@@ -1,6 +1,6 @@
 use skia_safe::Point as SkiaPoint;
 
-use crate::types::*;
+use crate::{prelude::Drawable, types::*};
 
 use super::SceneNode;
 

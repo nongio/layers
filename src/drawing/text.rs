@@ -1,13 +1,13 @@
 use std::sync::Arc;
 
 use crate::layers;
-use crate::layers::text::Text;
+use crate::layers::text::RenderText;
 use crate::types::PaintColor;
 use skia_safe::textlayout::*;
 use skia_safe::PaintStyle;
 use skia_safe::*;
 
-pub fn draw_text(canvas: &mut Canvas, layer: &Text) {
+pub fn draw_text(canvas: &mut Canvas, layer: &RenderText) {
     // let font_manager = FontMgr::default();
     // let mut font = Font::default();
     // let font_style = FontStyle::new(

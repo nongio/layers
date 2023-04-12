@@ -39,7 +39,7 @@ impl<V: Clone + Send + Sync> TreeStorage<V> {
         self.data.clone()
     }
 
-    pub fn remove_at(&mut self, id: &TreeStorageId) {
+    pub fn remove_at(&self, id: &TreeStorageId) {
         id.remove(&mut self.data.write().unwrap());
     }
 }

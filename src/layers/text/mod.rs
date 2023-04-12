@@ -84,7 +84,7 @@ impl Default for ModelText {
 
 impl Drawable for ModelText {
     fn draw(&self, canvas: &mut Canvas) {
-        let text: Text = Text::from(self);
+        let text = RenderText::from(self);
         draw_text(canvas, &text);
     }
     fn bounds(&self) -> Rectangle {
@@ -134,7 +134,7 @@ impl Drawable for ModelText {
 
 impl RenderNode for ModelText {}
 
-impl From<&ModelText> for Text {
+impl From<&ModelText> for RenderText {
     fn from(mt: &ModelText) -> Self {
         let matrix = mt.transform();
         let size = mt.size.value();

@@ -4,7 +4,7 @@ pub(crate) mod render_layer;
 pub(crate) mod render_node;
 
 pub(crate) use self::model::ModelLayer;
-pub use self::render_layer::RenderLayer;
+pub use self::render_layer::{RenderLayer, RenderLayerBuilder};
 
 use skia_safe::{Bitmap, Pixmap};
 use std::sync::Arc;
@@ -21,12 +21,6 @@ use crate::engine::Engine;
 use crate::engine::NodeRef;
 use crate::types::*;
 
-#[allow(dead_code)]
-pub struct LayerTree {
-    pub root: RenderLayer,
-    pub children: Vec<RenderLayer>,
-}
-
 #[derive(Clone)]
 pub struct Layer {
     pub(crate) engine: Arc<Engine>,
@@ -36,6 +30,25 @@ pub struct Layer {
 }
 
 impl Layer {
+    pub fn with_engine(engine: Arc<Engine>) -> Self {
+        let id = Arc::new(RwLock::new(None));
+        let model = Arc::new(ModelLayer::default());
+
+        let mut lt = engine.layout_tree.write().unwrap();
+
+        let layout = lt
+            .new_leaf(Style {
+                ..Default::default()
+            })
+            .unwrap();
+
+        Self {
+            engine: engine.clone(),
+            id,
+            model,
+            layout,
+        }
+    }
     pub fn set_id(&self, id: NodeRef) {
         self.id.write().unwrap().replace(id);
     }
@@ -53,6 +66,7 @@ impl Layer {
         BorderRadius,
         RenderableFlags::NEEDS_PAINT
     );
+
     change_model!(border_color, PaintColor, RenderableFlags::NEEDS_PAINT);
     change_model!(border_width, f32, RenderableFlags::NEEDS_PAINT);
     change_model!(shadow_offset, Point, RenderableFlags::NEEDS_PAINT);
@@ -197,10 +211,10 @@ impl Layer {
         self.engine.scene_add_layer(layer, self.id())
     }
 
-    pub fn build(&self, layer: &LayerTree) -> &Self {
-        self.set_size(layer.root.size, None);
-        self.set_background_color(layer.root.background_color.clone(), None)
-            .set_border_corner_radius(layer.root.border_corner_radius, None);
-        self
-    }
+    // pub fn build(&self, layer: &LayerTree) -> &Self {
+    //     self.set_size(layer.root.size, None);
+    //     self.set_background_color(layer.root.background_color.clone(), None)
+    //         .set_border_corner_radius(layer.root.border_corner_radius, None);
+    //     self
+    // }
 }

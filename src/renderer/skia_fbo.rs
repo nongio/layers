@@ -5,13 +5,16 @@ use skia_safe::{
 };
 use std::cell::Cell;
 
-use crate::engine::{
-    node::{DrawCacheManagement, RenderableFlags, SceneNode},
-    rendering::render_node,
-    scene::Scene,
-    NodeRef,
-};
 use crate::{drawing::scene::DrawScene, engine::storage::FlatStorage};
+use crate::{
+    engine::{
+        node::{DrawCacheManagement, RenderableFlags, SceneNode},
+        rendering::render_node,
+        scene::Scene,
+        NodeRef,
+    },
+    prelude::Drawable,
+};
 
 pub struct SkiaFboRenderer {
     pub gr_context: skia_safe::gpu::DirectContext,

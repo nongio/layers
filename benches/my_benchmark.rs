@@ -3,8 +3,8 @@ use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use layers::{
     engine::animations::{Easing, Transition},
     engine::LayersEngine,
-    layers::layer::Layer,
-    types::Point,
+    prelude::*,
+    types::*,
 };
 
 pub struct Timestamp(f32);

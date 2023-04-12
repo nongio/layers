@@ -6,7 +6,7 @@ use std::{
 };
 use taffy::prelude::{Layout, Node};
 
-use crate::types::*;
+use crate::{layers::Layers, types::*};
 
 use super::{draw_to_picture::DrawToPicture, rendering::Drawable};
 pub(crate) mod contains_point;
@@ -53,7 +53,7 @@ bitflags! {
 
 #[derive(Clone)]
 pub struct SceneNode {
-    pub model: Arc<dyn RenderNode>,
+    pub model: Arc<Layers>,
     pub transformation: Arc<RwLock<skia_safe::Matrix>>,
     pub scale: Arc<RwLock<(f32, f32)>>,
     pub draw_cache: Arc<RwLock<Option<DrawCache>>>,
@@ -62,7 +62,7 @@ pub struct SceneNode {
 }
 
 impl SceneNode {
-    pub fn with_renderable_and_layout(model: Arc<dyn RenderNode>, layout_node: Node) -> Self {
+    pub fn with_renderable_and_layout(model: Arc<Layers>, layout_node: Node) -> Self {
         Self {
             model,
             transformation: Arc::new(RwLock::new(skia_safe::Matrix::new_identity())),
@@ -142,8 +142,10 @@ impl DrawCacheManagement for SceneNode {
                 layout.location.y + bounds.y,
                 0.0,
             );
+            let scale = self.model.scale();
+            let scale = M44::scale(scale.0, scale.1, 0.0);
             let transform = M44::concat(&translate, &identity);
-            // let transform = M44::concat(&transform, &scale);
+            let transform = M44::concat(&transform, &scale);
             // let transform = M44::concat(&transform, &rotate_x);
             // let transform = M44::concat(&transform, &rotate_y);
             // let transform = M44::concat(&transform, &rotate_z);

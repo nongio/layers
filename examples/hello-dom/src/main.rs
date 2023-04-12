@@ -1,31 +1,17 @@
-use gl_rs as gl;
-use glutin::{
-    event::{Event, WindowEvent},
-    event_loop::{ControlFlow, EventLoop},
-    window::WindowBuilder,
-    GlProfile,
-};
-use mt_dom::{attr, diff, diff_with_key, element, leaf};
-use std::{f64::consts::PI, sync::Arc};
+use std::time::Duration;
 
-use layers::{
-    drawing::scene::DrawScene,
-    engine::{
-        animations::{Easing, Transition},
-        LayersEngine,
-    },
-    layers::*,
-    taffy::{
-        style::{AlignItems, Display, FlexDirection, FlexWrap, JustifyContent, Style},
-        style_helpers::points,
-        Taffy,
-    },
-    types::*,
-};
+use glutin::event::WindowEvent;
+use glutin::event_loop::{ControlFlow, EventLoop};
+use glutin::window::WindowBuilder;
+use glutin::GlProfile;
+use layers::prelude::*;
+use layers::types::Size;
 
-pub type MyNode =
-    mt_dom::Node<&'static str, &'static str, &'static str, &'static str, &'static str>;
+use crate::list::{view_list, ListState};
+use crate::toggle::{view_toggle, ToggleState};
 
+mod list;
+mod toggle;
 fn main() {
     type WindowedContext = glutin::ContextWrapper<glutin::PossiblyCurrent, glutin::window::Window>;
 
@@ -57,7 +43,7 @@ fn main() {
         pixel_format
     );
 
-    gl::load_with(|s| windowed_context.get_proc_address(s));
+    gl_rs::load_with(|s| windowed_context.get_proc_address(s));
 
     let pixel_format = windowed_context.get_pixel_format();
 
@@ -84,50 +70,52 @@ fn main() {
     }
     let env = Env { windowed_context };
     let engine = LayersEngine::new();
-
-    let root_layer = engine.new_layer();
-    root_layer.set_layout_style(Style {
-        display: Display::Flex,
-        flex_direction: FlexDirection::Row,
-        justify_content: Some(JustifyContent::FlexStart),
-        flex_wrap: FlexWrap::Wrap,
-        align_items: Some(AlignItems::Center),
-        ..Default::default()
-    });
-
-    root_layer.set_size(
+    let root = engine.new_layer();
+    root.set_size(
         Size {
-            x: window_width as f64 * 2.0,
-            y: window_height as f64 * 2.0,
+            x: (window_width as f32 * 2.0),
+            y: (window_height as f32 * 2.0),
         },
         None,
-    );
-    root_layer.set_position(Point { x: 0.0, y: 0.0 }, None);
-
-    root_layer.set_background_color(
+    )
+    .set_background_color(
         PaintColor::Solid {
             color: Color::new_rgba255(180, 180, 180, 255),
         },
         None,
-    );
-    engine.scene_add_layer(root_layer.clone());
+    )
+    .set_position(Point { x: 0.0, y: 0.0 }, None)
+    .set_border_corner_radius(10.0, None);
 
-    let div1: MyNode = element("layer", [attr("key", "1"), attr("value", "1")], []);
-    let div2: MyNode = element("layer", [attr("key", "1"), attr("value", "2")], []);
-    let diff = diff_with_key(&div1, &div2, &"key");
-    println!("{:#?}", diff);
-    return;
+    engine.scene_set_root(root.clone());
+    let layer = engine.new_layer();
+    engine.scene_add_layer_to(layer.clone(), root.id());
+    let layer2 = engine.new_layer();
+    engine.scene_add_layer_to(layer2.clone(), root.id());
+
     let instant = std::time::Instant::now();
-    let mut last_instant = 0.0;
+    let mut update_frame = 0;
+    let mut draw_frame = -1;
+    let last_instant = instant;
+
+    let state = ToggleState { value: false };
+    let layer_tree = view_toggle(state);
+    layer.build_layer_tree(&layer_tree);
+
+    let state = ListState {
+        values: vec!["Hello World!".into()],
+    };
+    let layer_tree = view_list(state);
+    layer2.build_layer_tree(&layer_tree);
 
     events_loop.run(move |event, _, control_flow| {
-        *control_flow = ControlFlow::Wait;
-        let now = instant.elapsed().as_secs_f64();
-        let dt = now - last_instant;
-        engine.step_time(dt);
-        last_instant = now;
+        let now = std::time::Instant::now();
+        let dt = (now - last_instant).as_secs_f32();
+        let next = now.checked_add(Duration::new(0, 2 * 1000000)).unwrap();
+        *control_flow = ControlFlow::WaitUntil(next);
+
         match event {
-            Event::WindowEvent { event, .. } => match event {
+            winit::event::Event::WindowEvent { event, .. } => match event {
                 WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
                 WindowEvent::Resized(physical_size) => {
                     env.windowed_context.resize(physical_size);
@@ -140,56 +128,57 @@ fn main() {
                         pixel_format,
                         0,
                     );
-                    let _transition = root_layer.set_size(
-                        Point {
-                            x: size.width as f64,
-                            y: size.height as f64,
-                        },
-                        Some(Transition {
-                            duration: 1.0,
-                            delay: 0.0,
-                            timing: Easing::default(),
-                        }),
-                    );
+
                     env.windowed_context.window().request_redraw();
                 }
                 WindowEvent::CursorMoved { position, .. } => {
                     _mouse_x = position.x;
                     _mouse_y = position.y;
                 }
+
                 WindowEvent::MouseInput {
-                    state: _button_state,
+                    state: button_state,
                     ..
                 } => {
-                    // if button_state == winit::event::ElementState::Released {
-                    // } else {
-                    // }
+                    let mut state = ToggleState { value: false };
+
+                    if button_state == winit::event::ElementState::Released {
+                        state.value = false;
+                    } else {
+                        state.value = true;
+                    }
+                    let layer_tree = view_toggle(state);
+                    // println!("layer_tree: {:?}", layer_tree);
+                    layer.build_layer_tree(&layer_tree);
                 }
                 _ => (),
             },
-            Event::MainEventsCleared => {
+            winit::event::Event::MainEventsCleared => {
                 let now = instant.elapsed().as_secs_f64();
-                let dt = now - last_instant;
-                let needs_redraw = engine.update(dt);
-                last_instant = now;
-                if needs_redraw {
-                    env.windowed_context.window().request_redraw();
+                let frame_number = (now / 0.016).floor() as i32;
+                if update_frame != frame_number {
+                    update_frame = frame_number;
+                    let dt = 0.016;
+                    let needs_redraw = engine.update(dt);
+                    if needs_redraw {
+                        env.windowed_context.window().request_redraw();
+                    }
                 }
             }
-            Event::RedrawRequested(_) => {
-                let now = instant.elapsed().as_secs_f64();
-                if let Some(root) = engine.scene_root() {
-                    let skia_renderer = skia_renderer.get_mut();
-                    skia_renderer.draw_scene(&engine.scene(), root);
+            winit::event::Event::RedrawRequested(_) => {
+                if draw_frame != update_frame {
+                    if let Some(root) = engine.scene_root() {
+                        let skia_renderer = skia_renderer.get_mut();
+                        skia_renderer.draw_scene(engine.scene(), root);
+                    }
+                    // this will be blocking until the GPU is done with the frame
+                    env.windowed_context.swap_buffers().unwrap();
+                    draw_frame = update_frame;
+                } else {
+                    println!("skipping draw");
                 }
-
-                let _delta = instant.elapsed().as_secs_f64() - now;
-                // println!("draw time: {}ms", delta * 1000.0);
-                // this will be blocking until the GPU is done with the frame
-                env.windowed_context.swap_buffers().unwrap();
             }
             _ => {}
         }
-        // });
     });
 }

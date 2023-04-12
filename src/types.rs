@@ -72,11 +72,18 @@ pub enum PaintColor {
     GradientLinear(Box<GradientLinear>),
     GradientRadial(Box<GradientRadial>),
 }
-
+impl Default for PaintColor {
+    fn default() -> Self {
+        PaintColor::Solid {
+            color: Color::default(),
+        }
+    }
+}
 #[allow(dead_code)]
-#[derive(Clone, Copy, Debug, diff::Diff, PartialEq)]
+#[derive(Clone, Copy, Default, Debug)]
 #[repr(u32)]
 pub enum BorderStyle {
+    #[default]
     Solid,
     Dotted,
     Dashed,
@@ -171,9 +178,10 @@ impl Default for Point {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Default, Debug)]
 #[repr(u32)]
 pub enum BlendMode {
+    #[default]
     Normal,
     BackgroundBlur,
 }

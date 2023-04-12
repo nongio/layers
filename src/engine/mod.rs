@@ -33,7 +33,7 @@ use crate::{
 use self::{
     animations::{Animation, Easing, Transition},
     command::NoopChange,
-    node::{ContainsPoint, RenderNode, RenderableFlags},
+    node::{ContainsPoint, RenderableFlags},
     scene::Scene,
     stages::{
         cleanup_animations, cleanup_transactions, execute_transactions, trigger_callbacks,
@@ -102,14 +102,14 @@ impl Default for TransitionCallbacks {
     }
 }
 
-pub(crate) struct Engine {
+pub struct Engine {
     pub scene: Arc<Scene>,
     scene_root: RwLock<Option<NodeRef>>,
     transactions: FlatStorage<AnimatedNodeChange>,
     animations: FlatStorage<AnimationState>,
     pub timestamp: RwLock<Timestamp>,
     transaction_handlers: FlatStorage<TransitionCallbacks>,
-    layout_tree: RwLock<Taffy>,
+    pub layout_tree: RwLock<Taffy>,
     layout_root: RwLock<taffy::node::Node>,
 }
 #[derive(Clone, Copy)]
@@ -203,41 +203,37 @@ impl Engine {
         Arc::new(new_engine)
     }
     pub fn scene_set_root(&self, layer: impl Into<Layers>) -> NodeRef {
-        let layer: Layers = layer.into();
-        let renderable = match layer.clone() {
-            Layers::Layer(layer) => layer.model as Arc<dyn RenderNode>,
-            Layers::TextLayer(text_layer) => text_layer.model as Arc<dyn RenderNode>,
-        };
-        let id = self.scene.add(renderable, layer.layout_node());
+        let layer: Arc<Layers> = Arc::new(layer.into());
+        let layout = layer.layout_node();
+
+        let id = self.scene.add(layer.clone(), layout);
         layer.set_id(id);
+
+        let mut scene_root = self.scene_root.write().unwrap();
+        let layout_root = *self.layout_root.read().unwrap();
+        let mut layout_tree = self.layout_tree.write().unwrap();
+
+        if scene_root.is_none() {
+            *scene_root = Some(id);
+            layout_tree.remove(layout_root).unwrap();
+            *self.layout_root.write().unwrap() = layout;
+        } else {
+            let scene_root = *scene_root.unwrap();
+            self.scene.append_node_to(id, NodeRef(scene_root));
+            layout_tree.add_child(layout_root, layout).unwrap();
+        }
+        let change = Arc::new(NoopChange::new(id.0.into()));
+        self.schedule_change(id, change);
         id
     }
 
     pub fn scene_add_layer(&self, layer: impl Into<Layers>, parent: Option<NodeRef>) -> NodeRef {
-        let layer: Layers = layer.into();
+        let layer: Arc<Layers> = Arc::new(layer.into());
         let mut layout_tree = self.layout_tree.write().unwrap();
 
-        let (id, layer_layout) = match layer {
-            Layers::Layer(layer) => {
-                let id = self.scene.append(
-                    parent,
-                    layer.model.clone() as Arc<dyn RenderNode>,
-                    layer.layout,
-                );
-                layer.set_id(id);
-                (id, layer.layout)
-            }
-            Layers::TextLayer(text_layer) => {
-                let id = self.scene.append(
-                    parent,
-                    text_layer.model.clone() as Arc<dyn RenderNode>,
-                    text_layer.layout,
-                );
-                text_layer.set_id(id);
-
-                (id, text_layer.layout)
-            }
-        };
+        let layer_layout = layer.layout_node();
+        let id = self.scene.append(parent, layer.clone(), layer_layout);
+        layer.set_id(id);
 
         if let Some(parent) = parent {
             let parent_layout = self.scene.get_node(parent).unwrap().get().layout_node;
@@ -260,7 +256,12 @@ impl Engine {
         self.schedule_change(id, change);
         id
     }
-
+    pub fn scene_remove_layer(&self, layer: NodeRef) {
+        let mut layout_tree = self.layout_tree.write().unwrap();
+        let layout = self.scene.get_node(layer).unwrap().get().layout_node;
+        layout_tree.remove(layout).unwrap();
+        self.scene.remove(layer);
+    }
     pub fn create_animation_from_transition(&self, transition: Transition<Easing>) -> AnimationRef {
         let start = self.timestamp.read().unwrap().0 + transition.delay;
 

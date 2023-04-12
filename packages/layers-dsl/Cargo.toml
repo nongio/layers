@@ -1,0 +1,18 @@
+[package]
+name = "layers-dsl"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+proc-macro = true
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+proc-macro2 = "1.0.52"
+syn = { version = "1.0.109", features = [
+    "parsing",
+    "printing",
+    "full",
+    "extra-traits",
+] }
+layers-dsl-core = { path = "../layers-dsl-core" }

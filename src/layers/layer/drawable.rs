@@ -12,6 +12,7 @@ impl Drawable for ModelLayer {
     fn bounds(&self) -> Rectangle {
         let s = self.size.value();
         let p = self.position.value();
+        
         Rectangle {
             x: p.x,
             y: p.y,

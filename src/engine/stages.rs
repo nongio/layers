@@ -3,6 +3,8 @@ use std::sync::{Arc, RwLock};
 use rayon::prelude::{IntoParallelRefIterator, IntoParallelRefMutIterator, ParallelIterator};
 use taffy::{prelude::Size, style_helpers::points};
 
+use crate::prelude::Drawable;
+
 use super::{
     node::{DrawCacheManagement, RenderableFlags},
     storage::FlatStorageId,

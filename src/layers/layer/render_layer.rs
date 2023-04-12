@@ -1,3 +1,5 @@
+use derive_builder::*;
+
 use crate::{
     engine::rendering::Drawable,
     types::{BlendMode, Color, Point, *},
@@ -5,7 +7,8 @@ use crate::{
 
 use super::model::ModelLayer;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Builder)]
+#[builder(public, default)]
 #[repr(C)]
 pub struct RenderLayer {
     pub background_color: PaintColor,

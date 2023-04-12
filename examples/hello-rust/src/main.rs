@@ -1,21 +1,14 @@
+use std::time::Duration;
+
 use gl_rs as gl;
 use glutin::{
-    event::{Event, WindowEvent},
+    event::{Event, MouseScrollDelta, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     window::WindowBuilder,
     GlProfile,
 };
 
-use layers::{
-    drawing::scene::DrawScene,
-    engine::{
-        animations::{Easing, Transition},
-        LayersEngine,
-    },
-    layers::layer::Layer,
-    taffy::prelude::*,
-    types::*,
-};
+use layers::prelude::*;
 
 fn main() {
     type WindowedContext = glutin::ContextWrapper<glutin::PossiblyCurrent, glutin::window::Window>;
@@ -77,20 +70,10 @@ fn main() {
     let engine = LayersEngine::new();
     let root_layer = engine.new_layer();
 
-    root_layer.set_layout_style(Style {
-        display: Display::Flex,
-        flex_direction: FlexDirection::Row,
-        justify_content: Some(JustifyContent::FlexStart),
-        flex_wrap: FlexWrap::Wrap,
-        align_items: Some(AlignItems::Center),
-        gap: points(30.0),
-        ..Default::default()
-    });
-
     root_layer.set_size(
         layers::types::Size {
-            x: window_width as f64 * 2.0,
-            y: window_height as f64 * 2.0,
+            x: window_width as f32 * 2.0,
+            y: window_height as f32 * 2.0,
         },
         None,
     );
@@ -105,46 +88,105 @@ fn main() {
     root_layer.set_border_corner_radius(10.0, None);
 
     engine.scene_add_layer(root_layer.clone());
+    let wrap_layer = engine.new_layer();
 
-    let mut layers: Vec<Layer> = Vec::new();
-    let image = image::open("./assets/fill.png").unwrap();
-    let image = image.into_rgba8();
-    let w = image.width() as i32;
-    let h = image.height() as i32;
-    let data = image.into_vec();
-    for n in 0..5 {
+    wrap_layer.set_position(layers::types::Point { x: 200.0, y: 100.0 }, None);
+    wrap_layer.set_size(layers::types::Size { x: 450.0, y: 600.0 }, None);
+    wrap_layer.set_background_color(
+        PaintColor::Solid {
+            color: Color::new_rgba255(180, 180, 0, 0),
+        },
+        None,
+    );
+    wrap_layer.set_border_color(
+        PaintColor::Solid {
+            color: Color::new_rgba255(0, 0, 0, 255),
+        },
+        None,
+    );
+    wrap_layer.set_border_width(4.0, None);
+
+    let container = engine.new_layer();
+    container.set_position(layers::types::Point { x: 0.0, y: 0.0 }, None);
+    container.set_size(
+        layers::types::Size {
+            x: 450.0,
+            y: 50000.0,
+        },
+        None,
+    );
+    container.set_background_color(
+        PaintColor::Solid {
+            color: Color::new_rgba255(180, 180, 0, 100),
+        },
+        None,
+    );
+    container.set_layout_style(Style {
+        display: Display::Flex,
+        position: Position::Absolute,
+
+        flex_direction: FlexDirection::Row,
+        justify_content: Some(JustifyContent::Center),
+        flex_wrap: FlexWrap::Wrap,
+        align_items: Some(AlignItems::Baseline),
+        align_content: Some(AlignContent::FlexStart),
+        gap: points(2.0),
+
+        size: layers::taffy::prelude::Size {
+            width: points(450.0),
+            height: points(50000.0),
+        },
+        ..Default::default()
+    });
+    engine.scene_add_layer(wrap_layer.clone());
+    engine.scene_add_layer_to(container.clone(), wrap_layer.id());
+    let mut layers: Vec<Layer> = Vec::with_capacity(5000);
+    for n in 100..200 {
+        let image_path = format!("./assets/img_{}.png", n + 1);
+        let image = image::open(image_path).unwrap();
+        let image = image.into_rgba8();
+        let w = image.width() as i32;
+        let h = image.height() as i32;
+        let data = image.into_vec();
+
         let layer = engine.new_layer();
-        layer.set_anchor_point(Point { x: 0.5, y: 0.5 }, None);
-        layer.set_size(Point { x: 200.0, y: 200.0 }, None);
-        layer.set_position(Point { x: 100.0, y: 100.0 }, None);
-        layer.set_border_corner_radius(40.0, None);
-        layer.set_background_color(Color::new_hex("#4043D1"), None);
-        layer.set_shadow_color(Color::new_rgba(0.0, 0.0, 0.0, 0.5), None);
-        layer.set_shadow_offset(Point { x: 10.0, y: 10.0 }, None);
-        layer.set_shadow_radius(10.0, None);
-        layer.set_content_from_data_raster_rgba8(&data, w.clone(), h.clone());
-        layer.set_layout_style(Style {
-            flex_grow: 0.0,
-            size: layers::taffy::prelude::Size {
-                width: points(200.0),
-                height: points(200.0),
-            },
-            ..Default::default()
-        });
+        // layer.set_content_from_data_raster_rgba8(&data, w, h);
 
+        layer
+            .set_anchor_point(Point { x: 0.5, y: 0.5 }, None)
+            .set_size(Point { x: 100.0, y: 100.0 }, None)
+            .set_border_corner_radius(20.0, None)
+            .set_shadow_color(Color::new_rgba(0.0, 0.0, 0.0, 0.5), None)
+            .set_background_color(
+                Color::new_rgba(rand::random(), rand::random(), rand::random(), 1.0),
+                None,
+            )
+            .set_shadow_offset(Point { x: 10.0, y: 10.0 }, None)
+            .set_shadow_radius(10.0, None)
+            .set_layout_style(Style {
+                flex_grow: 0.0,
+                size: layers::taffy::prelude::Size {
+                    width: points(100.0),
+                    height: points(100.0),
+                },
+
+                ..Default::default()
+            });
         layers.push(layer.clone());
 
-        engine.scene_add_layer(layer);
+        engine.scene_add_layer_to(layer, container.id());
     }
     let instant = std::time::Instant::now();
-    let mut last_instant = 0.0;
-
+    let mut update_frame = 0;
+    let mut draw_frame = -1;
+    let last_instant = instant;
+    let mut scroll_acceleration = 0.0;
     events_loop.run(move |event, _, control_flow| {
-        *control_flow = ControlFlow::Wait;
-        let now = instant.elapsed().as_secs_f64();
-        let dt = now - last_instant;
-        engine.step_time(dt);
-        last_instant = now;
+        let now = std::time::Instant::now();
+        let dt = (now - last_instant).as_secs_f32();
+        let next = now.checked_add(Duration::new(0, 2 * 1000000)).unwrap();
+        *control_flow = ControlFlow::WaitUntil(next);
+
         match event {
             Event::WindowEvent { event, .. } => match event {
                 WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
@@ -161,8 +203,8 @@ fn main() {
                     );
                     let _transition = root_layer.set_size(
                         Point {
-                            x: size.width as f64,
-                            y: size.height as f64,
+                            x: size.width as f32,
+                            y: size.height as f32,
                         },
                         Some(Transition {
                             duration: 1.0,
@@ -176,6 +218,39 @@ fn main() {
                     _mouse_x = position.x;
                     _mouse_y = position.y;
                 }
+                WindowEvent::MouseWheel {
+                    device_id: _,
+                    delta,
+                    phase: _,
+                    modifiers: _,
+                } => {
+                    match delta {
+                        MouseScrollDelta::LineDelta(_x, _y) => {}
+                        MouseScrollDelta::PixelDelta(pos) => {
+                            let mut y = pos.y as f32 * 500.0;
+                            if y != 0.0 {
+                                scroll_acceleration = (y / dt) / dt;
+                            }
+
+                            // Add momentum when scrolling stops
+                            let friction = 0.95;
+                            scroll_acceleration *= friction;
+                            y = scroll_acceleration * dt * dt;
+
+                            let y = container.position().y + y;
+                            let p = Point { x: 0.0, y };
+
+                            container.set_position(
+                                p,
+                                Some(Transition {
+                                    duration: 1.0,
+                                    delay: 0.0,
+                                    timing: Easing::default(),
+                                }),
+                            );
+                        }
+                    };
+                }
                 WindowEvent::MouseInput {
                     state: button_state,
                     ..
@@ -183,28 +258,11 @@ fn main() {
                     if button_state == winit::event::ElementState::Released {
                         let _i = 0;
 
-                        // layers[0].set_content_from_data_raster_rgba8(
-                        //     data.clone(),
-                        //     w as i32,
-                        //     h as i32,
-                        // );
-
                         layers.iter().for_each(|layer| {
-                            let _transition = layer.set_position(
-                                Point {
-                                    x: _mouse_x + rand::random::<f64>() * 1000.0,
-                                    y: _mouse_y + rand::random::<f64>() * 1000.0,
-                                },
-                                Some(Transition {
-                                    duration: 1.0,
-                                    delay: 0.0,
-                                    timing: Easing::default(),
-                                }),
-                            );
                             let _transition = layer.set_size(
-                                Point { x: 200.0, y: 200.0 },
+                                Point { x: 100.0, y: 100.0 },
                                 Some(Transition {
-                                    duration: 1.0,
+                                    duration: 0.5,
                                     delay: 0.0,
                                     timing: Easing::default(),
                                 }),
@@ -213,23 +271,9 @@ fn main() {
                     } else {
                         layers.iter().for_each(|layer| {
                             let _transition = layer.set_size(
-                                Point { x: 250.0, y: 250.0 },
+                                Point { x: 400.0, y: 400.0 },
                                 Some(Transition {
-                                    duration: 1.0,
-                                    delay: 0.0,
-                                    timing: Easing::default(),
-                                }),
-                            );
-                            let c = Color::new_rgba(
-                                rand::random::<f64>(),
-                                rand::random::<f64>(),
-                                rand::random::<f64>(),
-                                1.0,
-                            );
-                            layer.set_background_color(
-                                c,
-                                Some(Transition {
-                                    duration: 2.0,
+                                    duration: 1.5,
                                     delay: 0.0,
                                     timing: Easing::default(),
                                 }),
@@ -241,24 +285,29 @@ fn main() {
             },
             Event::MainEventsCleared => {
                 let now = instant.elapsed().as_secs_f64();
-                let dt = now - last_instant;
-                let needs_redraw = engine.update(dt);
-                last_instant = now;
-                if needs_redraw {
-                    env.windowed_context.window().request_redraw();
+                let frame_number = (now / 0.016).floor() as i32;
+                if update_frame != frame_number {
+                    update_frame = frame_number;
+                    let dt = 0.016;
+                    let needs_redraw = engine.update(dt);
+                    if needs_redraw {
+                        env.windowed_context.window().request_redraw();
+                        // draw_frame = -1;
+                    }
                 }
             }
             Event::RedrawRequested(_) => {
-                let now = instant.elapsed().as_secs_f64();
-                if let Some(root) = engine.scene_root() {
-                    let skia_renderer = skia_renderer.get_mut();
-                    skia_renderer.draw_scene(&engine.scene(), root);
+                if draw_frame != update_frame {
+                    if let Some(root) = engine.scene_root() {
+                        let skia_renderer = skia_renderer.get_mut();
+                        skia_renderer.draw_scene(engine.scene(), root);
+                    }
+                    // this will be blocking until the GPU is done with the frame
+                    env.windowed_context.swap_buffers().unwrap();
+                    draw_frame = update_frame;
+                } else {
+                    println!("skipping draw");
                 }
-
-                let delta = instant.elapsed().as_secs_f64() - now;
-                // println!("draw time: {}ms", delta * 1000.0);
-                // this will be blocking until the GPU is done with the frame
-                env.windowed_context.swap_buffers().unwrap();
             }
             _ => {}
         }

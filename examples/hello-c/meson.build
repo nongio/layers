@@ -1,17 +1,16 @@
 
 project('example', 'cpp', 'c')
 
-run_target('eas',
+run_target('layers',
   command : 'build_library.sh')
 
 
 cc = meson.get_compiler('c')
 p = join_paths(meson.source_root(), '../../target')
-# print variable p
 message(p)
 
 liblayers = cc.find_library('layers', dirs: [join_paths(meson.source_root(), '../../target/debug')])
-include_libeas = ['../../target/']
+include_liblayers = ['../../target/']
 
 wayland_egl = dependency('wayland-egl')
 wayland_protos = dependency('wayland-protocols', version: '>=1.14')
@@ -74,5 +73,5 @@ dependencies: [
 ],
 include_directories: [
 	'include/',
-	include_libeas
+	include_liblayers
 ])
