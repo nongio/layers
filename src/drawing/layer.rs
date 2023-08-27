@@ -34,13 +34,14 @@ pub fn draw_layer(canvas: &mut Canvas, layer: &RenderLayer) {
 
     // Draw the background color.
 
-    let mut background_paint = match layer.background_color {
-        PaintColor::Solid { color } => Paint::new(Color4f::from(color), None),
-        _ => Paint::new(Color4f::new(1.0, 1.0, 1.0, 1.0), None),
+    let mut background_color = match layer.background_color {
+        PaintColor::Solid { color } => Color4f::from(color),
+        _ => Color4f::new(1.0, 1.0, 1.0, layer.opacity),
     };
+    background_color.a *= layer.opacity;
+    let mut background_paint = Paint::new(background_color, None);
     background_paint.set_anti_alias(true);
     background_paint.set_style(PaintStyle::Fill);
-
     let bounds = Rect::from_xywh(0.0, 0.0, layer.size.x, layer.size.y);
     let rrbounds = RRect::new_rect_radii(
         bounds,
@@ -87,7 +88,6 @@ pub fn draw_layer(canvas: &mut Canvas, layer: &RenderLayer) {
         }
         BlendMode::Normal => {}
     }
-
     canvas.draw_paint(&background_paint);
     canvas.restore_to_count(save_count);
 
@@ -113,31 +113,33 @@ pub fn draw_layer(canvas: &mut Canvas, layer: &RenderLayer) {
         );
         let save_count = canvas.save();
         canvas.clip_rrect(rrbounds, Some(ClipOp::Difference), Some(true));
+        shadow_paint.set_alpha_f(layer.opacity);
         canvas.draw_rrect(shadow_rrect, &shadow_paint);
         canvas.restore_to_count(save_count);
     }
     // Draw border
     if layer.border_width > 0.0 {
-        let mut border_paint = match layer.border_color {
-            PaintColor::Solid { color } => Paint::new(Color4f::from(color), None),
-            _ => Paint::new(Color4f::new(1.0, 1.0, 1.0, 1.0), None),
+        let mut border_color = match layer.border_color {
+            PaintColor::Solid { color } => Color4f::from(color),
+            _ => Color4f::new(1.0, 1.0, 1.0, layer.opacity),
         };
-
+        border_color.a *= layer.opacity;
+        let mut border_paint = Paint::new(border_color, None);
         border_paint.set_style(PaintStyle::Stroke);
         border_paint.set_stroke_width(layer.border_width);
         canvas.draw_rrect(rrect, &border_paint);
     }
     // Draw content if any
     if let Some(content) = &layer.content {
-        let paint = Paint::default();
-
+        let mut paint = Paint::default();
+        paint.set_alpha_f(layer.opacity);
         canvas.clip_rrect(rrbounds, Some(ClipOp::Intersect), Some(true));
 
         canvas.draw_image_rect_with_sampling_options(
             content,
             None,
             Rect::from_xywh(0.0, 0.0, layer.size.x, layer.size.y),
-            SamplingOptions::default(),
+            SamplingOptions::new(FilterMode::Linear, MipmapMode::Linear),
             &paint,
         );
         // }

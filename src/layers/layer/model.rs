@@ -19,6 +19,7 @@ pub(crate) struct ModelLayer {
     pub shadow_color: SyncValue<Color>,
     pub content: SyncValue<Option<Image>>,
     pub blend_mode: BlendMode,
+    pub opacity: SyncValue<f32>,
 }
 
 impl Default for ModelLayer {
@@ -33,7 +34,7 @@ impl Default for ModelLayer {
             z: 0.0,
         });
         let background_color = SyncValue::new(PaintColor::Solid {
-            color: Color::new_rgba(1.0, 1.0, 1.0, 1.0),
+            color: Color::new_rgba(1.0, 1.0, 1.0, 0.0),
         });
         let border_corner_radius = SyncValue::new(BorderRadius::new_single(0.0));
         let border_color = SyncValue::new(PaintColor::Solid {
@@ -46,7 +47,7 @@ impl Default for ModelLayer {
         let shadow_color = SyncValue::new(Color::new_rgba(0.0, 0.0, 0.0, 1.0));
         let content = SyncValue::new(None);
         let blend_mode = BlendMode::Normal;
-
+        let opacity = SyncValue::new(1.0);
         Self {
             anchor_point,
             position,
@@ -63,6 +64,7 @@ impl Default for ModelLayer {
             shadow_color,
             content,
             blend_mode,
+            opacity,
         }
     }
 }
