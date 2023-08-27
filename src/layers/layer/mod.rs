@@ -6,6 +6,8 @@ pub(crate) mod render_node;
 pub(crate) use self::model::ModelLayer;
 pub use self::render_layer::{RenderLayer, RenderLayerBuilder};
 
+use skia_safe::gpu::BackendTexture;
+use skia_safe::image::CachingHint;
 use skia_safe::{Bitmap, Pixmap};
 use std::sync::Arc;
 use std::sync::RwLock;
@@ -74,7 +76,7 @@ impl Layer {
     change_model!(shadow_spread, f32, RenderableFlags::NEEDS_PAINT);
     change_model!(shadow_color, Color, RenderableFlags::NEEDS_PAINT);
     change_model!(content, Option<Image>, RenderableFlags::NEEDS_PAINT);
-
+    change_model!(opacity, f32, RenderableFlags::NEEDS_PAINT);
     // change_model!(
     //     size,
     //     Point,
@@ -164,44 +166,43 @@ impl Layer {
         }
     }
     // // set content from gl texture
-    // pub fn set_content_from_texture(
-    //     &self,
-    //     texture_id: u32,
-    //     target: skia_safe::gpu::gl::Enum,
-    //     _format: skia_safe::gpu::gl::Enum,
-    //     size: impl Into<Point>,
-    // ) {
-    //     let size = size.into();
-    //     unsafe {
-    //         let mut gr_context: skia_safe::gpu::DirectContext =
-    //             skia_safe::gpu::DirectContext::new_gl(None, None).unwrap();
+    pub fn set_content_from_texture(
+        &self,
+        texture_id: u32,
+        target: skia_safe::gpu::gl::Enum,
+        // _format: skia_safe::gpu::gl::Enum,
+        size: impl Into<Point>,
+    ) {
+        let size = size.into();
+        unsafe {
+            let mut gr_context: skia_safe::gpu::DirectContext =
+                skia_safe::gpu::DirectContext::new_gl(None, None).unwrap();
 
-    //         let mut texture_info =
-    //             skia_safe::gpu::gl::TextureInfo::from_target_and_id(target, texture_id);
-    //         texture_info.format = skia_safe::gpu::gl::Format::RGBA8.into();
+            let mut texture_info =
+                skia_safe::gpu::gl::TextureInfo::from_target_and_id(target, texture_id);
+            texture_info.format = skia_safe::gpu::gl::Format::RGBA8.into();
 
-    //         let texture = BackendTexture::new_gl(
-    //             (size.x as i32, size.y as i32),
-    //             skia_safe::gpu::MipMapped::Yes,
-    //             texture_info,
-    //         );
+            let texture = BackendTexture::new_gl(
+                (size.x as i32, size.y as i32),
+                skia_safe::gpu::MipMapped::Yes,
+                texture_info,
+            );
 
-    //         let image = Image::from_texture(
-    //             &mut gr_context,
-    //             &texture.clone(),
-    //             skia_safe::gpu::SurfaceOrigin::TopLeft,
-    //             skia_safe::ColorType::RGBA8888,
-    //             skia_safe::AlphaType::Opaque,
-    //             None,
-    //         )
-    //         .unwrap()
-    //         .clone();
+            let image = Image::from_texture(
+                &mut gr_context,
+                &texture,
+                skia_safe::gpu::SurfaceOrigin::TopLeft,
+                skia_safe::ColorType::RGBA8888,
+                skia_safe::AlphaType::Opaque,
+                None,
+            )
+            .unwrap();
 
-    //         let image = image.to_raster_image(CachingHint::Allow).unwrap();
+            let image = image.to_raster_image(CachingHint::Allow).unwrap();
 
-    //         self.set_content(Some(image), None);
-    //     }
-    // }
+            self.set_content(Some(image), None);
+        }
+    }
 
     pub fn bounds(&self) -> Rectangle {
         self.model.bounds()
