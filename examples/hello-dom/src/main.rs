@@ -12,6 +12,23 @@ use crate::toggle::{view_toggle, ToggleState};
 
 mod list;
 mod toggle;
+
+trait View<S> {
+    fn view(&self, state: S) -> ViewLayerTree;
+    fn on_press(&self, state: S) {}
+    fn on_release(&self, state: S) {}
+    fn on_move(&self, state: S) {}
+}
+// impl View for a function that accept an argument
+impl<F, T> View<T> for F
+where
+    F: Fn(T) -> ViewLayerTree,
+{
+    fn view(&self, state: T) -> ViewLayerTree {
+        (*self)(state)
+    }
+}
+
 fn main() {
     type WindowedContext = glutin::ContextWrapper<glutin::PossiblyCurrent, glutin::window::Window>;
 
@@ -99,7 +116,7 @@ fn main() {
     let last_instant = instant;
 
     let state = ToggleState { value: false };
-    let layer_tree = view_toggle(state);
+    let layer_tree = view_toggle.view(state);
     layer.build_layer_tree(&layer_tree);
 
     let state = ListState {
@@ -147,7 +164,7 @@ fn main() {
                     } else {
                         state.value = true;
                     }
-                    let layer_tree = view_toggle(state);
+                    let layer_tree = view_toggle.view(state);
                     // println!("layer_tree: {:?}", layer_tree);
                     layer.build_layer_tree(&layer_tree);
                 }

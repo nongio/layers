@@ -150,7 +150,7 @@ fn main() {
         let data = image.into_vec();
 
         let layer = engine.new_layer();
-        // layer.set_content_from_data_raster_rgba8(&data, w, h);
+        layer.set_content_from_data_raster_rgba8(&data, w, h);
 
         layer
             .set_anchor_point(Point { x: 0.5, y: 0.5 }, None)

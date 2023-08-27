@@ -17,34 +17,31 @@ impl LayersBuilder {
 }
 fn main() {
     if let Ok(root) = ::syn::parse2::<LayerItem>(quote!(
-        Layer()
-            .size(100, 100)
-            .background("red")
-        {
-            Layer()
-            {
-                for i in 0..10 {
-                    Layer("text")
-                }
-            }
-        }
+        Layer().size(100, 100).background("red") // {
+                                                 //     Layer()
+                                                 //     {
+                                                 //         // for i in 0..10 {
+                                                 //         Layer("text")
+                                                 //         // }
+                                                 //     }
+                                                 // }
     )) {
         // println!("{}", root);
         let code = code_gen(&root);
         println!("{}", code);
     }
-    let engine = LayersEngine::new();
+    // let engine = LayersEngine::new();
 
-    let tree = layers! {
-    Layer()
-    .size(100.0, 100.0)
-    .background("red")
-    // {
-    //     Layer()
-    //     {
-    //         Layer()
-    //     }
-    // }
+    // let tree = layers! {
+    // Layer()
+    // .size(100.0, 100.0)
+    // .background("red")
+    // // {
+    // //     Layer()
+    // //     {
+    // //         Layer()
+    // //     }
+    // // }
 
-    };
+    // };
 }

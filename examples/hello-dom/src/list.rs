@@ -6,11 +6,8 @@ use std::sync::Arc;
 pub struct ListState {
     pub values: Vec<String>,
 }
-pub fn view_list(state: ListState) -> ViewLayerTree {
-    const SIZE: f32 = 50.0;
+pub fn view_list(_state: ListState) -> ViewLayerTree {
     const PADDING: f32 = 5.0;
-    let TOGGLE_SIZE = SIZE * 2.0;
-    let position = PADDING;
 
     let background_color = Color::new_hex("#0075FF");
 

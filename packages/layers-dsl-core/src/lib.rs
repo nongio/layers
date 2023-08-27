@@ -1,5 +1,8 @@
 use core::fmt;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::{
+    borrow::BorrowMut,
+    sync::atomic::{AtomicUsize, Ordering},
+};
 
 use ::syn::{
     parse::{Parse, ParseStream, Parser},
@@ -42,25 +45,95 @@ impl fmt::Display for LayerItem {
 fn parse_expr(call: &Expr, varname: &Ident) -> (Result<TokenStream>, Result<TokenStream>) {
     let (mut init, mut block): (Result<TokenStream>, Result<TokenStream>) =
         (Ok(quote! {}), Ok(quote! {}));
-    match call {
-        Expr::MethodCall(method_call) => {
+    match call.clone() {
+        Expr::MethodCall(mut method_call) => {
             // Ok(Expr::MethodCall(method_call))
-            let ExprMethodCall {
-                attrs,
-                receiver,
-                dot_token,
-                method,
-                turbofish,
-                paren_token,
-                args,
-            } = method_call.clone();
+            // let ExprMethodCall {
+            //     // attrs,
+            //     receiver,
+            //     // dot_token,
+            //     // method,
+            //     // turbofish,
+            //     // paren_token,
+            //     // args,
+            //     ..
+            // } = method_call;
             // println!("attrs: {:?}", attrs);
-            // println!("receiver: {:?}", receiver);
+            println!("receiver: {:?}", &method_call.receiver);
             // println!("dot_token: {:?}", dot_token);
             // println!("method: {:?}", method);
             // println!("turbofish: {:?}", turbofish);
             // println!("paren_token: {:?}", paren_token);
             // println!("args: {:?}", args);
+
+            // parse receiver
+            // let mut receiver = *receiver;
+            let receiver = &mut method_call.receiver;
+
+            match receiver.as_mut() {
+                Expr::MethodCall(method_call) => {
+                    // let ExprMethodCall {
+                    //     // attrs,
+                    //     receiver,
+                    //     // dot_token,
+                    //     // method,
+                    //     // turbofish,
+                    //     // paren_token,
+                    //     // args,
+                    //     ..
+                    // } = method_call;
+                    // println!("attrs: {:?}", attrs);
+                    // println!("receiver: {:?}", receiver);
+                    // println!("dot_token: {:?}", dot_token);
+                    // println!("method: {:?}", method);
+                    // println!("turbofish: {:?}", turbofish);
+                    // println!("paren_token: {:?}", paren_token);
+                    // println!("args: {:?}", args);
+
+                    // let receiver = *receiver;
+                    let receiver = &mut method_call.receiver;
+
+                    match receiver.as_mut() {
+                        Expr::Call(call) => {
+                            // destructuring the call
+                            // let ExprCall {
+                            //     // attrs,
+                            //     // paren_token,
+                            //     func,
+                            //     // args,
+                            //     ..
+                            // } = call;
+                            // println!("func: {:?}", func);
+                            // println!("args: {:?}", args);
+                            // println!("attrs: {:?}", attrs);
+                            // println!("paren_token: {:?}", paren_token);
+                            // let variable_name = std::fmt::format(format_args!("engine_{:?}!", func));
+                            // let varname = syn::Ident::new(&variable_name, Span::call_site());
+                            let func = &mut call.func;
+                            match func.as_mut() {
+                                Expr::Path(path) => {
+                                    let ExprPath { attrs, qself, path } = path.borrow_mut();
+                                    // println!("attrs: {:?}", attrs);
+                                    // println!("qself: {:?}", qself);
+                                    println!("path: {:?}", path);
+                                    path.segments.iter_mut().for_each(|segment| {
+                                        let PathSegment { ident, arguments } = segment;
+                                        println!("ident: {:?}", ident);
+                                        *ident = Ident::new(
+                                            "ViewLayerBuilder::default",
+                                            Span::call_site(),
+                                        );
+                                        println!("arguments: {:?}", arguments);
+                                    });
+                                }
+                                _ => {}
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                _ => {}
+            }
 
             init = Ok(quote! {
                 ViewLayerTreeBuilder::default()

@@ -1,5 +1,4 @@
 use layers::prelude::*;
-use layers::types::Size;
 use std::sync::Arc;
 
 pub struct ToggleState {
@@ -8,7 +7,7 @@ pub struct ToggleState {
 pub fn view_toggle(state: ToggleState) -> ViewLayerTree {
     const SIZE: f32 = 50.0;
     const PADDING: f32 = 5.0;
-    let TOGGLE_SIZE = SIZE * 2.0;
+    const TOGGLE_SIZE: f32 = SIZE * 2.0;
     let position = if state.value {
         PADDING
     } else {
