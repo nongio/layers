@@ -23,7 +23,7 @@ diff-struct = "0.5.1"
 derive_builder = "0.12.0"
 
 [dependencies.skia-safe]
-version = "0"
+version = "0.62"
 
 # this set of features is required for enabling to use the pre-built
 # binaries of skia-safe
