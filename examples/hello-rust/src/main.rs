@@ -8,7 +8,7 @@ use glutin::{
     GlProfile,
 };
 
-use layers::prelude::*;
+use layers::prelude::{timing::TimingFunction, *};
 
 fn main() {
     type WindowedContext = glutin::ContextWrapper<glutin::PossiblyCurrent, glutin::window::Window>;
@@ -209,7 +209,7 @@ fn main() {
                         Some(Transition {
                             duration: 1.0,
                             delay: 0.0,
-                            timing: Easing::default(),
+                            timing: TimingFunction::default(),
                         }),
                     );
                     env.windowed_context.window().request_redraw();
@@ -245,7 +245,7 @@ fn main() {
                                 Some(Transition {
                                     duration: 1.0,
                                     delay: 0.0,
-                                    timing: Easing::default(),
+                                    timing: TimingFunction::default(),
                                 }),
                             );
                         }
@@ -264,7 +264,7 @@ fn main() {
                                 Some(Transition {
                                     duration: 0.5,
                                     delay: 0.0,
-                                    timing: Easing::default(),
+                                    timing: TimingFunction::default(),
                                 }),
                             );
                         });
@@ -275,7 +275,7 @@ fn main() {
                                 Some(Transition {
                                     duration: 1.5,
                                     delay: 0.0,
-                                    timing: Easing::default(),
+                                    timing: TimingFunction::default(),
                                 }),
                             );
                         });

@@ -1,4 +1,4 @@
-use layers::prelude::*;
+use layers::prelude::{timing::TimingFunction, *};
 use std::sync::Arc;
 
 pub struct ToggleState {
@@ -36,7 +36,7 @@ pub fn view_toggle(state: ToggleState) -> ViewLayerTree {
                     Some(Transition {
                         delay: 0.0,
                         duration: 0.3,
-                        timing: Easing::default(),
+                        timing: TimingFunction::default(),
                     }),
                 ))
                 .border_corner_radius((
@@ -48,7 +48,7 @@ pub fn view_toggle(state: ToggleState) -> ViewLayerTree {
                     Some(Transition {
                         delay: 0.0,
                         duration: 1.0,
-                        timing: Easing::default(),
+                        timing: TimingFunction::default(),
                     }),
                 ))
                 .build()
@@ -66,7 +66,7 @@ pub fn view_toggle(state: ToggleState) -> ViewLayerTree {
                             Some(Transition {
                                 delay: 0.0,
                                 duration: 0.3,
-                                timing: Easing::default(),
+                                timing: TimingFunction::default(),
                             }),
                         ))
                         .size((Point { x: SIZE, y: SIZE }, None))

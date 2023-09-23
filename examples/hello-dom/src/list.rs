@@ -1,5 +1,5 @@
+use layers::prelude::timing::TimingFunction;
 use layers::prelude::*;
-use layers::types::Size;
 use std::string::String;
 use std::sync::Arc;
 
@@ -23,7 +23,7 @@ pub fn view_list(_state: ListState) -> ViewLayerTree {
                     Some(Transition {
                         delay: 0.0,
                         duration: 0.3,
-                        timing: Easing::default(),
+                        timing: TimingFunction::default(),
                     }),
                 ))
                 .border_corner_radius((BorderRadius::new_single(5.0), None))
@@ -32,7 +32,7 @@ pub fn view_list(_state: ListState) -> ViewLayerTree {
                     Some(Transition {
                         delay: 0.0,
                         duration: 1.0,
-                        timing: Easing::default(),
+                        timing: TimingFunction::default(),
                     }),
                 ))
                 .build()

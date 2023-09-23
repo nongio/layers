@@ -7,7 +7,8 @@
 //! - The *draw* step generates a displaylist
 //! - The *render* step uses the displaylist to generate a texture of the node
 //! - The *compose* step generates the final image using the textures
-pub mod animations;
+
+pub mod animation;
 pub mod command;
 mod draw_to_picture;
 pub mod node;
@@ -31,7 +32,7 @@ use crate::{
 };
 
 use self::{
-    animations::{Animation, Easing, Transition},
+    animation::{Animation, Transition},
     command::NoopChange,
     node::{ContainsPoint, RenderableFlags},
     scene::Scene,
