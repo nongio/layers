@@ -20,6 +20,8 @@ pub trait Drawable {
     fn transform(&self) -> Matrix;
     /// Returns the scale of this drawable.
     fn scale(&self) -> (f32, f32);
+    /// Returns the anchor point of this drawable.
+    fn anchor_point(&self) -> (f32, f32);
 }
 
 pub fn draw_single_scene_node(canvas: &mut Canvas, node: &SceneNode) {

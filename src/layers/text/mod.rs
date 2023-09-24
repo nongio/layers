@@ -129,6 +129,10 @@ impl Drawable for ModelText {
         let s = self.scale.value();
         (s.x, s.y)
     }
+    fn anchor_point(&self) -> (f32, f32) {
+        // TODO: implement anchor point
+        (0.0, 0.0)
+    }
 }
 
 impl RenderNode for ModelText {}

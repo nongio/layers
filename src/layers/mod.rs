@@ -73,6 +73,12 @@ impl Drawable for Layers {
             Layers::TextLayer(layer) => layer.model.transform(),
         }
     }
+    fn anchor_point(&self) -> (f32, f32) {
+        match self {
+            Layers::Layer(layer) => layer.model.anchor_point(),
+            Layers::TextLayer(layer) => layer.model.anchor_point(),
+        }
+    }
 }
 impl From<Layer> for Layers {
     fn from(layer: Layer) -> Self {

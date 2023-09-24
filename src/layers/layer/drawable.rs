@@ -12,7 +12,7 @@ impl Drawable for ModelLayer {
     fn bounds(&self) -> Rectangle {
         let s = self.size.value();
         let p = self.position.value();
-        
+
         Rectangle {
             x: p.x,
             y: p.y,
@@ -79,5 +79,9 @@ impl Drawable for ModelLayer {
     fn scale(&self) -> (f32, f32) {
         let s = self.scale.value();
         (s.x, s.y)
+    }
+    fn anchor_point(&self) -> (f32, f32) {
+        let a = self.anchor_point.value();
+        (a.x, a.y)
     }
 }

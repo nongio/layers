@@ -151,10 +151,16 @@ impl DrawCacheManagement for SceneNode {
             let scale = M44::scale(scale.0, scale.1, 0.0);
             let transform = M44::concat(&translate, &identity);
             let transform = M44::concat(&transform, &scale);
+            let anchor_point = self.model.anchor_point();
+            let anchor_point = M44::translate(
+                -anchor_point.0 * bounds.width,
+                -anchor_point.1 * bounds.height,
+                0.0,
+            );
+            let transform = M44::concat(&transform, &anchor_point);
             // let transform = M44::concat(&transform, &rotate_x);
             // let transform = M44::concat(&transform, &rotate_y);
             // let transform = M44::concat(&transform, &rotate_z);
-            // let transform = M44::concat(&transform, &anchor_translate);
             *self.transformation.write().unwrap() = transform.to_m33();
             *self.scale.write().unwrap() = self.model.scale();
             self.set_need_layout(false);
