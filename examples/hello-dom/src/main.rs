@@ -94,8 +94,8 @@ fn main() {
             y: (window_height as f32 * 2.0),
         },
         None,
-    )
-    .set_background_color(
+    );
+    root.set_background_color(
         PaintColor::Solid {
             color: Color::new_rgba255(180, 180, 180, 255),
         },
