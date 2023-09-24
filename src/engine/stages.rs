@@ -1,12 +1,13 @@
 use std::sync::{Arc, RwLock};
 
+use indextree::Node;
 use rayon::prelude::{IntoParallelRefIterator, IntoParallelRefMutIterator, ParallelIterator};
 use taffy::{prelude::Size, style_helpers::points};
 
 use crate::prelude::Drawable;
 
 use super::{
-    node::{DrawCacheManagement, RenderableFlags},
+    node::{try_get_node, DrawCacheManagement, RenderableFlags, SceneNode},
     storage::FlatStorageId,
     AnimationState, Engine, NodeRef, Timestamp,
 };
@@ -89,22 +90,23 @@ pub(crate) fn execute_transactions(engine: &Engine) -> (Vec<NodeRef>, Vec<FlatSt
                 let node_id = command.node_id;
                 if let Some(node) = scene.get_node(node_id.0) {
                     {
-                        let node = node.get();
-                        if flags.contains(RenderableFlags::NEEDS_LAYOUT) {
-                            let bounds = node.model.bounds();
-                            let size = crate::types::Size {
-                                x: bounds.width,
-                                y: bounds.height,
-                            };
-                            engine.set_node_layout_size(node.layout_node, size);
-                        }
+                        if let Some(node) = try_get_node(node) {
+                            if flags.contains(RenderableFlags::NEEDS_LAYOUT) {
+                                let bounds = node.model.bounds();
+                                let size = crate::types::Size {
+                                    x: bounds.width,
+                                    y: bounds.height,
+                                };
+                                engine.set_node_layout_size(node.layout_node, size);
+                            }
 
-                        updated_nodes.write().unwrap().push(node_id);
-                        if done {
-                            node.remove_flags(RenderableFlags::ANIMATING);
+                            updated_nodes.write().unwrap().push(node_id);
+                            if done {
+                                node.remove_flags(RenderableFlags::ANIMATING);
+                            }
+                            node.insert_flags(flags);
                         }
                     }
-                    node.get().insert_flags(flags);
                 }
                 if done {
                     transactions_finished.write().unwrap().push(*id);
@@ -193,4 +195,31 @@ pub(crate) fn cleanup_transactions(engine: &Engine, finished_transations: Vec<Fl
         transactions.remove(command_id);
         handlers.remove(command_id);
     }
+}
+
+pub(crate) fn cleanup_layers(engine: &Engine) {
+    let scene = engine.scene.clone();
+    let nodes: Arc<RwLock<indextree::Arena<super::node::SceneNode>>> = scene.nodes.data();
+
+    let nodes = nodes.read().unwrap();
+    let deleted_nodes: Vec<Node<SceneNode>> = nodes
+        .iter()
+        .filter(|node| {
+            if node.is_removed() {
+                return false;
+            }
+            let scene_node = node.get();
+
+            scene_node.deleted && scene_node.model.id().is_some()
+        })
+        .map(|node| node.to_owned())
+        .collect();
+    drop(nodes);
+    deleted_nodes.iter().for_each(|delete_node| {
+        if let Some(node) = try_get_node(delete_node.to_owned()) {
+            scene.remove(node.id().unwrap());
+            let mut layout_tree = engine.layout_tree.write().unwrap();
+            layout_tree.remove(node.layout_node).unwrap();
+        }
+    })
 }

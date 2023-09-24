@@ -8,7 +8,7 @@ use taffy::prelude::{Layout, Node};
 
 use crate::{layers::Layers, types::*};
 
-use super::{draw_to_picture::DrawToPicture, rendering::Drawable};
+use super::{draw_to_picture::DrawToPicture, rendering::Drawable, NodeRef};
 pub(crate) mod contains_point;
 pub(crate) mod draw_cache_management;
 
@@ -59,9 +59,13 @@ pub struct SceneNode {
     pub draw_cache: Arc<RwLock<Option<DrawCache>>>,
     pub flags: Arc<RwLock<RenderableFlags>>,
     pub layout_node: Node,
+    pub deleted: bool,
 }
 
 impl SceneNode {
+    pub fn id(&self) -> Option<NodeRef> {
+        self.model.id()
+    }
     pub fn with_renderable_and_layout(model: Arc<Layers>, layout_node: Node) -> Self {
         Self {
             model,
@@ -75,6 +79,7 @@ impl SceneNode {
                     | RenderableFlags::NEEDS_RASTER,
             )),
             layout_node,
+            deleted: false,
         }
     }
     pub fn insert_flags(&self, flags: RenderableFlags) {
@@ -181,5 +186,13 @@ impl DrawCacheManagement for SceneNode {
             .read()
             .unwrap()
             .contains(RenderableFlags::NEEDS_RASTER)
+    }
+}
+
+pub fn try_get_node(node: indextree::Node<SceneNode>) -> Option<SceneNode> {
+    if node.is_removed() {
+        None
+    } else {
+        Some(node.get().to_owned())
     }
 }

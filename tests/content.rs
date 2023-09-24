@@ -1,6 +1,5 @@
 use layers::drawing::scene::DrawScene;
 use layers::engine::LayersEngine;
-use layers::layers::layer::Layer;
 use layers::types::Point;
 use std::sync::Arc;
 

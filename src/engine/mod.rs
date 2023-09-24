@@ -184,6 +184,11 @@ impl LayersEngine {
     pub fn scene_add_layer_to(&self, layer: impl Into<Layers>, parent: Option<NodeRef>) -> NodeRef {
         self.engine.scene_add_layer(layer, parent)
     }
+
+    pub fn scene_remove_layer(&self, layer: impl Into<Option<NodeRef>>) {
+        self.engine.scene_remove_layer(layer)
+    }
+
     pub fn scene_set_root(&self, layer: impl Into<Layers>) -> NodeRef {
         self.engine.scene_set_root(layer)
     }
@@ -273,6 +278,20 @@ impl Engine {
         self.schedule_change(id, change, None);
         id
     }
+    pub fn scene_remove_layer(&self, layer: impl Into<Option<NodeRef>>) {
+        let layer_id: Option<NodeRef> = layer.into();
+        if let Some(layer_id) = layer_id {
+            {
+                let nodes = self.scene.nodes.data();
+                let mut nodes = nodes.write().unwrap();
+                if let Some(node) = nodes.get_mut(layer_id.into()) {
+                    let node = node.get_mut();
+                    node.deleted = true;
+                }
+            }
+        }
+    }
+
     pub fn now(&self) -> f32 {
         self.timestamp.read().unwrap().0
     }
@@ -367,6 +386,8 @@ impl Engine {
         cleanup_animations(self, finished_animations);
 
         cleanup_transactions(self, finished_transations);
+
+        cleanup_layers(self);
         needs_redraw
     }
 
