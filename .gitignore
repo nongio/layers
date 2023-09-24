@@ -16,3 +16,5 @@ Cargo.lock
 *.pdb
 
 examples/hello-rust/assets/
+.vscode/launch.json
+.vscode/settings.json

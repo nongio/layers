@@ -1,8 +1,0 @@
-{
-    "editor.formatOnSave": true,
-    "files.associations": {
-        "stdio.h": "c",
-        "eas.h": "c",
-        "stdbool.h": "c"
-    }
-}
