@@ -51,17 +51,20 @@ pub trait Command {
     fn value_id(&self) -> usize;
 }
 
+pub trait SyncCommand: Command + Sync + Send {}
 /// A trait for objects that contain a transition.
 pub trait WithTransition {
-    fn transition(&self) -> Option<Transition<Easing>>;
+    // fn transition(&self) -> Option<Transition<Easing>>;
 }
 
-/// A group trait for commands that contain a transition.
-pub trait CommandWithTransition: Command + WithTransition + Send + Sync {}
+/// A group trait for commands that may contain an animation.
+pub trait CommandWithAnimation: SyncCommand {
+    fn animation(&self) -> Option<Animation>;
+}
 
 #[derive(Clone)]
 pub struct AnimatedNodeChange {
-    pub change: Arc<dyn CommandWithTransition>,
+    pub change: Arc<dyn SyncCommand>,
     animation_id: Option<AnimationRef>,
     node_id: NodeRef,
 }
@@ -72,7 +75,12 @@ pub struct AnimatedNodeChange {
 /// the progres can not be used to determine if the animation is finished
 /// because the animation could be reversed or looped
 #[derive(Clone)]
-pub struct AnimationState(Animation, f32, bool);
+pub struct AnimationState {
+    pub(crate) animation: Animation,
+    pub(crate) progress: f32,
+    pub(crate) is_running: bool,
+    pub(crate) is_finished: bool,
+}
 
 type FnCallback = Arc<dyn 'static + Fn(f32) + Send + Sync>;
 
@@ -115,11 +123,12 @@ pub struct Engine {
 }
 #[derive(Clone, Copy)]
 pub struct TransactionRef(pub FlatStorageId);
-#[derive(Clone)]
+
+#[derive(Clone, Copy)]
 pub struct AnimationRef(FlatStorageId);
 
 /// An identifier for a node in the three storage
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct NodeRef(pub TreeStorageId);
 
 #[derive(Clone)]
@@ -130,6 +139,7 @@ impl From<NodeRef> for TreeStorageId {
         node_ref.0
     }
 }
+
 pub struct LayersEngine {
     pub(crate) engine: Arc<Engine>,
 }
@@ -158,6 +168,12 @@ impl LayersEngine {
             id: Arc::new(RwLock::new(None)),
             layout,
         }
+    }
+    pub fn new_animation(&self, transition: Transition) -> AnimationRef {
+        self.engine.add_animation_from_transition(transition)
+    }
+    pub fn attach_animation(&self, transaction: TransactionRef, animation: AnimationRef) {
+        self.engine.attach_animation(transaction, animation);
     }
     pub fn update(&self, dt: f32) -> bool {
         self.engine.update(dt)
@@ -224,7 +240,7 @@ impl Engine {
             layout_tree.add_child(layout_root, layout).unwrap();
         }
         let change = Arc::new(NoopChange::new(id.0.into()));
-        self.schedule_change(id, change);
+        self.schedule_change(id, change, None);
         id
     }
 
@@ -254,50 +270,58 @@ impl Engine {
             }
         }
         let change = Arc::new(NoopChange::new(id.0.into()));
-        self.schedule_change(id, change);
+        self.schedule_change(id, change, None);
         id
     }
-    pub fn scene_remove_layer(&self, layer: NodeRef) {
-        let mut layout_tree = self.layout_tree.write().unwrap();
-        let layout = self.scene.get_node(layer).unwrap().get().layout_node;
-        layout_tree.remove(layout).unwrap();
-        self.scene.remove(layer);
+    pub fn now(&self) -> f32 {
+        self.timestamp.read().unwrap().0
     }
-    pub fn create_animation_from_transition(&self, transition: Transition<Easing>) -> AnimationRef {
-        let start = self.timestamp.read().unwrap().0 + transition.delay;
 
-        self.add_animation(Animation {
+    pub fn add_animation_from_transition(&self, transition: Transition) -> AnimationRef {
+        let start = self.now() + transition.delay;
+
+        self.add_animation(
+            Animation {
             start,
             duration: transition.duration,
             timing: transition.timing,
-        })
-    }
-
-    pub fn add_animation(&self, animation: Animation) -> AnimationRef {
-        AnimationRef(
-            self.animations
-                .insert(AnimationState(animation, 0.0, false)),
+            },
+            true,
         )
     }
 
-    pub fn add_change_with_animation(
+    pub fn add_animation(&self, animation: Animation, autostart: bool) -> AnimationRef {
+        AnimationRef(self.animations.insert(AnimationState {
+            animation,
+            progress: 0.0,
+            is_running: autostart,
+            is_finished: false,
+        }))
+    }
+    pub fn start_animation(&self, animation: AnimationRef, delay: Option<f32>) {
+        let animations = self.animations.data();
+        let mut animations = animations.write().unwrap();
+        if let Some(animation_state) = animations.get_mut(&animation.0) {
+            animation_state.animation.start =
+                self.timestamp.read().unwrap().0 + delay.unwrap_or(0.0);
+            animation_state.is_running = true;
+            animation_state.is_finished = false;
+            animation_state.progress = 0.0;
+        }
+    }
+
+    pub fn schedule_change(
         &self,
         target_id: NodeRef,
-        change: Arc<dyn CommandWithTransition>,
-        animation_id: Option<FlatStorageId>,
+        change: Arc<dyn SyncCommand>,
+        animation_id: Option<AnimationRef>,
     ) -> TransactionRef {
-        let aid = change
-            .transition()
-            .map(|t| self.create_animation_from_transition(t).0)
-            .or(animation_id)
-            .map(AnimationRef);
-
         let node = self.scene.nodes.get(target_id.0);
         if node.is_some() {
             let transaction_id: usize = change.value_id();
             let node_change = AnimatedNodeChange {
                 change,
-                animation_id: aid,
+                animation_id,
                 node_id: target_id,
             };
             TransactionRef(
@@ -309,12 +333,12 @@ impl Engine {
         }
     }
 
-    pub fn schedule_change(
-        &self,
-        target_id: NodeRef,
-        change: Arc<dyn CommandWithTransition>,
-    ) -> TransactionRef {
-        self.add_change_with_animation(target_id, change, None)
+    pub fn attach_animation(&self, transaction: TransactionRef, animation: AnimationRef) {
+        let transactions = self.transactions.data();
+        let mut transactions = transactions.write().unwrap();
+        if let Some(transaction) = transactions.get_mut(&transaction.0) {
+            transaction.animation_id = Some(animation);
+        }
     }
     pub fn step_time(&self, dt: f32) {
         let mut timestamp = self.timestamp.write().unwrap();

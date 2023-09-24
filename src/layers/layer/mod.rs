@@ -14,13 +14,12 @@ use std::sync::RwLock;
 use taffy::prelude::Node;
 use taffy::style::Style;
 
-use crate::engine::animations::{Easing, Transition};
-use crate::engine::command::change_model;
-use crate::engine::command::ModelChange;
+use crate::engine::animation::*;
+use crate::engine::command::*;
 use crate::engine::node::RenderableFlags;
 use crate::engine::rendering::Drawable;
-use crate::engine::Engine;
-use crate::engine::NodeRef;
+use crate::engine::{Engine, NodeRef, TransactionRef};
+
 use crate::types::*;
 
 #[derive(Clone)]
@@ -86,8 +85,8 @@ impl Layer {
     pub fn set_size(
         &self,
         value: impl Into<Point>,
-        transition: Option<Transition<Easing>>,
-    ) -> &Self {
+        transition: Option<Transition>,
+    ) -> TransactionRef {
         let value: Point = value.into();
         let flags = RenderableFlags::NEEDS_LAYOUT | RenderableFlags::NEEDS_PAINT;
 
@@ -96,13 +95,28 @@ impl Layer {
             flag: flags,
         });
         let id: Option<NodeRef> = *self.id.read().unwrap();
+        let mut tr = TransactionRef(0);
         if let Some(id) = id {
-            self.engine.schedule_change(id, change);
+            let animation = transition.map(|t| {
+                (
+                    self.engine.add_animation(
+                        Animation {
+                            duration: t.duration,
+                            timing: t.timing,
+                            start: t.delay + self.engine.now(),
+                        },
+                        true,
+                    ),
+                    t,
+                )
+            });
+            let aid = animation.map(|(a, _)| a);
+            tr = self.engine.schedule_change(id, change, aid);
         } else {
             self.model.size.set(value);
             self.engine.set_node_layout_size(self.layout, value);
         }
-        self
+        tr
     }
 
     pub fn set_layout_style(&self, style: Style) {

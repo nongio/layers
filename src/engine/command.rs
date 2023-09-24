@@ -6,39 +6,70 @@
 //! A Change when executed returns a set of bit flags to mark the affected Renderable for Layout, Paint or render.
 //! On every update the Engine step forward the animations and applies the changes to the Renderables.
 
-use std::sync::Arc;
+use std::sync::{
+    atomic::{AtomicUsize, Ordering},
+    Arc, RwLock,
+};
 
 use crate::easing::Interpolate;
 
 /// Changes to models are scheduled to be applied at before the rendering steps
 use super::{
-    animations::{Easing, SyncValue, Transition},
-    node::RenderableFlags,
-    Command, CommandWithTransition, Engine, TransactionRef, WithTransition,
+    animation::Transition, node::RenderableFlags, AnimationRef, Command, Engine, SyncCommand,
+    TransactionRef,
 };
+
+static ATTRIBUTE_COUNTER: AtomicUsize = AtomicUsize::new(0);
+
+#[derive(Debug, Clone)]
+pub struct Attribute<V: Sync> {
+    pub id: usize,
+    value: Arc<RwLock<V>>,
+}
+
+impl<V: Sync + Clone> Attribute<V> {
+    pub fn new(value: V) -> Attribute<V> {
+        let value = Arc::new(RwLock::new(value));
+        Self {
+            id: ATTRIBUTE_COUNTER.fetch_add(1, Ordering::SeqCst),
+            value,
+        }
+    }
+
+    pub fn value(&self) -> V {
+        self.value.read().unwrap().clone()
+    }
+
+    pub fn set(&self, value: V) {
+        *self.value.write().unwrap() = value;
+    }
+
+    pub fn to(&self, to: V, transition: Option<Transition>) -> AttributeChange<V> {
+        AttributeChange {
+            from: self.value(),
+            to,
+            target: self.clone(),
+            transition,
+        }
+    }
+}
 
 /// A representation of a change to a property, including an optional transition
 
 #[derive(Clone, Debug)]
-pub struct ValueChange<V: Sync> {
+pub struct AttributeChange<V: Sync> {
     pub from: V,
     pub to: V,
-    pub target: SyncValue<V>,
-    pub transition: Option<Transition<Easing>>,
+    pub target: Attribute<V>,
+    pub transition: Option<Transition>,
 }
 
 /// A representation of a change to a model proprty, including what subsequent
 /// rendering steps are required
 #[derive(Clone, Debug)]
 pub struct ModelChange<T: Sync> {
-    pub value_change: ValueChange<T>,
+    pub value_change: AttributeChange<T>,
     pub flag: RenderableFlags,
-}
-
-/// Objects implementing this trait expose a function `to(...)` that returns
-/// a `ValueChange` object
-pub trait AnimatableValue<V: Sync> {
-    fn to(&self, to: V, transition: Option<Transition<Easing>>) -> ValueChange<V>;
 }
 
 #[derive(Clone)]
@@ -70,20 +101,19 @@ impl Command for NoopChange {
         self.0
     }
 }
+impl SyncCommand for NoopChange {}
 
-impl WithTransition for NoopChange {
-    fn transition(&self) -> Option<Transition<Easing>> {
+impl From<NoopChange> for Option<AnimationRef> {
+    fn from(_: NoopChange) -> Self {
         None
     }
 }
 
-impl CommandWithTransition for NoopChange {}
-
-impl<T: Sync> WithTransition for ModelChange<T> {
-    fn transition(&self) -> Option<Transition<Easing>> {
-        self.value_change.transition
-    }
-}
+// impl<T: Sync> WithTransition for ModelChange<T> {
+//     fn transition(&self) -> Option<Transition<Easing>> {
+//         self.value_change.transition
+//     }
+// }
 
 impl<I: Interpolate + Sync + Clone + 'static> Command for ModelChange<I> {
     fn execute(&self, progress: f32) -> RenderableFlags {
@@ -100,11 +130,7 @@ impl<I: Interpolate + Sync + Clone + 'static> Command for ModelChange<I> {
         self.value_change.target.id
     }
 }
-
-impl<T: Interpolate + Sync + Send + Clone + Sized + 'static> CommandWithTransition
-    for ModelChange<T>
-{
-}
+impl<I: Interpolate + Sync + Send + Clone + 'static> SyncCommand for ModelChange<I> {}
 
 macro_rules! change_model {
     ($variable_name:ident, $variable_type:ty, $flags:expr) => {
@@ -112,8 +138,8 @@ macro_rules! change_model {
             pub fn [<set_ $variable_name>](
                 &self,
                 value: impl Into<$variable_type>,
-                transition: Option<Transition<Easing>>,
-            )  -> &Self {
+                transition: Option<Transition>,
+            )  -> TransactionRef {
                 let value:$variable_type = value.into();
                 let flags = $flags;
 
@@ -121,18 +147,23 @@ macro_rules! change_model {
                     value_change: self.model.$variable_name.to(value.clone(), transition),
                     flag: flags,
                 });
-                // let mut tr = crate::engine::TransactionRef(0);
+                let mut tr = crate::engine::TransactionRef(0);
                 let id:Option<NodeRef> = *self.id.read().unwrap();
                 if let Some(id) = id {
-                    self.engine.schedule_change(id, change.clone());
+                    let animation = transition.map(|t| {
+                        self.engine.add_animation(Animation {
+                            duration: t.duration,
+                            timing: t.timing,
+                            start: t.delay + self.engine.now(),
+                        }, true)
+                    });
+
+                    tr = self.engine.schedule_change(id, change.clone(), animation);
                 } else {
                     self.model.$variable_name.set(value.clone());
                 }
-                // let transaction = Transaction {
-                //     engine: self.engine.clone(),
-                //     id: tr,
-                // };
-                &self
+
+                tr
             }
             pub fn $variable_name(&self) -> $variable_type {
                 self.model.$variable_name.value()

@@ -32,7 +32,8 @@ impl TimingFunction {
     pub fn value_at(&self, t: f32) -> f32 {
         match self {
             TimingFunction::Easing(Easing { x1, x2, y1, y2 }) => {
-                bezier_easing_function(*x1, *x2, *y1, *y2, t)
+                bezier_easing_function(*x1 as f64, *x2 as f64, *y1 as f64, *y2 as f64, t as f64)
+                    as f32
             }
         }
     }

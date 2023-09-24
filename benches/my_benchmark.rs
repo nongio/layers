@@ -3,7 +3,7 @@ use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use layers::{
     engine::animations::{Easing, Transition},
     engine::LayersEngine,
-    prelude::*,
+    prelude::{timing::TimingFunction, *},
     types::*,
 };
 
@@ -27,7 +27,7 @@ fn criterion_benchmark(c: &mut Criterion) {
             Some(Transition {
                 duration: 10000.0,
                 delay: 0.0,
-                timing: Easing::default(),
+                timing: TimingFunction::default(),
             }),
         );
     }

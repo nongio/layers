@@ -5,15 +5,14 @@ use taffy::prelude::Node;
 use crate::{
     drawing::text::draw_text,
     engine::{
-        animations::SyncValue,
         node::{RenderNode, RenderableFlags},
         rendering::Drawable,
-        Engine, NodeRef,
+        Engine, NodeRef, TransactionRef,
     },
     types::*,
 };
 
-use crate::engine::{animations::*, command::*};
+use crate::engine::{animation::*, command::*};
 #[derive(Clone, Debug)]
 pub struct RenderText {
     pub matrix: Matrix,
@@ -29,16 +28,16 @@ pub struct RenderText {
 }
 
 pub struct ModelText {
-    pub position: SyncValue<Point>,
-    pub scale: SyncValue<Point>,
-    pub size: SyncValue<Point>,
-    pub background_color: SyncValue<PaintColor>,
-    pub text_color: SyncValue<Color>,
+    pub position: Attribute<Point>,
+    pub scale: Attribute<Point>,
+    pub size: Attribute<Point>,
+    pub background_color: Attribute<PaintColor>,
+    pub text_color: Attribute<Color>,
     pub font_family: String,
-    pub font_size: SyncValue<f32>,
+    pub font_size: Attribute<f32>,
 
-    pub font_weight: SyncValue<f32>,
-    pub font_letter_spacing: SyncValue<f32>,
+    pub font_weight: Attribute<f32>,
+    pub font_letter_spacing: Attribute<f32>,
     pub text: RwLock<String>,
 }
 
@@ -52,19 +51,19 @@ impl ModelText {
 }
 impl Default for ModelText {
     fn default() -> Self {
-        let position = SyncValue::new(Point { x: 0.0, y: 0.0 });
-        let size = SyncValue::new(Point { x: 100.0, y: 100.0 });
-        let scale = SyncValue::new(Point { x: 1.0, y: 1.0 });
+        let position = Attribute::new(Point { x: 0.0, y: 0.0 });
+        let size = Attribute::new(Point { x: 100.0, y: 100.0 });
+        let scale = Attribute::new(Point { x: 1.0, y: 1.0 });
 
-        let background_color = SyncValue::new(PaintColor::Solid {
+        let background_color = Attribute::new(PaintColor::Solid {
             color: Color::new_rgba(1.0, 1.0, 1.0, 1.0),
         });
 
-        let text_color = SyncValue::new(Color::new_rgba(0.0, 0.0, 0.0, 1.0));
+        let text_color = Attribute::new(Color::new_rgba(0.0, 0.0, 0.0, 1.0));
         let font_family = "Noto Sans".to_string();
-        let font_size = SyncValue::new(22.0);
-        let font_weight = SyncValue::new(400.0);
-        let font_letter_spacing = SyncValue::new(0.0);
+        let font_size = Attribute::new(22.0);
+        let font_weight = Attribute::new(400.0);
+        let font_letter_spacing = Attribute::new(0.0);
         let text = RwLock::new(String::from("Hello World"));
 
         Self {

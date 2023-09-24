@@ -1,6 +1,6 @@
 pub use super::{
     drawing::scene::DrawScene,
-    engine::{animation::*, rendering::*, LayersEngine},
+    engine::{animation::timing::*, animation::*, rendering::*, LayersEngine},
     layers::{
         layer::{Layer, RenderLayer, RenderLayerBuilder},
         BuildLayerTree, ViewLayerBuilder, ViewLayerTree, ViewLayerTreeBuilder,

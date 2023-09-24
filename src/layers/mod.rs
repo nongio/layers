@@ -89,19 +89,19 @@ impl From<TextLayer> for Layers {
 #[derive(Clone, Debug, Builder, Default)]
 #[builder(public, default)]
 pub struct ViewLayer {
-    pub background_color: (PaintColor, Option<Transition<Easing>>),
-    pub border_color: (Color, Option<Transition<Easing>>),
-    pub border_width: (f32, Option<Transition<Easing>>),
+    pub background_color: (PaintColor, Option<Transition>),
+    pub border_color: (Color, Option<Transition>),
+    pub border_width: (f32, Option<Transition>),
     pub border_style: BorderStyle,
-    pub border_corner_radius: (BorderRadius, Option<Transition<Easing>>),
-    pub size: (Point, Option<Transition<Easing>>),
-    pub position: (Point, Option<Transition<Easing>>),
+    pub border_corner_radius: (BorderRadius, Option<Transition>),
+    pub size: (Point, Option<Transition>),
+    pub position: (Point, Option<Transition>),
     #[builder(default = "(Point{x:1.0, y:1.0}, None)")]
-    pub scale: (Point, Option<Transition<Easing>>),
-    pub shadow_offset: (Point, Option<Transition<Easing>>),
-    pub shadow_radius: (f32, Option<Transition<Easing>>),
-    pub shadow_color: (Color, Option<Transition<Easing>>),
-    pub shadow_spread: (f32, Option<Transition<Easing>>),
+    pub scale: (Point, Option<Transition>),
+    pub shadow_offset: (Point, Option<Transition>),
+    pub shadow_radius: (f32, Option<Transition>),
+    pub shadow_color: (Color, Option<Transition>),
+    pub shadow_spread: (f32, Option<Transition>),
     pub content: Option<Image>,
     pub blend_mode: BlendMode,
     pub layout_style: Style,
@@ -183,7 +183,7 @@ impl BuildLayerTree for Layer {
             }
             while !child_layers.is_empty() {
                 let child = child_layers.pop().unwrap();
-                engine.scene_remove_layer(NodeRef(child));
+                engine.scene_remove_layer(Some(NodeRef(child)));
             }
         }
     }

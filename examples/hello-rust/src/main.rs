@@ -9,6 +9,7 @@ use glutin::{
 };
 
 use layers::prelude::{timing::TimingFunction, *};
+use winit::window::Icon;
 
 fn main() {
     type WindowedContext = glutin::ContextWrapper<glutin::PossiblyCurrent, glutin::window::Window>;
@@ -152,26 +153,25 @@ fn main() {
         let layer = engine.new_layer();
         layer.set_content_from_data_raster_rgba8(&data, w, h);
 
-        layer
-            .set_anchor_point(Point { x: 0.5, y: 0.5 }, None)
-            .set_size(Point { x: 100.0, y: 100.0 }, None)
-            .set_border_corner_radius(20.0, None)
-            .set_shadow_color(Color::new_rgba(0.0, 0.0, 0.0, 0.5), None)
-            .set_background_color(
-                Color::new_rgba(rand::random(), rand::random(), rand::random(), 1.0),
-                None,
-            )
-            .set_shadow_offset(Point { x: 10.0, y: 10.0 }, None)
-            .set_shadow_radius(10.0, None)
-            .set_layout_style(Style {
-                flex_grow: 0.0,
-                size: layers::taffy::prelude::Size {
-                    width: points(100.0),
-                    height: points(100.0),
-                },
+        layer.set_anchor_point(Point { x: 0.5, y: 0.5 }, None);
+        layer.set_size(Point { x: 100.0, y: 100.0 }, None);
+        layer.set_border_corner_radius(20.0, None);
+        layer.set_shadow_color(Color::new_rgba(0.0, 0.0, 0.0, 0.5), None);
+        layer.set_background_color(
+            Color::new_rgba(rand::random(), rand::random(), rand::random(), 1.0),
+            None,
+        );
+        layer.set_shadow_offset(Point { x: 10.0, y: 10.0 }, None);
+        layer.set_shadow_radius(10.0, None);
+        layer.set_layout_style(Style {
+            flex_grow: 0.0,
+            size: layers::taffy::prelude::Size {
+                width: points(100.0),
+                height: points(100.0),
+            },
 
-                ..Default::default()
-            });
+            ..Default::default()
+        });
         layers.push(layer.clone());
 
         engine.scene_add_layer_to(layer, container.id());
@@ -213,6 +213,26 @@ fn main() {
                         }),
                     );
                     env.windowed_context.window().request_redraw();
+                }
+                WindowEvent::KeyboardInput {
+                    device_id,
+                    input,
+                    is_synthetic,
+                } => {
+                    match input.virtual_keycode {
+                        Some(keycode) => match keycode {
+                            winit::event::VirtualKeyCode::Space => {
+                                let dt = 0.016;
+                                let needs_redraw = engine.update(dt);
+                                if needs_redraw {
+                                    env.windowed_context.window().request_redraw();
+                                    // draw_frame = -1;
+                                }
+                            }
+                            _ => (),
+                        },
+                        None => (),
+                    }
                 }
                 WindowEvent::CursorMoved { position, .. } => {
                     _mouse_x = position.x;

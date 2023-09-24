@@ -19,9 +19,24 @@ pub(crate) fn update_animations(engine: &Engine, timestamp: Timestamp) -> Vec<Fl
     if animations.len() > 0 {
         animations.par_iter_mut().for_each_with(
             finished_animations.clone(),
-            |done_animations, (id, AnimationState(animation, value, finished))| {
-                (*value, *finished) = animation.value(timestamp.0);
-                if *finished {
+            |done_animations,
+             (
+                id,
+                AnimationState {
+                    animation,
+                    progress,
+                    is_running,
+                    is_finished,
+                },
+            )| {
+                if !*is_running {
+                    return;
+                }
+                let (animation_progress, time_progress) = animation.value_at(timestamp.0);
+                *progress = animation_progress;
+                if time_progress >= 1.0 {
+                    *is_running = false;
+                    *is_finished = true;
                     done_animations.clone().write().unwrap().push(*id);
                 }
             },
@@ -52,7 +67,13 @@ pub(crate) fn execute_transactions(engine: &Engine) -> (Vec<NodeRef>, Vec<FlatSt
                     .map(|id| {
                         animations
                             .get(&id.0)
-                            .map(|AnimationState(_, value, done)| (value, done))
+                            .map(
+                                |AnimationState {
+                                     progress,
+                                     is_finished,
+                                     ..
+                                 }| (progress, is_finished),
+                            )
                             .unwrap_or((1.0, true))
                     })
                     .unwrap_or((1.0, true));
@@ -141,8 +162,8 @@ pub(crate) fn trigger_callbacks(engine: &Engine) {
     let animations = animations.read().unwrap();
     animations
         .iter()
-        .filter(|(_, AnimationState(_, _, finished))| *finished)
-        .for_each(|(id, AnimationState(_animation, _, _))| {
+        .filter(|(_, AnimationState { is_finished, .. })| *is_finished)
+        .for_each(|(id, AnimationState { .. })| {
             if let Some(handler) = engine.transaction_handlers.get(id) {
                 let callbacks = &handler.on_finish;
                 callbacks.iter().for_each(|callback| {

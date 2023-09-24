@@ -100,9 +100,9 @@ fn main() {
             color: Color::new_rgba255(180, 180, 180, 255),
         },
         None,
-    )
-    .set_position(Point { x: 0.0, y: 0.0 }, None)
-    .set_border_corner_radius(10.0, None);
+    );
+    root.set_position(Point { x: 0.0, y: 0.0 }, None);
+    root.set_border_corner_radius(10.0, None);
 
     engine.scene_set_root(root.clone());
     let layer = engine.new_layer();
@@ -167,6 +167,27 @@ fn main() {
                     let layer_tree = view_toggle.view(state);
                     // println!("layer_tree: {:?}", layer_tree);
                     layer.build_layer_tree(&layer_tree);
+                }
+                WindowEvent::KeyboardInput {
+                    device_id,
+                    input,
+                    is_synthetic,
+                } => {
+                    match input.virtual_keycode {
+                        Some(keycode) => match keycode {
+                            winit::event::VirtualKeyCode::Space => {
+                                println!("update");
+                                let dt = 0.016;
+                                let needs_redraw = engine.update(dt);
+                                if needs_redraw {
+                                    env.windowed_context.window().request_redraw();
+                                    // draw_frame = -1;
+                                }
+                            }
+                            _ => (),
+                        },
+                        None => (),
+                    }
                 }
                 _ => (),
             },
