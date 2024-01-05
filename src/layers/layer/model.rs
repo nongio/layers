@@ -17,8 +17,8 @@ pub(crate) struct ModelLayer {
     pub shadow_radius: Attribute<f32>,
     pub shadow_spread: Attribute<f32>,
     pub shadow_color: Attribute<Color>,
-    pub content: Attribute<Option<Image>>,
-    pub blend_mode: BlendMode,
+    pub content: Attribute<Option<Picture>>,
+    pub blend_mode: Attribute<BlendMode>,
     pub opacity: Attribute<f32>,
 }
 
@@ -46,7 +46,7 @@ impl Default for ModelLayer {
         let shadow_spread = Attribute::new(0.0);
         let shadow_color = Attribute::new(Color::new_rgba(0.0, 0.0, 0.0, 1.0));
         let content = Attribute::new(None);
-        let blend_mode = BlendMode::Normal;
+        let blend_mode = Attribute::new(BlendMode::Normal);
         let opacity = Attribute::new(1.0);
         Self {
             anchor_point,

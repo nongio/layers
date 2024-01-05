@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use crate::types::{
     BorderRadius, Color, GradientLinear, GradientRadial, PaintColor, Point, Point3d,
 };
-use skia_safe::Image;
+use skia_safe::{Image, Picture};
 
 #[allow(dead_code)]
 fn linspace(steps: u64, step: u64) -> f32 {
@@ -267,8 +267,8 @@ impl Interpolate for PaintColor {
     }
 }
 
-impl Interpolate for Option<Image> {
-    fn interpolate(&self, other: &Option<Image>, f: f32) -> Option<Image> {
+impl Interpolate for Option<Picture> {
+    fn interpolate(&self, other: &Option<Picture>, f: f32) -> Option<Picture> {
         if f < 0.5 {
             self.clone()
         } else {
