@@ -22,7 +22,7 @@ pub struct RenderLayer {
     pub shadow_color: Color,
     pub shadow_spread: f32,
     pub matrix: Matrix,
-    pub content: Option<Image>,
+    pub content: Option<Picture>,
     pub blend_mode: BlendMode,
     pub opacity: f32,
 }
@@ -41,6 +41,7 @@ impl From<&ModelLayer> for RenderLayer {
         let matrix = model.transform();
         let content = model.content.value();
         let opacity = model.opacity.value();
+        let blend_mode = model.blend_mode.value();
         Self {
             size,
             background_color,
@@ -54,7 +55,7 @@ impl From<&ModelLayer> for RenderLayer {
             shadow_spread,
             matrix,
             content,
-            blend_mode: model.blend_mode.clone(),
+            blend_mode,
             opacity,
         }
     }

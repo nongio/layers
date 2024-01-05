@@ -23,6 +23,39 @@ impl Default for Easing {
     }
 }
 
+/// Easing functions are used to interpolate between two values
+/// over a period of time. The default easing function is ease out.
+/// The easing is calculated using a bezier curve with 2 control points.
+///
+impl Easing {
+    pub fn ease_out() -> Self {
+        Easing::default()
+    }
+    pub fn ease_in() -> Self {
+        Easing {
+            x1: 0.42,
+            y1: 0.0,
+            x2: 1.0,
+            y2: 1.0,
+        }
+    }
+    pub fn ease_in_out() -> Self {
+        Easing {
+            x1: 0.42,
+            y1: 0.0,
+            x2: 0.58,
+            y2: 1.0,
+        }
+    }
+    pub fn linear() -> Self {
+        Easing {
+            x1: 0.0,
+            y1: 0.0,
+            x2: 1.0,
+            y2: 1.0,
+        }
+    }
+}
 #[derive(Clone, Copy, Debug)]
 pub enum TimingFunction {
     Easing(Easing),

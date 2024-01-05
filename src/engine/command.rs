@@ -1,22 +1,19 @@
 //! # Scheduled changes for models
-//! A Renderable defers changes to its properties, scheduling them into the Engine.
+//! A Node defers changes to its properties, scheduling them into the Engine.
 //! Changes are stored in a HashMap storage, that allows for id based read/write as well thread safe parallel iterations.
 //! The changes can include an optional Transition description used by the engine to generate runnable animations.
 //! Animations are separated from the changes to allow grouping of multiple changes in sync.
-//! A Change when executed returns a set of bit flags to mark the affected Renderable for Layout, Paint or render.
-//! On every update the Engine step forward the animations and applies the changes to the Renderables.
+//! A Change when executed returns a set of bit flags to mark the affected Node for Layout, Paint or render.
+//! On every update the Engine step forward the animations and applies the changes to the Nodes.
 
-use std::sync::{
-    atomic::{AtomicUsize, Ordering},
-    Arc, RwLock,
-};
-
-use crate::easing::Interpolate;
-
-/// Changes to models are scheduled to be applied at before the rendering steps
 use super::{
     animation::Transition, node::RenderableFlags, AnimationRef, Command, Engine, SyncCommand,
     TransactionRef,
+};
+use crate::easing::Interpolate;
+use std::sync::{
+    atomic::{AtomicUsize, Ordering},
+    Arc, RwLock,
 };
 
 static ATTRIBUTE_COUNTER: AtomicUsize = AtomicUsize::new(0);
@@ -64,7 +61,7 @@ pub struct AttributeChange<V: Sync> {
     pub transition: Option<Transition>,
 }
 
-/// A representation of a change to a model proprty, including what subsequent
+/// Representation of a change to a model property, including what subsequent
 /// rendering steps are required
 #[derive(Clone, Debug)]
 pub struct ModelChange<T: Sync> {
@@ -108,12 +105,6 @@ impl From<NoopChange> for Option<AnimationRef> {
         None
     }
 }
-
-// impl<T: Sync> WithTransition for ModelChange<T> {
-//     fn transition(&self) -> Option<Transition<Easing>> {
-//         self.value_change.transition
-//     }
-// }
 
 impl<I: Interpolate + Sync + Clone + 'static> Command for ModelChange<I> {
     fn execute(&self, progress: f32) -> RenderableFlags {

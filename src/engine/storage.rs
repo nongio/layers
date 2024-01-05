@@ -3,14 +3,19 @@ use std::sync::{atomic::AtomicUsize, Arc, RwLock};
 use indexmap::IndexMap;
 use indextree::{Arena, Node, NodeId};
 
-/// Internally we are using indexmap and indextree libraries to store the data,
-/// but we are not exposing them to the user. The following typedef are used to easily swap
-/// the underlying data structures.
+/// The implementation utilizes the indexmap and indextree libraries for data storage,
+/// while keeping these dependencies internal and not exposed to the user. The typedefs
+/// specified herein facilitate the substitution of underlying data structures as needed.
 ///
+/// Tree storage data structure.
 pub type TreeStorageData<T> = Arena<T>;
+/// Tree storage node.
 pub type TreeStorageNode<T> = Node<T>;
+/// Tree storage node id.
 pub type TreeStorageId = NodeId;
+/// Flat storage node id.
 pub type FlatStorageId = usize;
+/// Flat storage data structure.
 pub type FlatStorageData<T> = IndexMap<FlatStorageId, T>;
 
 /// Storage class. Allows to store and retrieve objects using their unique id.
@@ -40,7 +45,7 @@ impl<V: Clone + Send + Sync> TreeStorage<V> {
     }
 
     pub fn remove_at(&self, id: &TreeStorageId) {
-        id.remove(&mut self.data.write().unwrap());
+        id.remove_subtree(&mut self.data.write().unwrap());
     }
 }
 
