@@ -27,7 +27,6 @@ use std::{
 
 use crate::{
     layers::layer::{Layer, ModelLayer},
-    layers::Layers,
     types::Point,
 };
 
@@ -178,10 +177,10 @@ impl LayersEngine {
     pub fn update(&self, dt: f32) -> bool {
         self.engine.update(dt)
     }
-    pub fn scene_add_layer(&self, layer: impl Into<Layers>) -> NodeRef {
+    pub fn scene_add_layer(&self, layer: impl Into<Layer>) -> NodeRef {
         self.engine.scene_add_layer(layer, None)
     }
-    pub fn scene_add_layer_to(&self, layer: impl Into<Layers>, parent: Option<NodeRef>) -> NodeRef {
+    pub fn scene_add_layer_to(&self, layer: impl Into<Layer>, parent: Option<NodeRef>) -> NodeRef {
         self.engine.scene_add_layer(layer, parent)
     }
 
@@ -189,7 +188,7 @@ impl LayersEngine {
         self.engine.scene_remove_layer(layer)
     }
 
-    pub fn scene_set_root(&self, layer: impl Into<Layers>) -> NodeRef {
+    pub fn scene_set_root(&self, layer: impl Into<Layer>) -> NodeRef {
         self.engine.scene_set_root(layer)
     }
     pub fn scene(&self) -> &Arc<Scene> {
@@ -224,9 +223,9 @@ impl Engine {
         let new_engine = Self::new();
         Arc::new(new_engine)
     }
-    pub fn scene_set_root(&self, layer: impl Into<Layers>) -> NodeRef {
-        let layer: Arc<Layers> = Arc::new(layer.into());
-        let layout = layer.layout_node();
+    pub fn scene_set_root(&self, layer: impl Into<Layer>) -> NodeRef {
+        let layer: Layer = layer.into();
+        let layout = layer.layout;
 
         let id = self.scene.add(layer.clone(), layout);
         layer.set_id(id);
@@ -249,11 +248,11 @@ impl Engine {
         id
     }
 
-    pub fn scene_add_layer(&self, layer: impl Into<Layers>, parent: Option<NodeRef>) -> NodeRef {
-        let layer: Arc<Layers> = Arc::new(layer.into());
+    pub fn scene_add_layer(&self, layer: impl Into<Layer>, parent: Option<NodeRef>) -> NodeRef {
+        let layer: Layer = layer.into();
         let mut layout_tree = self.layout_tree.write().unwrap();
 
-        let layer_layout = layer.layout_node();
+        let layer_layout = layer.layout;
         let id = self.scene.append(parent, layer.clone(), layer_layout);
         layer.set_id(id);
 
@@ -425,7 +424,7 @@ impl Engine {
         }
         result
     }
-
+    #[allow(clippy::unwrap_or_default)]
     fn add_transaction_handler<F: Fn(f32) + Send + Sync + 'static>(
         &self,
         transaction: TransactionRef,

@@ -6,9 +6,9 @@ use std::{
 };
 use taffy::prelude::{Layout, Node};
 
-use crate::{layers::Layers, types::*};
+use crate::{layers::layer::Layer, types::*};
 
-use super::{draw_to_picture::DrawToPicture, rendering::Drawable, NodeRef};
+use super::{draw_to_picture::DrawToPicture, NodeRef};
 pub(crate) mod contains_point;
 pub(crate) mod draw_cache_management;
 
@@ -16,9 +16,9 @@ pub use contains_point::ContainsPoint;
 pub use draw_cache_management::DrawCacheManagement;
 
 /// SceneNode is the main data structure for the engine. It contains a model
-/// that can be rendered, and a layout node that can be used to layout the
+/// that can be rendered, and a layout node that can be used to position and size the
 /// model. As well it contains the data structures that are used to cache
-/// the rendering of the model. Caching is done using skia display lists.
+/// the rendering of the model. Caching is done using skia Picture.
 
 #[derive(Clone, Debug)]
 pub struct DrawCache {
@@ -38,9 +38,6 @@ impl DrawCache {
     }
 }
 
-/// A trait for objects that can be rendered (and cached) by the engine.
-pub trait RenderNode: Drawable + DrawToPicture + Send + Sync {}
-
 bitflags! {
     pub struct RenderableFlags: u32 {
         const NOOP = 1 << 0;
@@ -53,7 +50,7 @@ bitflags! {
 
 #[derive(Clone)]
 pub struct SceneNode {
-    pub model: Arc<Layers>,
+    pub model: Layer,
     pub transformation: Arc<RwLock<skia_safe::Matrix>>,
     pub scale: Arc<RwLock<(f32, f32)>>,
     pub draw_cache: Arc<RwLock<Option<DrawCache>>>,
@@ -66,7 +63,7 @@ impl SceneNode {
     pub fn id(&self) -> Option<NodeRef> {
         self.model.id()
     }
-    pub fn with_renderable_and_layout(model: Arc<Layers>, layout_node: Node) -> Self {
+    pub fn with_renderable_and_layout(model: Layer, layout_node: Node) -> Self {
         Self {
             model,
             transformation: Arc::new(RwLock::new(skia_safe::Matrix::new_identity())),
@@ -141,6 +138,7 @@ impl DrawCacheManagement for SceneNode {
             .contains(RenderableFlags::NEEDS_LAYOUT)
         {
             let identity = M44::new_identity();
+            // self.model.set_size(layout.size.width, layout.size.height);
             let bounds = self.model.bounds();
             let translate = M44::translate(
                 layout.location.x + bounds.x,
@@ -148,13 +146,13 @@ impl DrawCacheManagement for SceneNode {
                 0.0,
             );
             let scale = self.model.scale();
-            let scale = M44::scale(scale.0, scale.1, 0.0);
+            let scale = M44::scale(scale.x, scale.y, 0.0);
             let transform = M44::concat(&translate, &identity);
             let transform = M44::concat(&transform, &scale);
             let anchor_point = self.model.anchor_point();
             let anchor_point = M44::translate(
-                -anchor_point.0 * bounds.width,
-                -anchor_point.1 * bounds.height,
+                -anchor_point.x * bounds.width,
+                -anchor_point.y * bounds.height,
                 0.0,
             );
             let transform = M44::concat(&transform, &anchor_point);
@@ -162,7 +160,7 @@ impl DrawCacheManagement for SceneNode {
             // let transform = M44::concat(&transform, &rotate_y);
             // let transform = M44::concat(&transform, &rotate_z);
             *self.transformation.write().unwrap() = transform.to_m33();
-            *self.scale.write().unwrap() = self.model.scale();
+            *self.scale.write().unwrap() = self.model.scale().into();
             self.set_need_layout(false);
             // self.set_need_repaint(true);
             // self.set_need_raster(true);

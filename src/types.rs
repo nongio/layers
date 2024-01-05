@@ -216,6 +216,11 @@ impl From<Point> for skia_safe::Point {
         }
     }
 }
+impl From<Point> for (f32, f32) {
+    fn from(point: Point) -> (f32, f32) {
+        (point.x, point.y)
+    }
+}
 
 impl From<Point3d> for skia_safe::Point3 {
     fn from(point: Point3d) -> Self {

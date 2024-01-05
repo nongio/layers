@@ -7,7 +7,7 @@
 use std::sync::Arc;
 use taffy::prelude::Node;
 
-use crate::layers::Layers;
+use crate::prelude::Layer;
 
 use super::{
     node::SceneNode,
@@ -20,7 +20,7 @@ pub struct Scene {
 }
 
 impl Scene {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             ..Default::default()
         }
@@ -48,18 +48,18 @@ impl Scene {
         self.nodes.get(id)
     }
 
-    pub fn add<R: Into<Arc<Layers>>>(&self, renderable: R, layout: Node) -> NodeRef {
-        let renderable: Arc<Layers> = renderable.into();
+    pub fn add<R: Into<Layer>>(&self, renderable: R, layout: Node) -> NodeRef {
+        let renderable: Layer = renderable.into();
         let node = SceneNode::with_renderable_and_layout(renderable, layout);
         self.insert_node(&node, None)
     }
-    pub fn append<R: Into<Arc<Layers>>>(
+    pub fn append<R: Into<Layer>>(
         &self,
         parent: Option<NodeRef>,
         renderable: R,
         layout: Node,
     ) -> NodeRef {
-        let renderable: Arc<Layers> = renderable.into();
+        let renderable: Layer = renderable.into();
         let node = SceneNode::with_renderable_and_layout(renderable, layout);
         self.insert_node(&node, parent)
     }

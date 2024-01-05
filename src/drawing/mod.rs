@@ -4,4 +4,3 @@
 
 pub mod layer;
 pub mod scene;
-pub mod text;

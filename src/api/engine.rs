@@ -5,7 +5,7 @@ use crate::{
         self,
         // pointer::{ButtonState, PointerHandler},
     },
-    layers::{layer::Layer, text::TextLayer},
+    layers::layer::Layer,
 };
 
 /// C api to the LayersEngine
@@ -28,18 +28,6 @@ pub extern "C" fn engine_add_layer_to_scene(
 ) -> usize {
     let engine = unsafe { &*engine };
     let layer = unsafe { Arc::from_raw(layer) };
-    let layer = (*layer).clone();
-
-    engine.scene_add_layer(layer).0.into()
-}
-
-#[no_mangle]
-pub extern "C" fn engine_add_text(
-    engine: *const engine::LayersEngine,
-    text: *const TextLayer,
-) -> usize {
-    let engine = unsafe { &*engine };
-    let layer = unsafe { Arc::from_raw(text) };
     let layer = (*layer).clone();
 
     engine.scene_add_layer(layer).0.into()
