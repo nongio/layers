@@ -149,7 +149,9 @@ impl LayersEngine {
             engine: Engine::create(width, height),
         }
     }
-
+    pub fn set_scene_size(&self, width: f32, height: f32) {
+        self.engine.scene.set_size(width, height);
+    }
     pub fn new_layer(&self) -> Layer {
         let model = Arc::new(ModelLayer::default());
 

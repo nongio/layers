@@ -4,7 +4,7 @@
 //! The scene is a tree of renderable nodes (implementing the `Renderable` trait).
 //! The tree is stored in a memory arena using IndexTree, which allow fast read/write and thread safe parallel iterations.
 
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use taffy::prelude::Node;
 
 use crate::prelude::{Layer, Point};
@@ -17,7 +17,7 @@ use super::{
 };
 pub struct Scene {
     pub nodes: TreeStorage<SceneNode>,
-    pub size: Point,
+    pub size: RwLock<Point>,
 }
 
 impl Scene {
@@ -25,11 +25,18 @@ impl Scene {
         let nodes = TreeStorage::new();
         Self {
             nodes,
-            size: Point {
+            size: RwLock::new(Point {
                 x: width,
                 y: height,
-            },
+            }),
         }
+    }
+    pub fn set_size(&self, width: f32, height: f32) {
+        let mut size = self.size.write().unwrap();
+        *size = Point {
+            x: width,
+            y: height,
+        };
     }
     pub(crate) fn create(width: f32, height: f32) -> Arc<Scene> {
         Arc::new(Self::new(width, height))

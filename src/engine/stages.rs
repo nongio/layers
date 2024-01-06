@@ -121,12 +121,8 @@ pub(crate) fn update_layout_tree(engine: &Engine) {
     let layout_root = *engine.layout_root.read().unwrap();
 
     if layout.dirty(layout_root).unwrap() {
-        // let scene_root = *engine.scene_root.read().unwrap().unwrap();
-        // let scene_root = engine.scene.get_node(scene_root).unwrap();
+        let scene_size = engine.scene.size.read().unwrap();
 
-        // let scene_root = scene_root.get();
-        let scene_size = engine.scene.size;
-        // println!("scene size: {:?}", scene_size);
         layout
             .compute_layout(
                 layout_root,
