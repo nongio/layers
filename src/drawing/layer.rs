@@ -8,7 +8,7 @@ use skia_safe::{Canvas, ClipOp, Point, RRect, Rect};
 use crate::layers::layer::render_layer::RenderLayer;
 use crate::types::PaintColor;
 
-pub fn draw_layer(canvas: &mut Canvas, layer: &RenderLayer) {
+pub(crate) fn draw_layer(canvas: &mut Canvas, layer: &RenderLayer) {
     let bounds = Rect::from_xywh(0.0, 0.0, layer.size.x, layer.size.y);
     let rrbounds = RRect::new_rect_radii(
         bounds,

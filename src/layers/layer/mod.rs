@@ -1,23 +1,20 @@
 pub(crate) mod drawable;
 pub(crate) mod model;
 pub(crate) mod render_layer;
-pub(crate) mod render_node;
-
 pub(crate) use self::model::ModelLayer;
-pub use self::render_layer::{RenderLayer, RenderLayerBuilder};
 
 use skia_safe::gpu::BackendTexture;
-use skia_safe::image::CachingHint;
-use skia_safe::{Bitmap, Pixmap};
-use std::sync::Arc;
+
+use skia_safe::gpu;
+use skia_safe::gpu::gl::TextureInfo;
 use std::sync::RwLock;
+use std::{fmt, sync::Arc};
 use taffy::prelude::Node;
 use taffy::style::Style;
 
 use crate::engine::animation::*;
 use crate::engine::command::*;
 use crate::engine::node::RenderableFlags;
-use crate::engine::rendering::Drawable;
 use crate::engine::{Engine, NodeRef, TransactionRef};
 
 use crate::types::*;
@@ -27,7 +24,7 @@ pub struct Layer {
     pub(crate) engine: Arc<Engine>,
     pub id: Arc<RwLock<Option<NodeRef>>>,
     pub(crate) model: Arc<ModelLayer>,
-    pub layout: Node,
+    pub layout_node_id: Node,
 }
 
 impl Layer {
@@ -47,7 +44,7 @@ impl Layer {
             engine: engine.clone(),
             id,
             model,
-            layout,
+            layout_node_id: layout,
         }
     }
     pub fn set_id(&self, id: NodeRef) {
@@ -74,13 +71,8 @@ impl Layer {
     change_model!(shadow_radius, f32, RenderableFlags::NEEDS_PAINT);
     change_model!(shadow_spread, f32, RenderableFlags::NEEDS_PAINT);
     change_model!(shadow_color, Color, RenderableFlags::NEEDS_PAINT);
-    change_model!(content, Option<Image>, RenderableFlags::NEEDS_PAINT);
+    change_model!(content, Option<Picture>, RenderableFlags::NEEDS_PAINT);
     change_model!(opacity, f32, RenderableFlags::NEEDS_PAINT);
-    // change_model!(
-    //     size,
-    //     Point,
-    //     RenderableFlags::NEEDS_LAYOUT | RenderableFlags::NEEDS_PAINT
-    // );
 
     pub fn set_size(
         &self,
@@ -98,90 +90,41 @@ impl Layer {
         let mut tr = TransactionRef(0);
         if let Some(id) = id {
             let animation = transition.map(|t| {
-                (
-                    self.engine.add_animation(
-                        Animation {
-                            duration: t.duration,
-                            timing: t.timing,
-                            start: t.delay + self.engine.now(),
-                        },
-                        true,
-                    ),
-                    t,
+                self.engine.add_animation(
+                    Animation {
+                        duration: t.duration,
+                        timing: t.timing,
+                        start: t.delay + self.engine.now(),
+                    },
+                    true,
                 )
             });
-            let aid = animation.map(|(a, _)| a);
-            tr = self.engine.schedule_change(id, change, aid);
+
+            tr = self.engine.schedule_change(id, change, animation);
         } else {
             self.model.size.set(value);
-            self.engine.set_node_layout_size(self.layout, value);
+            // self.engine.set_node_layout_size(self.layout, value);
         }
         tr
     }
 
     pub fn set_layout_style(&self, style: Style) {
-        self.engine.set_node_layout_style(self.layout, style);
+        self.engine
+            .set_node_layout_style(self.layout_node_id, style);
     }
 
-    pub fn into_render_layer(self) -> RenderLayer {
-        let model = &*self.model;
-        model.into()
-    }
-    // pub fn set_content_from_file(&self, file_path: &str) {
-    //     // read jpg file
-    //     let data = std::fs::read(file_path).unwrap();
-    //     unsafe {
-    //         let data = skia_safe::Data::new_bytes(data.as_slice());
-    //         let content = Image::from_encoded(data);
-
-    //         self.set_content(content.clone(), None);
-    //     }
-    // }
-    pub fn set_content_from_data_raster_rgba8(
-        &self,
-        data: &Vec<u8>,
-        width: impl Into<i32>,
-        height: impl Into<i32>,
-    ) {
-        let width = width.into();
-        let height = height.into();
-        unsafe {
-            let image_info = skia_safe::ImageInfo::new(
-                skia_safe::ISize::new(width, height),
-                skia_safe::ColorType::RGBA8888,
-                skia_safe::AlphaType::Premul,
-                None,
-            );
-
-            let data = skia_safe::Data::new_bytes(data.as_slice());
-            let row_bytes = width as usize * image_info.bytes_per_pixel();
-            let pixmap = Pixmap::new(&image_info, data.as_bytes(), row_bytes);
-
-            let mut bitmap = Bitmap::new();
-            bitmap.install_pixels(&image_info, pixmap.writable_addr(), row_bytes);
-            let content = Image::from_bitmap(&bitmap);
-
-            if let Some(image) = content {
-                self.set_content(Some(image), None);
-            }
-        }
+    pub fn set_node_layout_size(&self, size: Point) {
+        self.engine.set_node_layout_size(self.layout_node_id, size);
     }
 
-    pub fn set_content_from_data_encoded(&self, data: &Vec<u8>) {
-        unsafe {
-            let data = skia_safe::Data::new_bytes(data.as_slice());
-
-            let content = Image::from_encoded(data);
-            if let Some(image) = content {
-                let image = image.to_raster_image(None);
-                println!("image size: {:?}", image);
-                self.set_content(image, None);
-            }
-        }
+    pub fn node_layout_style(&self) -> Style {
+        self.engine.get_node_layout_style(self.layout_node_id)
     }
+
     // // set content from gl texture
     pub fn set_content_from_texture(
         &self,
+        context: &mut gpu::RecordingContext,
         texture_id: u32,
         target: skia_safe::gpu::gl::Enum,
         // _format: skia_safe::gpu::gl::Enum,
@@ -189,47 +132,58 @@ impl Layer {
     ) {
         let size = size.into();
         unsafe {
-            let mut gr_context: skia_safe::gpu::DirectContext =
-                skia_safe::gpu::DirectContext::new_gl(None, None).unwrap();
-
-            let mut texture_info =
-                skia_safe::gpu::gl::TextureInfo::from_target_and_id(target, texture_id);
-            texture_info.format = skia_safe::gpu::gl::Format::RGBA8.into();
+            let texture_info = TextureInfo {
+                target,
+                id: texture_id,
+                format: skia_safe::gpu::gl::Format::RGBA8.into(),
+            };
 
             let texture = BackendTexture::new_gl(
                 (size.x as i32, size.y as i32),
-                skia_safe::gpu::MipMapped::Yes,
+                skia_safe::gpu::MipMapped::No,
                 texture_info,
             );
 
             let image = Image::from_texture(
-                &mut gr_context,
+                context,
                 &texture,
                 skia_safe::gpu::SurfaceOrigin::TopLeft,
                 skia_safe::ColorType::RGBA8888,
-                skia_safe::AlphaType::Opaque,
+                skia_safe::AlphaType::Premul,
                 None,
             )
             .unwrap();
 
-            let image = image.to_raster_image(CachingHint::Allow).unwrap();
+            let mut recorder = skia_safe::PictureRecorder::new();
+            let canvas = recorder.begin_recording(
+                skia_safe::Rect::from_wh(image.width() as f32, image.height() as f32),
+                None,
+            );
+            canvas.draw_image(&image, (0.0, 0.0), None);
+            let picture = recorder.finish_recording_as_picture(None);
 
-            self.set_content(Some(image), None);
+            self.model.content.set(picture);
+            if let Some(id) = self.id() {
+                let change = Arc::new(NoopChange::new(id.0.into()));
+                self.engine.schedule_change(id, change, None);
+            }
         }
-    }
-
-    pub fn bounds(&self) -> Rectangle {
-        self.model.bounds()
     }
 
     pub fn add_sublayer(&self, layer: Layer) -> NodeRef {
         self.engine.scene_add_layer(layer, self.id())
     }
 
-    // pub fn build(&self, layer: &LayerTree) -> &Self {
-    //     self.set_size(layer.root.size, None);
-    //     self.set_background_color(layer.root.background_color.clone(), None)
-    //         .set_border_corner_radius(layer.root.border_corner_radius, None);
-    //     self
-    // }
+    pub fn set_blend_mode(&self, blend_mode: BlendMode) {
+        self.model.blend_mode.set(blend_mode);
+    }
+}
+
+impl fmt::Debug for Layer {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Layer")
+            .field("id", &self.id())
+            // .field("model", &self.model)
+            .finish()
+    }
 }

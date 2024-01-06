@@ -178,7 +178,7 @@ impl Default for Point {
     }
 }
 
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Copy, Default, Debug)]
 #[repr(u32)]
 pub enum BlendMode {
     #[default]

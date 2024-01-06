@@ -43,7 +43,10 @@ impl Scene {
         NodeRef(id)
     }
 
-    pub fn get_node(&self, id: impl Into<TreeStorageId>) -> Option<TreeStorageNode<SceneNode>> {
+    pub fn get_node(
+        &self,
+        id: impl Into<TreeStorageId>,
+    ) -> Option<TreeStorageNode<SceneNode>> {
         let id = id.into();
         self.nodes.get(id)
     }

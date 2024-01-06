@@ -6,9 +6,14 @@ use std::{
 };
 use taffy::prelude::{Layout, Node};
 
-use crate::{layers::layer::Layer, types::*};
+use crate::{
+    layers::layer::{render_layer::RenderLayer, Layer},
+    types::*,
+};
 
-use super::{draw_to_picture::DrawToPicture, NodeRef};
+use super::NodeRef;
+use crate::engine::draw_to_picture::DrawToPicture;
+
 pub(crate) mod contains_point;
 pub(crate) mod draw_cache_management;
 
@@ -43,40 +48,35 @@ bitflags! {
         const NOOP = 1 << 0;
         const NEEDS_LAYOUT = 1 << 1;
         const NEEDS_PAINT = 1 << 2;
-        const NEEDS_RASTER = 1 << 3;
-        const ANIMATING = 1 << 4;
+        const ANIMATING = 1 << 3;
     }
 }
 
 #[derive(Clone)]
 pub struct SceneNode {
-    pub model: Layer,
-    pub transformation: Arc<RwLock<skia_safe::Matrix>>,
-    pub scale: Arc<RwLock<(f32, f32)>>,
+    pub layer: Layer,
+    pub(crate) render_layer: Arc<RwLock<RenderLayer>>,
     pub draw_cache: Arc<RwLock<Option<DrawCache>>>,
     pub flags: Arc<RwLock<RenderableFlags>>,
-    pub layout_node: Node,
-    pub deleted: bool,
+    pub layout_node_id: Node,
 }
 
 impl SceneNode {
     pub fn id(&self) -> Option<NodeRef> {
-        self.model.id()
+        self.layer.id()
     }
-    pub fn with_renderable_and_layout(model: Layer, layout_node: Node) -> Self {
+    pub fn with_renderable_and_layout(layer: Layer, layout_node: Node) -> Self {
+        let render_layer = RenderLayer::default();
         Self {
-            model,
-            transformation: Arc::new(RwLock::new(skia_safe::Matrix::new_identity())),
-            scale: Arc::new(RwLock::new((1.0, 1.0))),
+            layer,
             draw_cache: Arc::new(RwLock::new(None)),
             flags: Arc::new(RwLock::new(
                 RenderableFlags::NEEDS_PAINT
                     | RenderableFlags::NEEDS_LAYOUT
-                    | RenderableFlags::NEEDS_PAINT
-                    | RenderableFlags::NEEDS_RASTER,
+                    | RenderableFlags::NEEDS_PAINT,
             )),
-            layout_node,
-            deleted: false,
+            layout_node_id: layout_node,
+            render_layer: Arc::new(RwLock::new(render_layer)),
         }
     }
     pub fn insert_flags(&self, flags: RenderableFlags) {
@@ -85,12 +85,11 @@ impl SceneNode {
     pub fn remove_flags(&self, flags: RenderableFlags) {
         self.flags.write().unwrap().remove(flags);
     }
-}
-#[derive(Clone)]
-pub struct SceneNodeHandle(pub Arc<SceneNode>);
-impl SceneNodeHandle {
-    pub fn new(node: SceneNode) -> Self {
-        Self(Arc::new(node))
+    pub fn bounds(&self) -> Rectangle {
+        self.render_layer.read().unwrap().bounds
+    }
+    pub fn transform(&self) -> Matrix {
+        self.render_layer.read().unwrap().transform
     }
 }
 
@@ -102,29 +101,22 @@ impl DrawCacheManagement for SceneNode {
             .unwrap()
             .contains(RenderableFlags::NEEDS_PAINT);
         let mut draw_cache = self.draw_cache.write().unwrap();
+        let render_layer = self.render_layer.read().unwrap();
+
+        // if the size has changed from the layout, we need to repaint
+        // the flag want be set if the size has changed from the layout calculations
         if let Some(dc) = &*draw_cache {
-            let bounds = self.model.bounds();
-            let size = Size {
-                x: bounds.width,
-                y: bounds.height,
-            };
-            if size != *dc.size() {
+            if render_layer.size != *dc.size() {
                 needs_repaint = true;
                 // println!("Repainting because size changed");
             }
         }
         if needs_repaint {
-            let picture = self.model.draw_to_picture();
+            let picture = render_layer.draw_to_picture();
             if let Some(picture) = picture {
-                let bounds = self.model.bounds();
-                let size = Size {
-                    x: bounds.width,
-                    y: bounds.height,
-                };
-                let new_cache = DrawCache::new(picture, size);
+                let new_cache = DrawCache::new(picture, render_layer.size);
                 *draw_cache = Some(new_cache);
                 self.set_need_repaint(false);
-                self.set_need_raster(true);
             }
         }
     }
@@ -137,33 +129,10 @@ impl DrawCacheManagement for SceneNode {
             .unwrap()
             .contains(RenderableFlags::NEEDS_LAYOUT)
         {
-            let identity = M44::new_identity();
-            // self.model.set_size(layout.size.width, layout.size.height);
-            let bounds = self.model.bounds();
-            let translate = M44::translate(
-                layout.location.x + bounds.x,
-                layout.location.y + bounds.y,
-                0.0,
-            );
-            let scale = self.model.scale();
-            let scale = M44::scale(scale.x, scale.y, 0.0);
-            let transform = M44::concat(&translate, &identity);
-            let transform = M44::concat(&transform, &scale);
-            let anchor_point = self.model.anchor_point();
-            let anchor_point = M44::translate(
-                -anchor_point.x * bounds.width,
-                -anchor_point.y * bounds.height,
-                0.0,
-            );
-            let transform = M44::concat(&transform, &anchor_point);
-            // let transform = M44::concat(&transform, &rotate_x);
-            // let transform = M44::concat(&transform, &rotate_y);
-            // let transform = M44::concat(&transform, &rotate_z);
-            *self.transformation.write().unwrap() = transform.to_m33();
-            *self.scale.write().unwrap() = self.model.scale().into();
+            *self.render_layer.write().unwrap() =
+                RenderLayer::from_model_and_layout(&self.layer.model, layout);
+
             self.set_need_layout(false);
-            // self.set_need_repaint(true);
-            // self.set_need_raster(true);
         }
     }
 
@@ -179,21 +148,9 @@ impl DrawCacheManagement for SceneNode {
             .unwrap()
             .set(RenderableFlags::NEEDS_LAYOUT, need_layout);
     }
-    fn set_need_raster(&self, need_raster: bool) {
-        self.flags
-            .write()
-            .unwrap()
-            .set(RenderableFlags::NEEDS_RASTER, need_raster);
-    }
-    fn need_raster(&self) -> bool {
-        self.flags
-            .read()
-            .unwrap()
-            .contains(RenderableFlags::NEEDS_RASTER)
-    }
 }
 
-pub fn try_get_node(node: indextree::Node<SceneNode>) -> Option<SceneNode> {
+pub(crate) fn try_get_node(node: indextree::Node<SceneNode>) -> Option<SceneNode> {
     if node.is_removed() {
         None
     } else {

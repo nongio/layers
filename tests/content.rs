@@ -1,5 +1,6 @@
 use layers::drawing::scene::DrawScene;
 use layers::engine::LayersEngine;
+use layers::prelude::Layer;
 use layers::types::Point;
 use std::sync::Arc;
 
@@ -23,7 +24,7 @@ pub fn load_content_from_encoded_buffer() {
     let _id = engine.scene_add_layer(layer.clone());
 
     let data = std::fs::read("./assets/fill.png").unwrap();
-    layer.set_content_from_data_encoded(&data);
+    // layer.set_content_from_data_encoded(&data);
 
     engine.update(0.0);
     renderer.draw_scene(engine.scene(), engine.scene_root().unwrap());

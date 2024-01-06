@@ -7,44 +7,12 @@ use std::collections::VecDeque;
 use derive_builder::Builder;
 
 use self::layer::Layer;
-use crate::drawing::layer::draw_layer;
 use crate::engine::NodeRef;
 use crate::prelude::*;
 use indextree::NodeId;
 use skia_safe::Picture;
 
 pub mod layer;
-
-impl Drawable for Layer {
-    fn bounds(&self) -> Rectangle {
-        self.model.bounds()
-    }
-    fn draw(&self, canvas: &mut skia_safe::Canvas) {
-        draw_layer(canvas, &RenderLayer::from(&*self.model))
-    }
-    fn scale(&self) -> (f32, f32) {
-        self.model.scale()
-    }
-    fn scaled_bounds(&self) -> Rectangle {
-        self.model.scaled_bounds()
-    }
-    fn transform(&self) -> Matrix {
-        self.model.transform()
-    }
-    fn anchor_point(&self) -> (f32, f32) {
-        self.model.anchor_point()
-    }
-    fn opacity(&self) -> f32 {
-        self.model.opacity()
-    }
-
-    fn blend_mode(&self) -> BlendMode {
-        self.model.blend_mode()
-    }
-    fn border_corner_radius(&self) -> BorderRadius {
-        self.model.border_corner_radius()
-    }
-}
 
 // #[repr(C)]
 #[derive(Clone, Debug, Builder, Default)]
@@ -92,7 +60,7 @@ impl BuildLayerTree for Layer {
         layer.set_shadow_spread(tree.shadow_spread.0, tree.shadow_spread.1);
         layer.set_layout_style(tree.layout_style.clone());
         layer.set_opacity(tree.opacity.0, tree.opacity.1);
-        layer.set_blend_mode(tree.blend_mode.clone());
+        layer.set_blend_mode(tree.blend_mode);
         layer.set_content(tree.content.0.clone(), tree.content.1);
 
         let id = layer.id();
@@ -128,7 +96,7 @@ impl BuildLayerTree for Layer {
                 let layer = arena.get(layer).unwrap();
                 let layer = layer.get().clone();
                 drop(arena);
-                layer.model.build_layer_tree(child);
+                layer.layer.build_layer_tree(child);
             }
 
             while let Some(child) = child_layers.pop_front() {

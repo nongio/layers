@@ -1,13 +1,12 @@
 use std::sync::{Arc, RwLock};
 
-use indextree::Node;
 use rayon::prelude::{IntoParallelRefIterator, IntoParallelRefMutIterator, ParallelIterator};
 use taffy::{prelude::Size, style_helpers::points};
 
-use crate::prelude::Drawable;
+use crate::prelude::Point;
 
 use super::{
-    node::{try_get_node, DrawCacheManagement, RenderableFlags, SceneNode},
+    node::{try_get_node, DrawCacheManagement, RenderableFlags},
     storage::FlatStorageId,
     AnimationState, Engine, NodeRef, Timestamp,
 };
@@ -92,12 +91,14 @@ pub(crate) fn execute_transactions(engine: &Engine) -> (Vec<NodeRef>, Vec<FlatSt
                     {
                         if let Some(node) = try_get_node(node) {
                             if flags.contains(RenderableFlags::NEEDS_LAYOUT) {
-                                let bounds = node.model.bounds();
-                                let size = crate::types::Size {
-                                    x: bounds.width,
-                                    y: bounds.height,
-                                };
-                                engine.set_node_layout_size(node.layout_node, size);
+                                let size = node.layer.model.size.value();
+                                engine.set_node_layout_size(
+                                    node.layout_node_id,
+                                    Point {
+                                        x: points(size.x),
+                                        y: points(size.y),
+                                    },
+                                );
                             }
 
                             updated_nodes.write().unwrap().push(node_id);
@@ -132,16 +133,21 @@ pub(crate) fn update_layout_tree(engine: &Engine) {
         let scene_root = engine.scene.get_node(scene_root).unwrap();
 
         let scene_root = scene_root.get();
-        let bounds = scene_root.model.bounds();
+        let scene_size = scene_root.layer.model.size.value();
+        // println!("scene size: {:?}", scene_size);
         layout
             .compute_layout(
                 layout_root,
                 Size {
-                    width: points(bounds.width),
-                    height: points(bounds.height),
+                    width: points(scene_size.x),
+                    height: points(scene_size.y),
                 },
             )
             .unwrap();
+        // println!(
+        //     "layout tree updated {:?}",
+        //     layout.layout(layout_root).unwrap()
+        // );
     }
 }
 
@@ -151,12 +157,19 @@ pub(crate) fn update_nodes(engine: &Engine, nodes_list: Vec<NodeRef>) {
     let layout = engine.layout_tree.read().unwrap();
     let arena = engine.scene.nodes.data();
     let arena = arena.read().unwrap();
-    nodes_list.par_iter().for_each(|node_id| {
+    let mut sorted_nodes = nodes_list.clone();
+    sorted_nodes.sort();
+    sorted_nodes.dedup();
+    sorted_nodes.par_iter().for_each(|node_id| {
         let node = arena.get(node_id.0).unwrap().get();
-        let l = layout.layout(node.layout_node).unwrap();
+        let l = layout.layout(node.layout_node_id).unwrap();
+        // println!("layout: {:?}", l);
         node.layout_if_needed(l);
         node.repaint_if_needed();
     });
+    if !sorted_nodes.is_empty() {
+        // println!("updated nodes: {:?}", sorted_nodes.len());
+    }
 }
 
 pub(crate) fn trigger_callbacks(engine: &Engine) {
@@ -195,31 +208,4 @@ pub(crate) fn cleanup_transactions(engine: &Engine, finished_transations: Vec<Fl
         transactions.remove(command_id);
         handlers.remove(command_id);
     }
-}
-
-pub(crate) fn cleanup_layers(engine: &Engine) {
-    let scene = engine.scene.clone();
-    let nodes: Arc<RwLock<indextree::Arena<super::node::SceneNode>>> = scene.nodes.data();
-
-    let nodes = nodes.read().unwrap();
-    let deleted_nodes: Vec<Node<SceneNode>> = nodes
-        .iter()
-        .filter(|node| {
-            if node.is_removed() {
-                return false;
-            }
-            let scene_node = node.get();
-
-            scene_node.deleted && scene_node.model.id().is_some()
-        })
-        .map(|node| node.to_owned())
-        .collect();
-    drop(nodes);
-    deleted_nodes.iter().for_each(|delete_node| {
-        if let Some(node) = try_get_node(delete_node.to_owned()) {
-            scene.remove(node.id().unwrap());
-            let mut layout_tree = engine.layout_tree.write().unwrap();
-            layout_tree.remove(node.layout_node).unwrap();
-        }
-    })
 }

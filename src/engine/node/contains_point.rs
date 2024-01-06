@@ -1,6 +1,6 @@
 use skia_safe::Point as SkiaPoint;
 
-use crate::{prelude::Drawable, types::*};
+use crate::types::*;
 
 use super::SceneNode;
 
@@ -10,14 +10,15 @@ pub trait ContainsPoint {
 
 impl ContainsPoint for SceneNode {
     fn contains(&self, point: Point) -> bool {
-        let matrix = self.transformation.read().unwrap();
+        let render_layer = self.render_layer.read().unwrap();
+        let matrix = render_layer.transform;
         let inverse = matrix.invert().unwrap();
         let point = inverse.map_point(SkiaPoint::new(point.x, point.y));
         let point = Point {
             x: point.x,
             y: point.y,
         };
-        self.model.bounds().contains(point)
+        render_layer.bounds.contains(point)
     }
 }
 

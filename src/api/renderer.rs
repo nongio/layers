@@ -1,3 +1,5 @@
+use skia_safe::ColorType;
+
 use crate::{drawing::scene::DrawScene, engine, renderer::skia_fbo::SkiaFboRenderer};
 
 #[no_mangle]
@@ -6,9 +8,18 @@ pub extern "C" fn create_skia_renderer(
     height: i32,
     sample_count: usize,
     stencil_bits: usize,
-    fboid: usize,
+    fboid: u32,
 ) -> *mut SkiaFboRenderer {
-    let renderer = SkiaFboRenderer::new(width, height, sample_count, stencil_bits, fboid);
+    let renderer = SkiaFboRenderer::new(
+        width,
+        height,
+        sample_count,
+        stencil_bits,
+        fboid,
+        ColorType::RGBA8888,
+        skia_safe::gpu::SurfaceOrigin::BottomLeft,
+        None,
+    );
     Box::into_raw(Box::new(renderer))
 }
 

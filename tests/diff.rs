@@ -2,8 +2,8 @@ use std::{borrow::Borrow, sync::Arc, vec};
 
 use diff::Differ;
 use layers::{
-    engine::{CommandWithTransition, LayersEngine},
-    layers::layer::RenderLayer,
+    engine::LayersEngine,
+    // layers::layer::RenderLayer,
     types::{BorderRadius, BorderStyle, Color, PaintColor, Point, Size},
 };
 
@@ -14,7 +14,7 @@ struct Layer {
     // pub background_color: PaintColor,
     // pub border_color: PaintColor,
     pub border_width: f32,
-    pub border_style: BorderStyle,
+    // pub border_style: BorderStyle,
     pub border_corner_radius: BorderRadius,
 }
 
@@ -28,53 +28,32 @@ pub fn diff_layers() {
     let differ = LayerDiffer {};
     let engine = LayersEngine::new();
     let layer1 = engine.new_layer();
-    layer1
-        .set_size(Size { x: 100.0, y: 100.0 }, None)
-        .set_position(Point { x: 50.0, y: 50.0 }, None)
-        .set_background_color(
-            PaintColor::Solid {
-                color: Color::new_hex("#76d7c4"),
-            },
-            None,
-        )
-        .set_border_corner_radius(1.0, None);
 
     let layer2 = engine.new_layer();
-    layer2
-        .set_size(Size { x: 600.0, y: 600.0 }, None)
-        .set_position(Point { x: 50.0, y: 50.0 }, None)
-        .set_background_color(
-            PaintColor::Solid {
-                color: Color::new_hex("#76d7c4"),
-            },
-            None,
-        )
-        .set_border_corner_radius(50.0, None);
 
-    let r1 = layer1.into_render_layer();
-    let r2 = layer2.into_render_layer();
+    // let r1 = layer1.into_render_layer();
+    // let r2 = layer2.into_render_layer();
 
-    let r3 = differ.diff(&r1, &r2);
-    println!("{:?}", r3);
+    // let r3 = differ.diff(&r1, &r2);
+    // println!("{:?}", r3);
 }
 
 struct LayerDiffer {}
-impl Differ<RenderLayer> for LayerDiffer {
-    type Repr = Vec<Arc<dyn CommandWithTransition>>;
-    fn diff(&self, a: &RenderLayer, b: &RenderLayer) -> Self::Repr {
-        let commands = vec![];
-        if a.size != b.size {
-            
-            commands.push(CommandWithTransition::SetSize {
-                size: b.size,
-                transition: None,
-            });
-        }
+// impl Differ<RenderLayer> for LayerDiffer {
+// type Repr = Vec<Arc<dyn CommandWithTransition>>;
+// fn diff(&self, a: &RenderLayer, b: &RenderLayer) -> Self::Repr {
+//     let commands = vec![];
+//     if a.size != b.size {
+//         commands.push(CommandWithTransition::SetSize {
+//             size: b.size,
+//             transition: None,
+//         });
+//     }
 
-        commands
-    }
-    fn apply(&self, a: &mut RenderLayer, b: &Self::Repr) {}
-}
+//     commands
+// }
+// fn apply(&self, a: &mut RenderLayer, b: &Self::Repr) {}
+// }
 // trait ToChanges {
 //     fn to_changes(&self) -> Vec<Layer>;
 // }

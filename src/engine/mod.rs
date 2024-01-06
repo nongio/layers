@@ -127,7 +127,7 @@ pub struct TransactionRef(pub FlatStorageId);
 pub struct AnimationRef(FlatStorageId);
 
 /// An identifier for a node in the three storage
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, std::cmp::Ord)]
 pub struct NodeRef(pub TreeStorageId);
 
 #[derive(Clone)]
@@ -157,6 +157,7 @@ impl LayersEngine {
 
         let layout = lt
             .new_leaf(Style {
+                position: Position::Absolute,
                 ..Default::default()
             })
             .unwrap();
@@ -165,7 +166,7 @@ impl LayersEngine {
             engine: self.engine.clone(),
             model,
             id: Arc::new(RwLock::new(None)),
-            layout,
+            layout_node_id: layout,
         }
     }
     pub fn new_animation(&self, transition: Transition) -> AnimationRef {
@@ -211,6 +212,12 @@ impl Default for LayersEngine {
         Self::new()
     }
 }
+
+impl std::fmt::Debug for LayersEngine {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LayersEngine").finish()
+    }
+}
 impl Engine {
     fn new() -> Self {
         // rayon::ThreadPoolBuilder::new()
@@ -225,7 +232,7 @@ impl Engine {
     }
     pub fn scene_set_root(&self, layer: impl Into<Layer>) -> NodeRef {
         let layer: Layer = layer.into();
-        let layout = layer.layout;
+        let layout = layer.layout_node_id;
 
         let id = self.scene.add(layer.clone(), layout);
         layer.set_id(id);
@@ -252,14 +259,17 @@ impl Engine {
         let layer: Layer = layer.into();
         let mut layout_tree = self.layout_tree.write().unwrap();
 
-        let layer_layout = layer.layout;
+        let layer_layout = layer.layout_node_id;
         let id = self.scene.append(parent, layer.clone(), layer_layout);
         layer.set_id(id);
 
         if let Some(parent) = parent {
-            let parent_layout = self.scene.get_node(parent).unwrap().get().layout_node;
+            let parent_layout = self.scene.get_node(parent).unwrap().get().layout_node_id;
             self.scene.append_node_to(id, parent);
             layout_tree.add_child(parent_layout, layer_layout).unwrap();
+
+            let change: Arc<NoopChange> = Arc::new(NoopChange::new(parent.0.into()));
+            self.schedule_change(parent, change, None);
         } else {
             let mut scene_root = self.scene_root.write().unwrap();
             let layout_root = *self.layout_root.read().unwrap();
@@ -269,11 +279,14 @@ impl Engine {
                 *self.layout_root.write().unwrap() = layer_layout;
             } else {
                 let scene_root = *scene_root.unwrap();
+                let root_id = NodeRef(scene_root);
                 self.scene.append_node_to(id, NodeRef(scene_root));
                 layout_tree.add_child(layout_root, layer_layout).unwrap();
+                let change: Arc<NoopChange> = Arc::new(NoopChange::new(root_id.0.into()));
+                self.schedule_change(root_id, change, None);
             }
         }
-        let change = Arc::new(NoopChange::new(id.0.into()));
+        let change: Arc<NoopChange> = Arc::new(NoopChange::new(id.0.into()));
         self.schedule_change(id, change, None);
         id
     }
@@ -281,11 +294,11 @@ impl Engine {
         let layer_id: Option<NodeRef> = layer.into();
         if let Some(layer_id) = layer_id {
             {
-                let nodes = self.scene.nodes.data();
-                let mut nodes = nodes.write().unwrap();
-                if let Some(node) = nodes.get_mut(layer_id.into()) {
-                    let node = node.get_mut();
-                    node.deleted = true;
+                if let Some(node) = self.scene.get_node(layer_id) {
+                    let node = node.get();
+                    self.scene.remove(layer_id);
+                    let mut layout_tree = self.layout_tree.write().unwrap();
+                    layout_tree.remove(node.layout_node_id).unwrap();
                 }
             }
         }
@@ -300,9 +313,9 @@ impl Engine {
 
         self.add_animation(
             Animation {
-            start,
-            duration: transition.duration,
-            timing: transition.timing,
+                start,
+                duration: transition.duration,
+                timing: transition.timing,
             },
             true,
         )
@@ -369,9 +382,27 @@ impl Engine {
         // 1.1 Update animations to the current timestamp
         let finished_animations = update_animations(self, timestamp.clone());
         // 1.2 Execute transactions using the updated animations
-        let (updated_nodes, finished_transations, needs_redraw) = execute_transactions(self);
+        let (mut updated_nodes, finished_transations, needs_redraw) = execute_transactions(self);
 
-        // 2.0 update the layout tree using taffy
+        // merge the updated nodes with the nodes that are part of the layout calculation
+        let arena = self.scene.nodes.data();
+        let arena = arena.read().unwrap();
+
+        let nodes = arena.iter().filter_map(|node| {
+            if node.is_removed() {
+                return None;
+            }
+            let scene_node = node.get();
+            // let layout = self.get_node_layout_style(scene_node.layout_node_id);
+            // if layout.position != Position::Absolute {
+            scene_node.insert_flags(RenderableFlags::NEEDS_LAYOUT | RenderableFlags::NEEDS_PAINT);
+            scene_node.id()
+            // } else {
+            // None
+            // }
+        });
+        updated_nodes.extend(nodes); // nodes are deduplicated in the update_nodes function
+                                     // 2.0 update the layout tree using taffy
         update_layout_tree(self);
 
         // 3.0 update render nodes and trigger repaint
@@ -386,7 +417,6 @@ impl Engine {
 
         cleanup_transactions(self, finished_transations);
 
-        cleanup_layers(self);
         needs_redraw
     }
 
@@ -402,11 +432,13 @@ impl Engine {
     pub fn set_node_layout_size(&self, node: Node, size: crate::types::Size) {
         let mut layout = self.layout_tree.write().unwrap();
         let mut style = layout.style(node).unwrap().clone();
+        if style.size.width != auto() {
+            style.size.width = points(size.x);
+        }
+        if style.size.height != auto() {
+            style.size.height = points(size.y);
+        }
 
-        style.size = taffy::geometry::Size {
-            width: points(size.x),
-            height: points(size.y),
-        };
         // println!("set_node_layout_size: {:?}", style.size);
         layout.set_style(node, style).unwrap();
     }
