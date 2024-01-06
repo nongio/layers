@@ -45,22 +45,20 @@ fn main() {
     }
     // let engine = LayersEngine::new();
 
-    let tree = layers! {
-        LayerView()
-        .size((Point { x: 100.0, y: 100.0 }, None))
-        .background_color((
-            PaintColor::Solid {
-                color: Color::new_hex("#ffffff"),
-            },
-            None,
-        )){
-            LayerView()
-                .size((Point { x: 100.0, y: 100.0 }, None))
-           //     {
-           //         // for i in 0..10 {
-           //         Layer("text")
-           //         // }
-           //     }
-        }
-    };
+    // let tree = layers! {
+    //     LayerView()
+    //     .background_color((
+    //         PaintColor::Solid {
+    //             color: Color::new_hex("#ffffff"),
+    //         },
+    //         None,
+    //     )){
+    //         LayerView()
+    //        //     {
+    //        //         // for i in 0..10 {
+    //        //         Layer("text")
+    //        //         // }
+    //        //     }
+    //     }
+    // };
 }

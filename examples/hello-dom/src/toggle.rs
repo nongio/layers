@@ -1,4 +1,7 @@
-use layers::prelude::{timing::TimingFunction, *};
+use layers::{
+    prelude::{timing::TimingFunction, *},
+    types::Size,
+};
 use std::sync::Arc;
 
 pub struct ToggleState {
@@ -22,9 +25,9 @@ pub fn view_toggle(state: ToggleState) -> ViewLayer {
     ViewLayerBuilder::default()
         .position((Point { x: 30.0, y: 30.0 }, None))
         .size((
-            Point {
-                x: TOGGLE_SIZE,
-                y: SIZE + PADDING * 2.0,
+            Size {
+                width: taffy::Dimension::Points(TOGGLE_SIZE),
+                height: taffy::Dimension::Points(SIZE + PADDING * 2.0),
             },
             None,
         ))
@@ -59,7 +62,13 @@ pub fn view_toggle(state: ToggleState) -> ViewLayer {
                     timing: TimingFunction::default(),
                 }),
             ))
-            .size((Point { x: SIZE, y: SIZE }, None))
+            .size((
+                Size {
+                    width: taffy::Dimension::Points(SIZE),
+                    height: taffy::Dimension::Points(SIZE),
+                },
+                None,
+            ))
             .background_color((
                 PaintColor::Solid {
                     color: Color::new_hex("#FFFFFF"),

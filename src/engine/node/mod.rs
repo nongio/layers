@@ -28,17 +28,17 @@ pub use draw_cache_management::DrawCacheManagement;
 #[derive(Clone, Debug)]
 pub struct DrawCache {
     picture: Picture,
-    size: Size,
+    size: Point,
 }
 
 impl DrawCache {
-    pub fn new(picture: Picture, size: Size) -> Self {
+    pub fn new(picture: Picture, size: Point) -> Self {
         Self { picture, size }
     }
     pub fn picture(&self) -> &Picture {
         &self.picture
     }
-    pub fn size(&self) -> &Size {
+    pub fn size(&self) -> &Point {
         &self.size
     }
 }

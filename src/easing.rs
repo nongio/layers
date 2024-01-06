@@ -1,9 +1,10 @@
 use std::fmt::Debug;
 
 use crate::types::{
-    BorderRadius, Color, GradientLinear, GradientRadial, PaintColor, Point, Point3d,
+    BorderRadius, Color, GradientLinear, GradientRadial, PaintColor, Point, Point3d, Size,
 };
 use skia_safe::{Image, Picture};
+use taffy::style::Dimension;
 
 #[allow(dead_code)]
 fn linspace(steps: u64, step: u64) -> f32 {
@@ -95,6 +96,14 @@ impl std::cmp::PartialEq for BorderRadius {
             && self.bottom_right == other.bottom_right
     }
 }
+
+// implementation of PartialEq trait for Size
+impl std::cmp::PartialEq for Size {
+    fn eq(&self, other: &Size) -> bool {
+        self.width == other.width && self.height == other.height
+    }
+}
+
 // implementation of Add trait for BorderRadius
 impl std::ops::Add for BorderRadius {
     type Output = BorderRadius;
@@ -237,6 +246,7 @@ impl Interpolable for crate::types::Color {}
 // for PaintColor which is not correct
 impl !Interpolable for crate::types::PaintColor {}
 impl !Interpolable for Option<Image> {}
+impl !Interpolable for crate::types::Size {}
 
 impl<V: Interpolable> Interpolate for V {
     fn interpolate(&self, other: &Self, f: f32) -> Self {
@@ -273,6 +283,34 @@ impl Interpolate for Option<Picture> {
             self.clone()
         } else {
             other.clone()
+        }
+    }
+}
+
+impl Interpolate for Dimension {
+    fn interpolate(&self, other: &Dimension, f: f32) -> Dimension {
+        match (self, other) {
+            (Dimension::Auto, Dimension::Auto) => Dimension::Auto,
+            (Dimension::Auto, Dimension::Percent(p)) => Dimension::Percent(*p),
+            (Dimension::Auto, Dimension::Points(p)) => Dimension::Points(*p),
+            (Dimension::Percent(_p1), Dimension::Auto) => Dimension::Auto,
+            (Dimension::Percent(p1), Dimension::Percent(p2)) => {
+                Dimension::Percent(p1.interpolate(p2, f))
+            }
+            (Dimension::Percent(_p1), Dimension::Points(p2)) => Dimension::Points(*p2),
+            (Dimension::Points(_p1), Dimension::Auto) => Dimension::Auto,
+            (Dimension::Points(_p1), Dimension::Percent(p2)) => Dimension::Percent(*p2),
+            (Dimension::Points(p1), Dimension::Points(p2)) => {
+                Dimension::Points(p1.interpolate(p2, f))
+            }
+        }
+    }
+}
+impl Interpolate for Size {
+    fn interpolate(&self, other: &Size, f: f32) -> Size {
+        Size {
+            width: self.width.interpolate(&other.width, f),
+            height: self.height.interpolate(&other.height, f),
         }
     }
 }

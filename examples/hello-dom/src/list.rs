@@ -1,5 +1,5 @@
-use layers::prelude::timing::TimingFunction;
 use layers::prelude::*;
+use layers::{prelude::timing::TimingFunction, types::Size};
 use std::string::String;
 use std::sync::Arc;
 
@@ -13,7 +13,13 @@ pub fn view_list(_state: ListState) -> ViewLayer {
 
     ViewLayerBuilder::default()
         .position((Point { x: 30.0, y: 330.0 }, None))
-        .size((Point { x: 300.0, y: 30.0 }, None))
+        .size((
+            Size {
+                width: taffy::Dimension::Points(300.0),
+                height: taffy::Dimension::Points(30.0),
+            },
+            None,
+        ))
         .background_color((
             PaintColor::Solid {
                 color: background_color,
@@ -41,7 +47,13 @@ pub fn view_list(_state: ListState) -> ViewLayer {
                 },
                 None,
             ))
-            .size((Point { x: 290.0, y: 20.0 }, None))
+            .size((
+                Size {
+                    width: taffy::Dimension::Points(290.0),
+                    height: taffy::Dimension::Points(20.0),
+                },
+                None,
+            ))
             .background_color((
                 PaintColor::Solid {
                     color: Color::new_hex("#FFFFFF"),

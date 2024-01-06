@@ -10,8 +10,8 @@ use crate::{
 
 /// C api to the LayersEngine
 #[no_mangle]
-pub extern "C" fn create_engine() -> *const engine::LayersEngine {
-    let engine = Arc::new(engine::LayersEngine::new());
+pub extern "C" fn create_engine(width: f32, height: f32) -> *const engine::LayersEngine {
+    let engine = Arc::new(engine::LayersEngine::new(width, height));
     Arc::into_raw(engine)
 }
 

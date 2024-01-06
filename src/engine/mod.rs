@@ -144,9 +144,9 @@ pub struct LayersEngine {
 }
 
 impl LayersEngine {
-    pub fn new() -> Self {
+    pub fn new(width: f32, height: f32) -> Self {
         Self {
-            engine: Engine::create(),
+            engine: Engine::create(width, height),
         }
     }
 
@@ -207,27 +207,43 @@ impl LayersEngine {
     }
 }
 
-impl Default for LayersEngine {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl std::fmt::Debug for LayersEngine {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("LayersEngine").finish()
     }
 }
 impl Engine {
-    fn new() -> Self {
+    fn new(width: f32, height: f32) -> Self {
         // rayon::ThreadPoolBuilder::new()
         //     .num_threads(2)
         //     .build_global()
         //     .unwrap();
-        Default::default()
+        let mut layout_tree = Taffy::new();
+        let layout_root = RwLock::new(
+            layout_tree
+                .new_leaf(Style {
+                    display: Display::Flex,
+                    flex_direction: FlexDirection::Column,
+                    ..Default::default()
+                })
+                .unwrap(),
+        );
+
+        let scene = Scene::create(width, height);
+        let scene_root = RwLock::new(None);
+        Engine {
+            scene,
+            transactions: FlatStorage::new(),
+            animations: FlatStorage::new(),
+            timestamp: RwLock::new(Timestamp(0.0)),
+            transaction_handlers: FlatStorage::new(),
+            layout_tree: RwLock::new(layout_tree),
+            layout_root,
+            scene_root,
+        }
     }
-    pub fn create() -> Arc<Self> {
-        let new_engine = Self::new();
+    pub fn create(width: f32, height: f32) -> Arc<Self> {
+        let new_engine = Self::new(width, height);
         Arc::new(new_engine)
     }
     pub fn scene_set_root(&self, layer: impl Into<Layer>) -> NodeRef {
@@ -432,12 +448,10 @@ impl Engine {
     pub fn set_node_layout_size(&self, node: Node, size: crate::types::Size) {
         let mut layout = self.layout_tree.write().unwrap();
         let mut style = layout.style(node).unwrap().clone();
-        if style.size.width != auto() {
-            style.size.width = points(size.x);
-        }
-        if style.size.height != auto() {
-            style.size.height = points(size.y);
-        }
+        style.size = taffy::geometry::Size {
+            width: size.width,
+            height: size.height,
+        };
 
         // println!("set_node_layout_size: {:?}", style.size);
         layout.set_style(node, style).unwrap();
@@ -503,34 +517,6 @@ impl Engine {
         handler: F,
     ) {
         self.add_transaction_handler(transaction, TransactionEventType::Update, handler);
-    }
-}
-
-impl Default for Engine {
-    fn default() -> Self {
-        let mut layout_tree = Taffy::new();
-        let layout_root = RwLock::new(
-            layout_tree
-                .new_leaf(Style {
-                    display: Display::Flex,
-                    flex_direction: FlexDirection::Column,
-                    ..Default::default()
-                })
-                .unwrap(),
-        );
-
-        let scene = Scene::create();
-        let scene_root = RwLock::new(None);
-        Engine {
-            scene,
-            transactions: FlatStorage::new(),
-            animations: FlatStorage::new(),
-            timestamp: RwLock::new(Timestamp(0.0)),
-            transaction_handlers: FlatStorage::new(),
-            layout_tree: RwLock::new(layout_tree),
-            layout_root,
-            scene_root,
-        }
     }
 }
 

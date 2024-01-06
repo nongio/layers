@@ -7,7 +7,7 @@
 use std::sync::Arc;
 use taffy::prelude::Node;
 
-use crate::prelude::Layer;
+use crate::prelude::{Layer, Point};
 
 use super::{
     node::SceneNode,
@@ -17,16 +17,22 @@ use super::{
 };
 pub struct Scene {
     pub nodes: TreeStorage<SceneNode>,
+    pub size: Point,
 }
 
 impl Scene {
-    pub fn new() -> Self {
+    pub fn new(width: f32, height: f32) -> Self {
+        let nodes = TreeStorage::new();
         Self {
-            ..Default::default()
+            nodes,
+            size: Point {
+                x: width,
+                y: height,
+            },
         }
     }
-    pub(crate) fn create() -> Arc<Scene> {
-        Arc::new(Self::new())
+    pub(crate) fn create(width: f32, height: f32) -> Arc<Scene> {
+        Arc::new(Self::new(width, height))
     }
 
     pub fn append_node_to(&self, children: NodeRef, parent: NodeRef) {
@@ -43,10 +49,7 @@ impl Scene {
         NodeRef(id)
     }
 
-    pub fn get_node(
-        &self,
-        id: impl Into<TreeStorageId>,
-    ) -> Option<TreeStorageNode<SceneNode>> {
+    pub fn get_node(&self, id: impl Into<TreeStorageId>) -> Option<TreeStorageNode<SceneNode>> {
         let id = id.into();
         self.nodes.get(id)
     }
@@ -69,13 +72,5 @@ impl Scene {
     pub fn remove(&self, id: impl Into<TreeStorageId>) {
         let id = id.into();
         self.nodes.remove_at(&id);
-    }
-}
-
-impl Default for Scene {
-    fn default() -> Self {
-        let nodes = TreeStorage::new();
-
-        Scene { nodes }
     }
 }

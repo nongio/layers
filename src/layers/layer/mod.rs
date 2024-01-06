@@ -76,13 +76,13 @@ impl Layer {
 
     pub fn set_size(
         &self,
-        value: impl Into<Point>,
+        value: impl Into<Size>,
         transition: Option<Transition>,
     ) -> TransactionRef {
-        let value: Point = value.into();
+        let value: Size = value.into();
         let flags = RenderableFlags::NEEDS_LAYOUT | RenderableFlags::NEEDS_PAINT;
 
-        let change: Arc<ModelChange<Point>> = Arc::new(ModelChange {
+        let change: Arc<ModelChange<Size>> = Arc::new(ModelChange {
             value_change: self.model.size.to(value, transition),
             flag: flags,
         });
@@ -113,7 +113,7 @@ impl Layer {
             .set_node_layout_style(self.layout_node_id, style);
     }
 
-    pub fn set_node_layout_size(&self, size: Point) {
+    pub fn set_node_layout_size(&self, size: Size) {
         self.engine.set_node_layout_size(self.layout_node_id, size);
     }
 

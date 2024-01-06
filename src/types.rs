@@ -20,9 +20,42 @@ pub struct Point {
     pub y: f32,
 }
 
-#[allow(dead_code)]
-pub type Size = Point;
+#[derive(Clone, Copy, Debug)]
+#[repr(C)]
+pub struct Size {
+    pub width: taffy::style::Dimension,
+    pub height: taffy::style::Dimension,
+}
 
+impl Size {
+    pub fn points(width: f32, height: f32) -> Self {
+        Size {
+            width: taffy::style::Dimension::Points(width),
+            height: taffy::style::Dimension::Points(height),
+        }
+    }
+    pub fn percen(width: f32, height: f32) -> Self {
+        Size {
+            width: taffy::style::Dimension::Percent(width),
+            height: taffy::style::Dimension::Percent(height),
+        }
+    }
+    pub fn auto() -> Self {
+        Size {
+            width: taffy::style::Dimension::Auto,
+            height: taffy::style::Dimension::Auto,
+        }
+    }
+}
+
+impl Default for Size {
+    fn default() -> Self {
+        Size {
+            width: taffy::style::Dimension::Auto,
+            height: taffy::style::Dimension::Auto,
+        }
+    }
+}
 use core::ops::Sub;
 impl Sub for &Point {
     type Output = Point;

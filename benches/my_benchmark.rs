@@ -1,7 +1,6 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
 use layers::{
-    engine::animations::{Easing, Transition},
     engine::LayersEngine,
     prelude::{timing::TimingFunction, *},
     types::*,
@@ -10,7 +9,7 @@ use layers::{
 pub struct Timestamp(f32);
 
 fn criterion_benchmark(c: &mut Criterion) {
-    let engine = LayersEngine::new();
+    let engine = LayersEngine::new(1000.0, 1000.0);
 
     let root = engine.new_layer();
     engine.scene_set_root(root);
@@ -23,7 +22,7 @@ fn criterion_benchmark(c: &mut Criterion) {
 
     for model in models.iter() {
         model.set_size(
-            Point { x: 100.0, y: 100.0 },
+            Size::points(100.0, 100.0),
             Some(Transition {
                 duration: 10000.0,
                 delay: 0.0,

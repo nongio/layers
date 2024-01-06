@@ -9,18 +9,21 @@ use glutin::{
     GlProfile,
 };
 
-use layers::skia::{
-    self,
-    gpu::{
-        self,
-        gl::{FramebufferInfo, TextureInfo},
-        BackendTexture,
-    },
-    ColorType, Paint, PixelGeometry, Surface, SurfaceProps, SurfacePropsFlags,
-};
 use layers::{
     prelude::{timing::TimingFunction, *},
     skia::Color4f,
+};
+use layers::{
+    skia::{
+        self,
+        gpu::{
+            self,
+            gl::{FramebufferInfo, TextureInfo},
+            BackendTexture,
+        },
+        ColorType, Paint, PixelGeometry, Surface, SurfaceProps, SurfacePropsFlags,
+    },
+    types::Size,
 };
 use winit::window::Icon;
 
@@ -115,16 +118,16 @@ fn main() {
         windowed_context: WindowedContext,
     }
     let env = Env { windowed_context };
-    let engine = LayersEngine::new();
+    let engine = LayersEngine::new(window_width as f32 * 2.0, window_height as f32 * 2.0);
     let root_layer = engine.new_layer();
 
-    root_layer.set_size(
-        layers::types::Size {
-            x: window_width as f32 * 2.0,
-            y: window_height as f32 * 2.0,
-        },
-        None,
-    );
+    // root_layer.set_size(
+    //     layers::types::Size {
+    //         x: window_width as f32 * 2.0,
+    //         y: window_height as f32 * 2.0,
+    //     },
+    //     None,
+    // );
     root_layer.set_position(Point { x: 0.0, y: 0.0 }, None);
 
     root_layer.set_background_color(
@@ -139,7 +142,7 @@ fn main() {
 
     let container = engine.new_layer();
     container.set_position(layers::types::Point { x: 0.0, y: 0.0 }, None);
-    container.set_size(layers::types::Size { x: 450.0, y: 500.0 }, None);
+    container.set_size(layers::types::Size::points(450.0, 500.0), None);
     container.set_background_color(
         PaintColor::Solid {
             color: Color::new_rgba255(255, 255, 255, 255),
@@ -317,10 +320,7 @@ fn main() {
                         0_u32,
                     );
                     let _transition = root_layer.set_size(
-                        Point {
-                            x: size.width as f32,
-                            y: size.height as f32,
-                        },
+                        Size::points(size.width as f32, size.height as f32),
                         Some(Transition {
                             duration: 1.0,
                             delay: 0.0,

@@ -3,8 +3,6 @@ use std::sync::{Arc, RwLock};
 use rayon::prelude::{IntoParallelRefIterator, IntoParallelRefMutIterator, ParallelIterator};
 use taffy::{prelude::Size, style_helpers::points};
 
-use crate::prelude::Point;
-
 use super::{
     node::{try_get_node, DrawCacheManagement, RenderableFlags},
     storage::FlatStorageId,
@@ -92,13 +90,7 @@ pub(crate) fn execute_transactions(engine: &Engine) -> (Vec<NodeRef>, Vec<FlatSt
                         if let Some(node) = try_get_node(node) {
                             if flags.contains(RenderableFlags::NEEDS_LAYOUT) {
                                 let size = node.layer.model.size.value();
-                                engine.set_node_layout_size(
-                                    node.layout_node_id,
-                                    Point {
-                                        x: points(size.x),
-                                        y: points(size.y),
-                                    },
-                                );
+                                engine.set_node_layout_size(node.layout_node_id, size);
                             }
 
                             updated_nodes.write().unwrap().push(node_id);
@@ -129,11 +121,11 @@ pub(crate) fn update_layout_tree(engine: &Engine) {
     let layout_root = *engine.layout_root.read().unwrap();
 
     if layout.dirty(layout_root).unwrap() {
-        let scene_root = *engine.scene_root.read().unwrap().unwrap();
-        let scene_root = engine.scene.get_node(scene_root).unwrap();
+        // let scene_root = *engine.scene_root.read().unwrap().unwrap();
+        // let scene_root = engine.scene.get_node(scene_root).unwrap();
 
-        let scene_root = scene_root.get();
-        let scene_size = scene_root.layer.model.size.value();
+        // let scene_root = scene_root.get();
+        let scene_size = engine.scene.size;
         // println!("scene size: {:?}", scene_size);
         layout
             .compute_layout(

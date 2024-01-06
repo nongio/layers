@@ -7,8 +7,8 @@ use std::collections::VecDeque;
 use derive_builder::Builder;
 
 use self::layer::Layer;
-use crate::engine::NodeRef;
 use crate::prelude::*;
+use crate::{engine::NodeRef, types::Size};
 use indextree::NodeId;
 use skia_safe::Picture;
 
@@ -23,7 +23,7 @@ pub struct ViewLayer {
     pub border_width: (f32, Option<Transition>),
     pub border_style: BorderStyle,
     pub border_corner_radius: (BorderRadius, Option<Transition>),
-    pub size: (Point, Option<Transition>),
+    pub size: (Size, Option<Transition>),
     pub position: (Point, Option<Transition>),
     #[builder(default = "(Point{x:1.0, y:1.0}, None)")]
     pub scale: (Point, Option<Transition>),

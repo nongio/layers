@@ -11,6 +11,7 @@ use glutin::{
 use layers::{
     prelude::{timing::TimingFunction, *},
     skia::ColorType,
+    types::Size,
 };
 use winit::window::Icon;
 
@@ -73,16 +74,16 @@ fn main() {
         windowed_context: WindowedContext,
     }
     let env = Env { windowed_context };
-    let engine = LayersEngine::new();
+    let engine = LayersEngine::new(window_width as f32 * 2.0, window_height as f32 * 2.0);
     let root_layer = engine.new_layer();
 
-    root_layer.set_size(
-        layers::types::Size {
-            x: window_width as f32 * 2.0,
-            y: window_height as f32 * 2.0,
-        },
-        None,
-    );
+    // root_layer.set_size(
+    //     layers::types::Size {
+    //         x: window_width as f32 * 2.0,
+    //         y: window_height as f32 * 2.0,
+    //     },
+    //     None,
+    // );
     root_layer.set_position(Point { x: 0.0, y: 0.0 }, None);
 
     root_layer.set_background_color(
@@ -104,13 +105,7 @@ fn main() {
     let wrap_layer = engine.new_layer();
 
     wrap_layer.set_position(layers::types::Point { x: 0.0, y: 0.0 }, None);
-    wrap_layer.set_size(
-        layers::types::Size {
-            x: 1000.0,
-            y: 800.0,
-        },
-        None,
-    );
+    wrap_layer.set_size(layers::types::Size::points(1000.0, 800.0), None);
     wrap_layer.set_background_color(
         PaintColor::Solid {
             color: Color::new_rgba255(180, 180, 0, 0),
@@ -134,7 +129,7 @@ fn main() {
     });
     let container = engine.new_layer();
     container.set_position(layers::types::Point { x: 0.0, y: 0.0 }, None);
-    container.set_size(layers::types::Size { x: 600.0, y: 500.0 }, None);
+    container.set_size(layers::types::Size::points(600.0, 500.0), None);
     container.set_background_color(
         PaintColor::Solid {
             color: Color::new_rgba255(180, 180, 0, 100),
@@ -172,7 +167,7 @@ fn main() {
         // layer.set_content_from_data_raster_rgba8(&data, w, h);
 
         layer.set_anchor_point(Point { x: 0.5, y: 0.5 }, None);
-        layer.set_size(Point { x: 50.0, y: 50.0 }, None);
+        layer.set_size(Size::points(50.0, 50.0), None);
         layer.set_border_corner_radius(20.0, None);
         layer.set_shadow_color(Color::new_rgba(0.0, 0.0, 0.0, 0.5), None);
         layer.set_background_color(
@@ -222,10 +217,7 @@ fn main() {
                         0_u32,
                     );
                     let _transition = root_layer.set_size(
-                        Point {
-                            x: size.width as f32,
-                            y: size.height as f32,
-                        },
+                        Size::points(size.width as f32, size.height as f32),
                         Some(Transition {
                             duration: 1.0,
                             delay: 0.0,
@@ -300,7 +292,7 @@ fn main() {
 
                         layers.iter().for_each(|layer| {
                             let _transition = layer.set_size(
-                                Point { x: 50.0, y: 50.0 },
+                                Size::points(50.0, 50.0),
                                 Some(Transition {
                                     duration: 0.5,
                                     delay: 0.0,
@@ -311,7 +303,7 @@ fn main() {
                     } else {
                         layers.iter().for_each(|layer| {
                             let _transition = layer.set_size(
-                                Point { x: 200.0, y: 200.0 },
+                                Size::points(200.0, 200.0),
                                 Some(Transition {
                                     duration: 2.0,
                                     delay: 0.0,

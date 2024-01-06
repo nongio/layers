@@ -1,5 +1,5 @@
-use layers::skia;
 use layers::{prelude::*, skia::Color4f};
+use layers::{skia, types::Size};
 
 #[derive(Clone)]
 pub struct AppSwitcherState {
@@ -38,13 +38,13 @@ pub fn view_app_icon(state: AppIconState) -> ViewLayer {
         recorder.finish_recording_as_picture(None)
     };
     ViewLayerBuilder::default()
-        // .size((
-        //     Point {
-        //         x: ICON_SIZE + PADDING * 2.0,
-        //         y: ICON_SIZE + PADDING * 2.0 + 50.0,
-        //     },
-        //     Some(transition),
-        // ))
+        .size((
+            Size {
+                width: taffy::Dimension::Points(ICON_SIZE + PADDING * 2.0),
+                height: taffy::Dimension::Points(200.0 + PADDING * 2.0 + 50.0),
+            },
+            Some(transition),
+        ))
         .background_color((
             PaintColor::Solid {
                 color: Color::new_rgba(0.0, 0.0, 0.0, 0.3),
@@ -80,7 +80,7 @@ pub fn view_app_icon(state: AppIconState) -> ViewLayer {
                 align_items: Some(taffy::AlignItems::Center),
                 max_size: taffy::Size {
                     width: taffy::Dimension::Points(ICON_SIZE + PADDING * 2.0),
-                    height: taffy::Dimension::Points(ICON_SIZE + PADDING * 2.0),
+                    height: taffy::Dimension::Points(200.0 + PADDING * 2.0),
                 },
                 min_size: taffy::Size {
                     width: taffy::Dimension::Points(1.0),
@@ -88,13 +88,10 @@ pub fn view_app_icon(state: AppIconState) -> ViewLayer {
                 },
                 ..Default::default()
             })
-            // .size((
-            //     Point {
-            //         x: ICON_SIZE + PADDING * 2.0,
-            //         y: ICON_SIZE + PADDING * 2.0,
-            //     },
-            //     None,
-            // ))
+            .size((
+                Size::points(ICON_SIZE + PADDING * 2.0, 200.0 + PADDING * 2.0),
+                None,
+            ))
             .background_color((
                 PaintColor::Solid {
                     color: selection_background_color,
@@ -109,13 +106,7 @@ pub fn view_app_icon(state: AppIconState) -> ViewLayer {
                 },
                 ..Default::default()
             })
-            // .size((
-            //     Point {
-            //         x: ICON_SIZE,
-            //         y: ICON_SIZE,
-            //     },
-            //     None,
-            // ))
+            .size((Size::points(ICON_SIZE, 200.0), None))
             .background_color((
                 PaintColor::Solid {
                     color: Color::new_hex("#00ff00ff"),
@@ -136,9 +127,9 @@ pub fn view_app_switcher(state: AppSwitcherState) -> ViewLayer {
     ViewLayerBuilder::default()
         .position((Point { x: 0.0, y: 10.0 }, None))
         .size((
-            Point {
-                x: 200.0,
-                y: ICON_SIZE + PADDING * 2.0 + 100.0,
+            Size {
+                width: taffy::auto(), //taffy::Dimension::Percent(1.0),
+                height: taffy::Dimension::Points(300.0),
             },
             None,
         ))
@@ -164,10 +155,6 @@ pub fn view_app_switcher(state: AppSwitcherState) -> ViewLayer {
             gap: taffy::Size {
                 width: taffy::LengthPercentage::Points(20.0),
                 height: taffy::LengthPercentage::Points(PADDING),
-            },
-            size: taffy::Size {
-                width: taffy::auto(), //taffy::Dimension::Percent(1.0),
-                height: taffy::Dimension::Points(300.0),
             },
             max_size: taffy::Size {
                 width: taffy::Dimension::Percent(1.0),

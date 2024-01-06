@@ -94,12 +94,12 @@ fn main() {
         windowed_context: WindowedContext,
     }
     let env = Env { windowed_context };
-    let engine = LayersEngine::new();
+    let engine = LayersEngine::new(window_width as f32 * 2.0, window_height as f32 * 2.0);
     let root = engine.new_layer();
     root.set_size(
         Size {
-            x: (window_width as f32 * 2.0),
-            y: (window_height as f32 * 2.0),
+            width: taffy::Dimension::Points(window_width as f32 * 2.0),
+            height: taffy::Dimension::Points(window_height as f32 * 2.0),
         },
         None,
     );

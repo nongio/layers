@@ -8,7 +8,7 @@ pub(crate) struct ModelLayer {
     pub position: Attribute<Point>,
     pub scale: Attribute<Point>,
     pub rotation: Attribute<Point3d>,
-    pub size: Attribute<Point>,
+    pub size: Attribute<Size>,
     pub background_color: Attribute<PaintColor>,
     pub border_corner_radius: Attribute<BorderRadius>,
     pub border_color: Attribute<PaintColor>,
@@ -25,7 +25,10 @@ pub(crate) struct ModelLayer {
 impl Default for ModelLayer {
     fn default() -> Self {
         let position = Attribute::new(Point { x: 0.0, y: 0.0 });
-        let size = Attribute::new(Point { x: 100.0, y: 100.0 });
+        let size = Attribute::new(Size {
+            width: taffy::style::Dimension::Auto,
+            height: taffy::style::Dimension::Auto,
+        });
         let anchor_point = Attribute::new(Point { x: 0.0, y: 0.0 });
         let scale = Attribute::new(Point { x: 1.0, y: 1.0 });
         let rotation = Attribute::new(Point3d {
