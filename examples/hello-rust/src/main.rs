@@ -8,7 +8,10 @@ use glutin::{
     GlProfile,
 };
 
-use layers::prelude::{timing::TimingFunction, *};
+use layers::{
+    prelude::{timing::TimingFunction, *},
+    skia::ColorType,
+};
 use winit::window::Icon;
 
 fn main() {
@@ -54,11 +57,13 @@ fn main() {
     let pixel_format: usize = pixel_format.stencil_bits.try_into().unwrap();
 
     let mut skia_renderer = layers::renderer::skia_fbo::SkiaFboRenderer::create(
-        size.width.try_into().unwrap(),
-        size.height.try_into().unwrap(),
+        size.width as i32,
+        size.height as i32,
         sample_count,
         pixel_format,
-        0,
+        ColorType::RGBA8888,
+        layers::skia::gpu::SurfaceOrigin::BottomLeft,
+        0_u32,
     );
 
     let mut _mouse_x = 0.0;
@@ -87,12 +92,25 @@ fn main() {
         None,
     );
     root_layer.set_border_corner_radius(10.0, None);
-
+    root_layer.set_layout_style(taffy::Style {
+        position: taffy::Position::Absolute,
+        display: taffy::Display::Flex,
+        // flex_direction: taffy::FlexDirection::Column,
+        // justify_content: Some(taffy::JustifyContent::Center),
+        // align_items: Some(taffy::AlignItems::Center),
+        ..Default::default()
+    });
     engine.scene_add_layer(root_layer.clone());
     let wrap_layer = engine.new_layer();
 
-    wrap_layer.set_position(layers::types::Point { x: 200.0, y: 100.0 }, None);
-    wrap_layer.set_size(layers::types::Size { x: 450.0, y: 600.0 }, None);
+    wrap_layer.set_position(layers::types::Point { x: 0.0, y: 0.0 }, None);
+    wrap_layer.set_size(
+        layers::types::Size {
+            x: 1000.0,
+            y: 800.0,
+        },
+        None,
+    );
     wrap_layer.set_background_color(
         PaintColor::Solid {
             color: Color::new_rgba255(180, 180, 0, 0),
@@ -106,43 +124,43 @@ fn main() {
         None,
     );
     wrap_layer.set_border_width(4.0, None);
-
+    wrap_layer.set_layout_style(taffy::Style {
+        position: taffy::Position::Absolute,
+        display: taffy::Display::Flex,
+        // flex_direction: taffy::FlexDirection::Column,
+        // justify_content: Some(taffy::JustifyContent::Center),
+        // align_items: Some(taffy::AlignItems::Center),
+        ..Default::default()
+    });
     let container = engine.new_layer();
     container.set_position(layers::types::Point { x: 0.0, y: 0.0 }, None);
-    container.set_size(
-        layers::types::Size {
-            x: 450.0,
-            y: 50000.0,
-        },
-        None,
-    );
+    container.set_size(layers::types::Size { x: 600.0, y: 500.0 }, None);
     container.set_background_color(
         PaintColor::Solid {
             color: Color::new_rgba255(180, 180, 0, 100),
         },
         None,
     );
-    container.set_layout_style(Style {
-        display: Display::Flex,
-        position: Position::Absolute,
-
-        flex_direction: FlexDirection::Row,
-        justify_content: Some(JustifyContent::Center),
-        flex_wrap: FlexWrap::Wrap,
-        align_items: Some(AlignItems::Baseline),
-        align_content: Some(AlignContent::FlexStart),
-        gap: points(2.0),
+    container.set_layout_style(taffy::Style {
+        display: taffy::Display::Flex,
+        position: taffy::Position::Absolute,
+        flex_direction: taffy::FlexDirection::Row,
+        flex_wrap: taffy::FlexWrap::Wrap,
+        justify_content: Some(taffy::JustifyContent::Center),
+        align_items: Some(taffy::AlignItems::FlexStart),
+        align_content: Some(taffy::AlignContent::FlexStart),
+        gap: taffy::points(2.0),
 
         size: layers::taffy::prelude::Size {
-            width: points(450.0),
-            height: points(50000.0),
+            width: taffy::points(600.0),
+            height: taffy::points(500.0),
         },
         ..Default::default()
     });
     engine.scene_add_layer(wrap_layer.clone());
     engine.scene_add_layer_to(container.clone(), wrap_layer.id());
     let mut layers: Vec<Layer> = Vec::with_capacity(5000);
-    for n in 100..200 {
+    for n in 0..100 {
         let image_path = format!("./assets/img_{}.png", n + 1);
         let image = image::open(image_path).unwrap();
         let image = image.into_rgba8();
@@ -151,10 +169,10 @@ fn main() {
         let data = image.into_vec();
 
         let layer = engine.new_layer();
-        layer.set_content_from_data_raster_rgba8(&data, w, h);
+        // layer.set_content_from_data_raster_rgba8(&data, w, h);
 
         layer.set_anchor_point(Point { x: 0.5, y: 0.5 }, None);
-        layer.set_size(Point { x: 100.0, y: 100.0 }, None);
+        layer.set_size(Point { x: 50.0, y: 50.0 }, None);
         layer.set_border_corner_radius(20.0, None);
         layer.set_shadow_color(Color::new_rgba(0.0, 0.0, 0.0, 0.5), None);
         layer.set_background_color(
@@ -163,11 +181,11 @@ fn main() {
         );
         layer.set_shadow_offset(Point { x: 10.0, y: 10.0 }, None);
         layer.set_shadow_radius(10.0, None);
-        layer.set_layout_style(Style {
-            flex_grow: 0.0,
-            size: layers::taffy::prelude::Size {
-                width: points(100.0),
-                height: points(100.0),
+        layer.set_layout_style(taffy::Style {
+            // flex_grow: 0.0,
+            size: taffy::Size {
+                width: taffy::points(50.0),
+                height: taffy::points(50.0),
             },
 
             ..Default::default()
@@ -195,11 +213,13 @@ fn main() {
 
                     let size = env.windowed_context.window().inner_size();
                     skia_renderer = layers::renderer::skia_fbo::SkiaFboRenderer::create(
-                        size.width.try_into().unwrap(),
-                        size.height.try_into().unwrap(),
+                        size.width as i32,
+                        size.height as i32,
                         sample_count,
                         pixel_format,
-                        0,
+                        ColorType::RGBA8888,
+                        layers::skia::gpu::SurfaceOrigin::BottomLeft,
+                        0_u32,
                     );
                     let _transition = root_layer.set_size(
                         Point {
@@ -260,14 +280,14 @@ fn main() {
                             let y = container.position().y + y;
                             let p = Point { x: 0.0, y };
 
-                            container.set_position(
-                                p,
-                                Some(Transition {
-                                    duration: 1.0,
-                                    delay: 0.0,
-                                    timing: TimingFunction::default(),
-                                }),
-                            );
+                            // container.set_position(
+                            //     p,
+                            //     Some(Transition {
+                            //         duration: 1.0,
+                            //         delay: 0.0,
+                            //         timing: TimingFunction::default(),
+                            //     }),
+                            // );
                         }
                     };
                 }
@@ -280,7 +300,7 @@ fn main() {
 
                         layers.iter().for_each(|layer| {
                             let _transition = layer.set_size(
-                                Point { x: 100.0, y: 100.0 },
+                                Point { x: 50.0, y: 50.0 },
                                 Some(Transition {
                                     duration: 0.5,
                                     delay: 0.0,
@@ -291,9 +311,9 @@ fn main() {
                     } else {
                         layers.iter().for_each(|layer| {
                             let _transition = layer.set_size(
-                                Point { x: 400.0, y: 400.0 },
+                                Point { x: 200.0, y: 200.0 },
                                 Some(Transition {
-                                    duration: 1.5,
+                                    duration: 2.0,
                                     delay: 0.0,
                                     timing: TimingFunction::default(),
                                 }),
