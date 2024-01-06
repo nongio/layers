@@ -61,4 +61,5 @@ members = [
     "examples/hello-rust",
     "examples/hello-dom",
     "examples/hello-dsl",
+    "examples/hello-content",
 ]
