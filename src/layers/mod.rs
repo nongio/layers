@@ -2,7 +2,10 @@
 
 // use std::sync::Arc;
 
-use std::collections::VecDeque;
+use std::{
+    collections::{hash_map::DefaultHasher, VecDeque},
+    hash::{Hash, Hasher},
+};
 
 use derive_builder::Builder;
 
@@ -103,5 +106,40 @@ impl BuildLayerTree for Layer {
                 engine.scene_remove_layer(Some(NodeRef(child)));
             }
         }
+    }
+}
+
+pub struct View<S: Hash> {
+    render_function: Box<dyn Fn(&S) -> ViewLayer>,
+    last_state: Option<u64>,
+    last_view: Option<ViewLayer>,
+    hasher: DefaultHasher,
+    pub layer: Layer,
+}
+
+// impl View for a function that accept an argument
+impl<S: Hash> View<S> {
+    pub fn new(layer: Layer, render_function: Box<dyn Fn(&S) -> ViewLayer>) -> Self {
+        Self {
+            layer,
+            render_function,
+            last_state: None,
+            last_view: None,
+            hasher: DefaultHasher::new(),
+        }
+    }
+
+    pub fn render(&mut self, state: &S) -> bool {
+        let hasher = &mut self.hasher;
+        std::hash::Hash::hash(state, hasher);
+        let state_hash = hasher.finish();
+        if self.last_state.is_none() || self.last_state.as_ref().unwrap() != &state_hash {
+            let view = (self.render_function)(state);
+            self.last_state = Some(state_hash);
+            self.last_view = Some(view.clone());
+            self.layer.build_layer_tree(&view);
+            return true;
+        }
+        false
     }
 }

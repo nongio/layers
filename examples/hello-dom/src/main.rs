@@ -9,31 +9,14 @@ use layers::{prelude::*, skia::ColorType};
 
 use crate::{
     app_switcher::view_app_switcher,
-    toggle::{view_toggle, ToggleState},
-};
-use crate::{
     app_switcher::AppSwitcherState,
     list::{view_list, ListState},
+    toggle::{view_toggle, ToggleState},
 };
 
 mod app_switcher;
 mod list;
 mod toggle;
-trait View<S> {
-    fn view(&self, state: S) -> ViewLayer;
-    fn on_press(&self, state: S) {}
-    fn on_release(&self, state: S) {}
-    fn on_move(&self, state: S) {}
-}
-// impl View for a function that accept an argument
-impl<F, T> View<T> for F
-where
-    F: Fn(T) -> ViewLayer,
-{
-    fn view(&self, state: T) -> ViewLayer {
-        (*self)(state)
-    }
-}
 
 fn main() {
     type WindowedContext = glutin::ContextWrapper<glutin::PossiblyCurrent, glutin::window::Window>;
@@ -149,8 +132,8 @@ fn main() {
             // "blender".into(),
         ],
     };
-    let layer_tree = view_app_switcher.view(state.clone());
-    layer.build_layer_tree(&layer_tree);
+    let mut app_switcher_view = layers::prelude::View::new(layer, Box::new(view_app_switcher));
+    app_switcher_view.render(&state);
 
     engine.update(0.0);
     events_loop.run(move |event, _, control_flow| {
@@ -184,17 +167,17 @@ fn main() {
                 }
 
                 WindowEvent::MouseInput {
-                    state: button_state,
+                    state: _button_state,
                     ..
                 } => {
-                    let layer_tree = view_app_switcher.view(state.clone());
-                    layer.build_layer_tree(&layer_tree);
+                    app_switcher_view.render(&state);
                 }
                 WindowEvent::KeyboardInput {
-                    device_id,
+                    device_id: _,
                     input,
-                    is_synthetic,
+                    is_synthetic: _,
                 } => {
+                    #[allow(clippy::single_match)]
                     match input.virtual_keycode {
                         Some(keycode) => match keycode {
                             winit::event::VirtualKeyCode::Space => {
@@ -214,22 +197,19 @@ fn main() {
                                         state.current_app,
                                         state.apps.len()
                                     );
-                                    let layer_tree = view_app_switcher.view(state.clone());
-                                    layer.build_layer_tree(&layer_tree);
+                                    app_switcher_view.render(&state);
                                 }
                             }
                             winit::event::VirtualKeyCode::A => {
                                 if input.state == winit::event::ElementState::Released {
                                     state.apps.push("test".into());
-                                    let layer_tree = view_app_switcher.view(state.clone());
-                                    layer.build_layer_tree(&layer_tree);
+                                    app_switcher_view.render(&state);
                                 }
                             }
                             winit::event::VirtualKeyCode::S => {
                                 if input.state == winit::event::ElementState::Released {
                                     state.apps.pop();
-                                    let layer_tree = view_app_switcher.view(state.clone());
-                                    layer.build_layer_tree(&layer_tree);
+                                    app_switcher_view.render(&state);
                                 }
                             }
                             winit::event::VirtualKeyCode::Escape => {

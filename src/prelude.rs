@@ -5,7 +5,7 @@ pub use super::{
     engine::{
         animation::timing::*, animation::*, rendering::*, scene::Scene, LayersEngine, NodeRef,
     },
-    layers::{layer::Layer, BuildLayerTree, ViewLayer, ViewLayerBuilder},
+    layers::{layer::Layer, BuildLayerTree, View, ViewLayer, ViewLayerBuilder},
     types::{
         BlendMode, BorderRadius, BorderStyle, Color, Image, Matrix, PaintColor, Point, Rectangle,
     },

@@ -1,7 +1,7 @@
 use layers::{prelude::*, skia::Color4f};
 use layers::{skia, types::Size};
 
-#[derive(Clone)]
+#[derive(Clone, Hash)]
 pub struct AppSwitcherState {
     pub current_app: usize,
     pub apps: Vec<String>,
@@ -119,7 +119,7 @@ pub fn view_app_icon(state: AppIconState) -> ViewLayer {
         .build()
         .unwrap()
 }
-pub fn view_app_switcher(state: AppSwitcherState) -> ViewLayer {
+pub fn view_app_switcher(state: &AppSwitcherState) -> ViewLayer {
     const ICON_SIZE: f32 = 200.0;
     const PADDING: f32 = 20.0;
 
