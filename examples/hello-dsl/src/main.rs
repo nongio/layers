@@ -15,16 +15,29 @@ impl LayersBuilder {
         println!("Layer: {}", name);
     }
 }
+
+#[allow(non_snake_case)]
+pub fn LayerView() -> ViewLayerBuilder {
+    ViewLayerBuilder::default()
+}
 fn main() {
     if let Ok(root) = ::syn::parse2::<LayerItem>(quote!(
-        Layer().size(100, 100).background("red") // {
-                                                 //     Layer()
-                                                 //     {
-                                                 //         // for i in 0..10 {
-                                                 //         Layer("text")
-                                                 //         // }
-                                                 //     }
-                                                 // }
+        LayerView()
+            .size((Point { x: 100.0, y: 100.0 }, None))
+            .background_color((
+                PaintColor::Solid {
+                    color: Color::new_hex("#ffffff"),
+                },
+                None,
+            )){
+                LayerView()
+                    .size((Point { x: 100.0, y: 100.0 }, None))
+               //     {
+               //         // for i in 0..10 {
+               //         Layer("text")
+               //         // }
+               //     }
+            }
     )) {
         // println!("{}", root);
         let code = code_gen(&root);
@@ -32,16 +45,22 @@ fn main() {
     }
     // let engine = LayersEngine::new();
 
-    // let tree = layers! {
-    // Layer()
-    // .size(100.0, 100.0)
-    // .background("red")
-    // // {
-    // //     Layer()
-    // //     {
-    // //         Layer()
-    // //     }
-    // // }
-
-    // };
+    let tree = layers! {
+        LayerView()
+        .size((Point { x: 100.0, y: 100.0 }, None))
+        .background_color((
+            PaintColor::Solid {
+                color: Color::new_hex("#ffffff"),
+            },
+            None,
+        )){
+            LayerView()
+                .size((Point { x: 100.0, y: 100.0 }, None))
+           //     {
+           //         // for i in 0..10 {
+           //         Layer("text")
+           //         // }
+           //     }
+        }
+    };
 }

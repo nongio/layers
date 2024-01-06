@@ -4,17 +4,23 @@ use glutin::event::WindowEvent;
 use glutin::event_loop::{ControlFlow, EventLoop};
 use glutin::window::WindowBuilder;
 use glutin::GlProfile;
-use layers::prelude::*;
 use layers::types::Size;
+use layers::{prelude::*, skia::ColorType};
 
-use crate::list::{view_list, ListState};
-use crate::toggle::{view_toggle, ToggleState};
+use crate::{
+    app_switcher::view_app_switcher,
+    toggle::{view_toggle, ToggleState},
+};
+use crate::{
+    app_switcher::AppSwitcherState,
+    list::{view_list, ListState},
+};
 
+mod app_switcher;
 mod list;
 mod toggle;
-
 trait View<S> {
-    fn view(&self, state: S) -> ViewLayerTree;
+    fn view(&self, state: S) -> ViewLayer;
     fn on_press(&self, state: S) {}
     fn on_release(&self, state: S) {}
     fn on_move(&self, state: S) {}
@@ -22,9 +28,9 @@ trait View<S> {
 // impl View for a function that accept an argument
 impl<F, T> View<T> for F
 where
-    F: Fn(T) -> ViewLayerTree,
+    F: Fn(T) -> ViewLayer,
 {
-    fn view(&self, state: T) -> ViewLayerTree {
+    fn view(&self, state: T) -> ViewLayer {
         (*self)(state)
     }
 }
@@ -72,11 +78,13 @@ fn main() {
     let pixel_format: usize = pixel_format.stencil_bits.try_into().unwrap();
 
     let mut skia_renderer = layers::renderer::skia_fbo::SkiaFboRenderer::create(
-        size.width.try_into().unwrap(),
-        size.height.try_into().unwrap(),
+        size.width as i32,
+        size.height as i32,
         sample_count,
         pixel_format,
-        0,
+        ColorType::RGBA8888,
+        layers::skia::gpu::SurfaceOrigin::BottomLeft,
+        0_u32,
     );
 
     let mut _mouse_x = 0.0;
@@ -103,28 +111,48 @@ fn main() {
     );
     root.set_position(Point { x: 0.0, y: 0.0 }, None);
     root.set_border_corner_radius(10.0, None);
-
+    root.set_layout_style(taffy::Style {
+        position: taffy::Position::Absolute,
+        padding: taffy::Rect {
+            left: taffy::LengthPercentage::Points(0.0),
+            right: taffy::LengthPercentage::Points(0.0),
+            top: taffy::LengthPercentage::Points(0.0),
+            bottom: taffy::LengthPercentage::Points(0.0),
+        },
+        size: taffy::Size {
+            width: taffy::Dimension::Percent(1.0),
+            height: taffy::Dimension::Percent(1.0),
+        },
+        justify_content: Some(taffy::JustifyContent::Center),
+        align_items: Some(taffy::AlignItems::Center),
+        ..Default::default()
+    });
     engine.scene_set_root(root.clone());
     let layer = engine.new_layer();
     engine.scene_add_layer_to(layer.clone(), root.id());
-    let layer2 = engine.new_layer();
-    engine.scene_add_layer_to(layer2.clone(), root.id());
 
     let instant = std::time::Instant::now();
     let mut update_frame = 0;
     let mut draw_frame = -1;
     let last_instant = instant;
 
-    let state = ToggleState { value: false };
-    let layer_tree = view_toggle.view(state);
+    let mut state = AppSwitcherState {
+        current_app: 0,
+        apps: vec![
+            "firefox".into(),
+            "code".into(),
+            "terminal".into(),
+            // "spotify".into(),
+            // "discord".into(),
+            // "steam".into(),
+            // "obs".into(),
+            // "blender".into(),
+        ],
+    };
+    let layer_tree = view_app_switcher.view(state.clone());
     layer.build_layer_tree(&layer_tree);
 
-    let state = ListState {
-        values: vec!["Hello World!".into()],
-    };
-    let layer_tree = view_list(state);
-    layer2.build_layer_tree(&layer_tree);
-
+    engine.update(0.0);
     events_loop.run(move |event, _, control_flow| {
         let now = std::time::Instant::now();
         let dt = (now - last_instant).as_secs_f32();
@@ -139,11 +167,13 @@ fn main() {
 
                     let size = env.windowed_context.window().inner_size();
                     skia_renderer = layers::renderer::skia_fbo::SkiaFboRenderer::create(
-                        size.width.try_into().unwrap(),
-                        size.height.try_into().unwrap(),
+                        size.width as i32,
+                        size.height as i32,
                         sample_count,
                         pixel_format,
-                        0,
+                        ColorType::RGBA8888,
+                        layers::skia::gpu::SurfaceOrigin::BottomLeft,
+                        0_u32,
                     );
 
                     env.windowed_context.window().request_redraw();
@@ -157,15 +187,7 @@ fn main() {
                     state: button_state,
                     ..
                 } => {
-                    let mut state = ToggleState { value: false };
-
-                    if button_state == winit::event::ElementState::Released {
-                        state.value = false;
-                    } else {
-                        state.value = true;
-                    }
-                    let layer_tree = view_toggle.view(state);
-                    // println!("layer_tree: {:?}", layer_tree);
+                    let layer_tree = view_app_switcher.view(state.clone());
                     layer.build_layer_tree(&layer_tree);
                 }
                 WindowEvent::KeyboardInput {
@@ -182,6 +204,37 @@ fn main() {
                                 if needs_redraw {
                                     env.windowed_context.window().request_redraw();
                                     // draw_frame = -1;
+                                }
+                            }
+                            winit::event::VirtualKeyCode::Tab => {
+                                if input.state == winit::event::ElementState::Released {
+                                    state.current_app = (state.current_app + 1) % state.apps.len();
+                                    println!(
+                                        "current app {} {}",
+                                        state.current_app,
+                                        state.apps.len()
+                                    );
+                                    let layer_tree = view_app_switcher.view(state.clone());
+                                    layer.build_layer_tree(&layer_tree);
+                                }
+                            }
+                            winit::event::VirtualKeyCode::A => {
+                                if input.state == winit::event::ElementState::Released {
+                                    state.apps.push("test".into());
+                                    let layer_tree = view_app_switcher.view(state.clone());
+                                    layer.build_layer_tree(&layer_tree);
+                                }
+                            }
+                            winit::event::VirtualKeyCode::S => {
+                                if input.state == winit::event::ElementState::Released {
+                                    state.apps.pop();
+                                    let layer_tree = view_app_switcher.view(state.clone());
+                                    layer.build_layer_tree(&layer_tree);
+                                }
+                            }
+                            winit::event::VirtualKeyCode::Escape => {
+                                if input.state == winit::event::ElementState::Released {
+                                    *control_flow = ControlFlow::Exit;
                                 }
                             }
                             _ => (),

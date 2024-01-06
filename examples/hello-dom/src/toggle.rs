@@ -4,7 +4,7 @@ use std::sync::Arc;
 pub struct ToggleState {
     pub value: bool,
 }
-pub fn view_toggle(state: ToggleState) -> ViewLayerTree {
+pub fn view_toggle(state: ToggleState) -> ViewLayer {
     const SIZE: f32 = 50.0;
     const PADDING: f32 = 5.0;
     const TOGGLE_SIZE: f32 = SIZE * 2.0;
@@ -18,74 +18,60 @@ pub fn view_toggle(state: ToggleState) -> ViewLayerTree {
     } else {
         Color::new_hex("#00B407")
     };
-    ViewLayerTreeBuilder::default()
-        .root(Arc::new(
-            ViewLayerBuilder::default()
-                .position((Point { x: 30.0, y: 30.0 }, None))
-                .size((
-                    Point {
-                        x: TOGGLE_SIZE,
-                        y: SIZE + PADDING * 2.0,
-                    },
-                    None,
-                ))
-                .background_color((
-                    PaintColor::Solid {
-                        color: background_color,
-                    },
-                    Some(Transition {
-                        delay: 0.0,
-                        duration: 0.3,
-                        timing: TimingFunction::default(),
-                    }),
-                ))
-                .border_corner_radius((
-                    BorderRadius::new_single((SIZE + PADDING * 2.0) / 2.0),
-                    None,
-                ))
-                .scale((
-                    Point { x: 3.0, y: 3.0 },
-                    Some(Transition {
-                        delay: 0.0,
-                        duration: 1.0,
-                        timing: TimingFunction::default(),
-                    }),
-                ))
-                .build()
-                .unwrap(),
+
+    ViewLayerBuilder::default()
+        .position((Point { x: 30.0, y: 30.0 }, None))
+        .size((
+            Point {
+                x: TOGGLE_SIZE,
+                y: SIZE + PADDING * 2.0,
+            },
+            None,
         ))
-        .children(vec![Arc::new(
-            ViewLayerTreeBuilder::default()
-                .root(Arc::new(
-                    ViewLayerBuilder::default()
-                        .position((
-                            Point {
-                                x: position,
-                                y: PADDING,
-                            },
-                            Some(Transition {
-                                delay: 0.0,
-                                duration: 0.3,
-                                timing: TimingFunction::default(),
-                            }),
-                        ))
-                        .size((Point { x: SIZE, y: SIZE }, None))
-                        .background_color((
-                            PaintColor::Solid {
-                                color: Color::new_hex("#FFFFFF"),
-                            },
-                            None,
-                        ))
-                        .border_corner_radius((BorderRadius::new_single(SIZE / 2.0), None))
-                        .shadow_color((Color::new_rgba(0.0, 0.0, 0.0, 0.5), None))
-                        .shadow_offset((Point { x: 4.0, y: 4.0 }, None))
-                        .shadow_radius((4.0, None))
-                        .build()
-                        .unwrap(),
-                ))
-                .build()
-                .unwrap(),
-        )])
+        .background_color((
+            PaintColor::Solid {
+                color: background_color,
+            },
+            Some(Transition {
+                delay: 0.0,
+                duration: 0.3,
+                timing: TimingFunction::default(),
+            }),
+        ))
+        .border_corner_radius((BorderRadius::new_single((SIZE + PADDING * 2.0) / 2.0), None))
+        .scale((
+            Point { x: 3.0, y: 3.0 },
+            Some(Transition {
+                delay: 0.0,
+                duration: 1.0,
+                timing: TimingFunction::default(),
+            }),
+        ))
+        .children(vec![ViewLayerBuilder::default()
+            .position((
+                Point {
+                    x: position,
+                    y: PADDING,
+                },
+                Some(Transition {
+                    delay: 0.0,
+                    duration: 0.3,
+                    timing: TimingFunction::default(),
+                }),
+            ))
+            .size((Point { x: SIZE, y: SIZE }, None))
+            .background_color((
+                PaintColor::Solid {
+                    color: Color::new_hex("#FFFFFF"),
+                },
+                None,
+            ))
+            .border_corner_radius((BorderRadius::new_single(SIZE / 2.0), None))
+            .shadow_color((Color::new_rgba(0.0, 0.0, 0.0, 0.5), None))
+            .shadow_offset((Point { x: 4.0, y: 4.0 }, None))
+            .shadow_radius((4.0, None))
+            .build()
+            .unwrap()])
         .build()
         .unwrap()
 }
