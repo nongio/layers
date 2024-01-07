@@ -1,5 +1,4 @@
-pub use super::drawing::scene::{draw_scene, render_node, render_node_children};
-pub use super::renderer::skia_fbo::draw_node_children;
+pub use super::drawing::scene::{draw_scene, render_node_tree};
 pub use super::{
     drawing::scene::DrawScene,
     engine::{

@@ -42,10 +42,10 @@ impl Scene {
         Arc::new(Self::new(width, height))
     }
 
-    pub fn append_node_to(&self, children: NodeRef, parent: NodeRef) {
+    pub fn append_node_to(&self, child: NodeRef, parent: NodeRef) {
         let nodes = self.nodes.data();
         let mut nodes = nodes.write().unwrap();
-        parent.append(*children, &mut nodes);
+        parent.append(*child, &mut nodes);
     }
     /// Add a new node to the scene
     fn insert_node(&self, node: &SceneNode, parent: Option<NodeRef>) -> NodeRef {
