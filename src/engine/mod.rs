@@ -22,7 +22,7 @@ use taffy::prelude::*;
 
 use std::{
     ops::Deref,
-    sync::{Arc, RwLock},
+    sync::{atomic::AtomicBool, Arc, RwLock},
 };
 
 use crate::{
@@ -33,13 +33,13 @@ use crate::{
 use self::{
     animation::{Animation, Transition},
     command::NoopChange,
-    node::{ContainsPoint, RenderableFlags},
+    node::{ContainsPoint, DrawCacheManagement, RenderableFlags, SceneNode},
     scene::Scene,
     stages::{
-        cleanup_animations, cleanup_transactions, execute_transactions, trigger_callbacks,
-        update_animations, update_layout_tree, update_nodes,
+        cleanup_animations, cleanup_nodes, cleanup_transactions, execute_transactions,
+        trigger_callbacks, update_animations, update_layout_tree, update_nodes,
     },
-    storage::{FlatStorage, FlatStorageId, TreeStorageId},
+    storage::{FlatStorage, FlatStorageId, TreeStorageId, TreeStorageNode},
 };
 #[derive(Clone)]
 pub struct Timestamp(f32);
@@ -50,7 +50,7 @@ pub trait Command {
     fn value_id(&self) -> usize;
 }
 
-pub trait SyncCommand: Command + Sync + Send {}
+pub trait SyncCommand: Command + Sync + Send + std::fmt::Debug {}
 /// A trait for objects that contain a transition.
 pub trait WithTransition {
     // fn transition(&self) -> Option<Transition<Easing>>;
@@ -61,7 +61,7 @@ pub trait CommandWithAnimation: SyncCommand {
     fn animation(&self) -> Option<Animation>;
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct AnimatedNodeChange {
     pub change: Arc<dyn SyncCommand>,
     animation_id: Option<AnimationRef>,
@@ -119,15 +119,16 @@ pub struct Engine {
     transaction_handlers: FlatStorage<TransitionCallbacks>,
     pub layout_tree: RwLock<Taffy>,
     layout_root: RwLock<taffy::node::Node>,
+    pub damage: RwLock<crate::types::Rectangle>,
 }
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct TransactionRef(pub FlatStorageId);
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct AnimationRef(FlatStorageId);
 
 /// An identifier for a node in the three storage
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, std::cmp::Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, std::cmp::Ord, Hash)]
 pub struct NodeRef(pub TreeStorageId);
 
 #[derive(Clone)]
@@ -139,6 +140,7 @@ impl From<NodeRef> for TreeStorageId {
     }
 }
 
+#[derive(Clone)]
 pub struct LayersEngine {
     pub(crate) engine: Arc<Engine>,
 }
@@ -169,6 +171,7 @@ impl LayersEngine {
             model,
             id: Arc::new(RwLock::new(None)),
             layout_node_id: layout,
+            hidden: Arc::new(AtomicBool::new(false)),
         }
     }
     pub fn new_animation(&self, transition: Transition) -> AnimationRef {
@@ -194,6 +197,9 @@ impl LayersEngine {
     pub fn scene_set_root(&self, layer: impl Into<Layer>) -> NodeRef {
         self.engine.scene_set_root(layer)
     }
+    pub fn scene_get_node(&self, node: NodeRef) -> Option<TreeStorageNode<SceneNode>> {
+        self.engine.scene_get_node(node)
+    }
     pub fn scene(&self) -> &Arc<Scene> {
         &self.engine.scene
     }
@@ -207,6 +213,17 @@ impl LayersEngine {
     pub fn scene_layer_at(&self, point: Point) -> Option<NodeRef> {
         self.engine.layer_at(point)
     }
+    pub fn damage(&self) -> crate::types::Rectangle {
+        *self.engine.damage.read().unwrap()
+    }
+    pub fn clear_damage(&self) {
+        *self.engine.damage.write().unwrap() = crate::types::Rectangle::default();
+    }
+    pub fn root_layer(&self) -> Option<SceneNode> {
+        let root_id = self.scene_root()?;
+        let node = self.scene_get_node(root_id)?;
+        Some(node.get().clone())
+    }
 }
 
 impl std::fmt::Debug for LayersEngine {
@@ -216,10 +233,10 @@ impl std::fmt::Debug for LayersEngine {
 }
 impl Engine {
     fn new(width: f32, height: f32) -> Self {
-        // rayon::ThreadPoolBuilder::new()
-        //     .num_threads(2)
-        //     .build_global()
-        //     .unwrap();
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(2)
+            .build_global()
+            .unwrap();
         let mut layout_tree = Taffy::new();
         let layout_root = RwLock::new(
             layout_tree
@@ -233,6 +250,7 @@ impl Engine {
 
         let scene = Scene::create(width, height);
         let scene_root = RwLock::new(None);
+        let damage = RwLock::new(crate::types::Rectangle::default());
         Engine {
             scene,
             transactions: FlatStorage::new(),
@@ -242,32 +260,37 @@ impl Engine {
             layout_tree: RwLock::new(layout_tree),
             layout_root,
             scene_root,
+            damage,
         }
     }
     pub fn create(width: f32, height: f32) -> Arc<Self> {
         let new_engine = Self::new(width, height);
         Arc::new(new_engine)
     }
+
     pub fn scene_set_root(&self, layer: impl Into<Layer>) -> NodeRef {
         let layer: Layer = layer.into();
         let layout = layer.layout_node_id;
 
-        let id = self.scene.add(layer.clone(), layout);
-        layer.set_id(id);
-
-        let mut scene_root = self.scene_root.write().unwrap();
-        let layout_root = *self.layout_root.read().unwrap();
-        let mut layout_tree = self.layout_tree.write().unwrap();
-
-        if scene_root.is_none() {
-            *scene_root = Some(id);
-            layout_tree.remove(layout_root).unwrap();
-            *self.layout_root.write().unwrap() = layout;
-        } else {
-            let scene_root = *scene_root.unwrap();
-            self.scene.append_node_to(id, NodeRef(scene_root));
-            layout_tree.add_child(layout_root, layout).unwrap();
+        // append layer if it is not already in the scene
+        let id = layer.id().unwrap_or_else(|| {
+            let id = self.scene.add(layer.clone(), layout);
+            layer.set_id(id);
+            id
+        });
+        // detach the node from the scene
+        {
+            let nodes = self.scene.nodes.data();
+            let mut arena = nodes.write().unwrap();
+            id.0.detach(&mut arena);
         }
+
+        // set the new root
+        let mut scene_root = self.scene_root.write().unwrap();
+        *scene_root = Some(id);
+        *self.layout_root.write().unwrap() = layout;
+        // let mut layout_tree = self.layout_tree.write().unwrap();
+
         let change = Arc::new(NoopChange::new(id.0.into()));
         self.schedule_change(id, change, None);
         id
@@ -275,37 +298,38 @@ impl Engine {
 
     pub fn scene_add_layer(&self, layer: impl Into<Layer>, parent: Option<NodeRef>) -> NodeRef {
         let layer: Layer = layer.into();
-        let mut layout_tree = self.layout_tree.write().unwrap();
+        let layout = layer.layout_node_id;
 
-        let layer_layout = layer.layout_node_id;
-        let id = self.scene.append(parent, layer.clone(), layer_layout);
-        layer.set_id(id);
-
-        if let Some(parent) = parent {
-            let parent_layout = self.scene.get_node(parent).unwrap().get().layout_node_id;
-            self.scene.append_node_to(id, parent);
-            layout_tree.add_child(parent_layout, layer_layout).unwrap();
-
-            let change: Arc<NoopChange> = Arc::new(NoopChange::new(parent.0.into()));
-            self.schedule_change(parent, change, None);
+        let parent = parent.or_else(|| {
+            let scene_root = *self.scene_root.read().unwrap();
+            scene_root
+        });
+        let id = if parent.is_none() {
+            // if we append to a scene without a root, we set the layer as the root
+            self.scene_set_root(layer)
         } else {
-            let mut scene_root = self.scene_root.write().unwrap();
-            let layout_root = *self.layout_root.read().unwrap();
-            if scene_root.is_none() {
-                *scene_root = Some(id);
-                layout_tree.remove(layout_root).unwrap();
-                *self.layout_root.write().unwrap() = layer_layout;
-            } else {
-                let scene_root = *scene_root.unwrap();
-                let root_id = NodeRef(scene_root);
-                self.scene.append_node_to(id, NodeRef(scene_root));
-                layout_tree.add_child(layout_root, layer_layout).unwrap();
-                let change: Arc<NoopChange> = Arc::new(NoopChange::new(root_id.0.into()));
-                self.schedule_change(root_id, change, None);
+            let parent = parent.unwrap();
+            let id = layer.id().unwrap_or_else(|| {
+                let id = self.scene.add(layer.clone(), layout);
+                layer.set_id(id);
+                id
+            });
+
+            let parent_node = self.scene.get_node(parent).unwrap();
+            let parent_node = parent_node.get();
+            parent_node.set_need_layout(true);
+
+            let parent_layout = parent_node.layout_node_id;
+            self.scene.append_node_to(id, parent);
+
+            let mut layout_tree = self.layout_tree.write().unwrap();
+            layout_tree.add_child(parent_layout, layout).unwrap();
+            let res = layout_tree.mark_dirty(parent_layout);
+            if let Some(err) = res.err() {
+                println!("layout err {}", err);
             }
-        }
-        let change: Arc<NoopChange> = Arc::new(NoopChange::new(id.0.into()));
-        self.schedule_change(id, change, None);
+            id
+        };
         id
     }
     pub fn scene_remove_layer(&self, layer: impl Into<Option<NodeRef>>) {
@@ -313,15 +337,30 @@ impl Engine {
         if let Some(layer_id) = layer_id {
             {
                 if let Some(node) = self.scene.get_node(layer_id) {
+                    let parent = node.parent();
                     let node = node.get();
                     self.scene.remove(layer_id);
+                    if let Some(parent) = parent {
+                        if let Some(parent) = self.scene.get_node(parent) {
+                            let parent = parent.get();
+                            parent.set_need_layout(true);
+                            let mut layout = self.layout_tree.write().unwrap();
+                            let res = layout.mark_dirty(parent.layout_node_id);
+                            if let Some(err) = res.err() {
+                                println!("layout err {}", err);
+                            }
+                        }
+                    }
+
                     let mut layout_tree = self.layout_tree.write().unwrap();
                     layout_tree.remove(node.layout_node_id).unwrap();
                 }
             }
         }
     }
-
+    pub fn scene_get_node(&self, node: NodeRef) -> Option<TreeStorageNode<SceneNode>> {
+        self.scene.get_node(node)
+    }
     pub fn now(&self) -> f32 {
         self.timestamp.read().unwrap().0
     }
@@ -395,47 +434,54 @@ impl Engine {
     }
     pub fn update(&self, dt: f32) -> bool {
         let mut timestamp = self.timestamp.write().unwrap();
-        *timestamp = Timestamp(timestamp.0 + dt);
+        let t = Timestamp(timestamp.0 + dt);
 
         // 1.1 Update animations to the current timestamp
-        let finished_animations = update_animations(self, timestamp.clone());
+        let finished_animations = update_animations(self, &t);
+        *timestamp = t;
         // 1.2 Execute transactions using the updated animations
-        let (mut updated_nodes, finished_transations, needs_redraw) = execute_transactions(self);
-
+        let (updated_nodes, finished_transitions, _needs_redraw) = execute_transactions(self);
+        let needs_draw = !updated_nodes.is_empty();
         // merge the updated nodes with the nodes that are part of the layout calculation
-        let arena = self.scene.nodes.data();
-        let arena = arena.read().unwrap();
-
-        let nodes = arena.iter().filter_map(|node| {
-            if node.is_removed() {
-                return None;
-            }
-            let scene_node = node.get();
-            // let layout = self.get_node_layout_style(scene_node.layout_node_id);
-            // if layout.position != Position::Absolute {
-            scene_node.insert_flags(RenderableFlags::NEEDS_LAYOUT | RenderableFlags::NEEDS_PAINT);
-            scene_node.id()
-            // } else {
-            // None
-            // }
-        });
-        updated_nodes.extend(nodes); // nodes are deduplicated in the update_nodes function
-                                     // 2.0 update the layout tree using taffy
+        let updated_nodes: Vec<NodeRef>;
+        {
+            let arena = self.scene.nodes.data();
+            let arena = arena.read().unwrap();
+            updated_nodes = arena
+                .iter()
+                .filter_map(|node| {
+                    if node.is_removed() {
+                        return None;
+                    }
+                    let scene_node = node.get();
+                    // let layout = self.get_node_layout_style(scene_node.layout_node_id);
+                    // if layout.position != Position::Absolute {
+                    scene_node.insert_flags(RenderableFlags::NEEDS_LAYOUT);
+                    scene_node.id()
+                    // } else {
+                    // None
+                    // }
+                })
+                .collect();
+        };
+        // 2.0 update the layout tree using taffy
         update_layout_tree(self);
 
         // 3.0 update render nodes and trigger repaint
-        update_nodes(self, updated_nodes);
-
-        // 4.0 update render nodes and trigger repaint
+        let damage = update_nodes(self, updated_nodes);
+        *self.damage.write().unwrap() = damage;
+        // 4.0 trigger the callbacks for the listeners on the transitions
         trigger_callbacks(self);
 
         // 5.0 cleanup the animations marked as done and
         // transactions already exectured
         cleanup_animations(self, finished_animations);
+        cleanup_transactions(self, finished_transitions);
 
-        cleanup_transactions(self, finished_transations);
+        // 6.0 cleanup the nodes that are marked as removed
+        cleanup_nodes(self);
 
-        needs_redraw
+        needs_draw
     }
 
     pub fn get_node_layout_style(&self, node: Node) -> Style {
@@ -455,7 +501,7 @@ impl Engine {
             height: size.height,
         };
 
-        // println!("set_node_layout_size: {:?}", style.size);
+        // println!("{:?} set_node_layout_size: {:?}", node, style.size);
         layout.set_style(node, style).unwrap();
     }
 

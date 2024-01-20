@@ -1,9 +1,47 @@
+use std::{
+    error::Error,
+    sync::{Arc, RwLock},
+};
+
+use taffy::style::Display;
+
 use crate::{
     engine::command::Attribute,
     types::{BlendMode, Color, Point, *},
 };
 
+// pub type ContentDrawFunction = Box<dyn Fn(&mut skia_safe::Canvas, f32, f32)>;
+
+#[allow(clippy::type_complexity)]
+#[derive(Clone)]
+pub struct ContentDrawFunction(
+    pub Arc<dyn 'static + Fn(&mut skia_safe::Canvas, f32, f32) + Send + Sync>,
+);
+
+impl<F: Fn(&mut skia_safe::Canvas, f32, f32) + Send + Sync + 'static> From<F>
+    for ContentDrawFunction
+{
+    fn from(f: F) -> Self {
+        ContentDrawFunction(Arc::new(f))
+    }
+}
+use std::fmt;
+
+#[derive(Debug)]
+pub struct ContentDrawError {
+    pub message: String,
+}
+
+impl fmt::Display for ContentDrawError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.message)
+    }
+}
+
+impl Error for ContentDrawError {}
+
 pub(crate) struct ModelLayer {
+    pub display: Attribute<Display>,
     pub anchor_point: Attribute<Point>,
     pub position: Attribute<Point>,
     pub scale: Attribute<Point>,
@@ -17,7 +55,7 @@ pub(crate) struct ModelLayer {
     pub shadow_radius: Attribute<f32>,
     pub shadow_spread: Attribute<f32>,
     pub shadow_color: Attribute<Color>,
-    pub content: Attribute<Option<Picture>>,
+    pub draw_content: Arc<RwLock<Option<ContentDrawFunction>>>,
     pub blend_mode: Attribute<BlendMode>,
     pub opacity: Attribute<f32>,
 }
@@ -26,8 +64,8 @@ impl Default for ModelLayer {
     fn default() -> Self {
         let position = Attribute::new(Point { x: 0.0, y: 0.0 });
         let size = Attribute::new(Size {
-            width: taffy::style::Dimension::Auto,
-            height: taffy::style::Dimension::Auto,
+            width: taffy::style::Dimension::Points(0.0),
+            height: taffy::style::Dimension::Points(0.0),
         });
         let anchor_point = Attribute::new(Point { x: 0.0, y: 0.0 });
         let scale = Attribute::new(Point { x: 1.0, y: 1.0 });
@@ -47,11 +85,13 @@ impl Default for ModelLayer {
         let shadow_offset = Attribute::new(Point { x: 0.0, y: 0.0 });
         let shadow_radius = Attribute::new(0.0);
         let shadow_spread = Attribute::new(0.0);
-        let shadow_color = Attribute::new(Color::new_rgba(0.0, 0.0, 0.0, 1.0));
-        let content = Attribute::new(None);
+        let shadow_color = Attribute::new(Color::new_rgba(0.0, 0.0, 0.0, 0.0));
+        let content = Arc::new(RwLock::new(None));
         let blend_mode = Attribute::new(BlendMode::Normal);
         let opacity = Attribute::new(1.0);
+        let display = Attribute::new(Display::None);
         Self {
+            display,
             anchor_point,
             position,
             scale,
@@ -65,7 +105,7 @@ impl Default for ModelLayer {
             shadow_radius,
             shadow_spread,
             shadow_color,
-            content,
+            draw_content: content,
             blend_mode,
             opacity,
         }

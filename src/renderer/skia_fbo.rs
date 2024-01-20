@@ -110,16 +110,19 @@ impl SkiaFboRenderer {
 }
 
 impl DrawScene for SkiaFboRenderer {
-    fn draw_scene(&self, scene: &Scene, root_id: NodeRef) {
+    fn draw_scene(&self, scene: &Scene, root_id: NodeRef, damage: Option<skia_safe::Rect>) {
         let mut surface = self.surface();
         let canvas = surface.canvas();
-
+        let save_point = canvas.save();
+        if let Some(damage) = damage {
+            canvas.clip_rect(damage, None, None);
+        }
         let arena = scene.nodes.data();
         let arena = &*arena.read().unwrap();
         if let Some(_root) = scene.get_node(root_id) {
             render_node_tree(root_id, arena, canvas, 1.0);
         }
-
+        canvas.restore_to_count(save_point);
         surface.flush_and_submit();
     }
 }

@@ -34,7 +34,7 @@ impl Size {
             height: taffy::style::Dimension::Points(height),
         }
     }
-    pub fn percen(width: f32, height: f32) -> Self {
+    pub fn percent(width: f32, height: f32) -> Self {
         Size {
             width: taffy::style::Dimension::Percent(width),
             height: taffy::style::Dimension::Percent(height),
@@ -75,7 +75,7 @@ pub struct Point3d {
     pub y: f32,
     pub z: f32,
 }
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Default, Debug)]
 #[repr(C)]
 pub struct Rectangle {
     pub x: f32,
@@ -162,10 +162,10 @@ impl Default for BorderRadius {
 impl Default for Color {
     fn default() -> Self {
         Color {
-            l: 1.0,
-            a: 1.0,
-            b: 1.0,
-            alpha: 1.0,
+            l: 0.0,
+            a: 0.0,
+            b: 0.0,
+            alpha: 0.0,
         }
     }
 }

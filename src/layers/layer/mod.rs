@@ -1,16 +1,13 @@
 pub(crate) mod drawable;
 pub(crate) mod model;
 pub(crate) mod render_layer;
+use self::model::ContentDrawFunction;
 pub(crate) use self::model::ModelLayer;
 
-use skia_safe::gpu::BackendTexture;
-
-use skia_safe::gpu;
-use skia_safe::gpu::gl::TextureInfo;
-use std::sync::RwLock;
+use std::sync::{atomic::AtomicBool, RwLock};
 use std::{fmt, sync::Arc};
-use taffy::prelude::Node;
 use taffy::style::Style;
+use taffy::{prelude::Node, style::Display};
 
 use crate::engine::animation::*;
 use crate::engine::command::*;
@@ -25,6 +22,7 @@ pub struct Layer {
     pub id: Arc<RwLock<Option<NodeRef>>>,
     pub(crate) model: Arc<ModelLayer>,
     pub layout_node_id: Node,
+    pub hidden: Arc<AtomicBool>,
 }
 
 impl Layer {
@@ -45,6 +43,7 @@ impl Layer {
             id,
             model,
             layout_node_id: layout,
+            hidden: Arc::new(AtomicBool::new(false)),
         }
     }
     pub fn set_id(&self, id: NodeRef) {
@@ -53,6 +52,46 @@ impl Layer {
     pub fn id(&self) -> Option<NodeRef> {
         let id = *self.id.read().unwrap();
         id
+    }
+    pub fn set_hidden(&self, hidden: bool) {
+        self.hidden
+            .store(hidden, std::sync::atomic::Ordering::Relaxed);
+
+        // when hidden we set display to none so that the layout engine
+        // doesn't layout the node
+        let mut display = Display::None;
+
+        if !hidden {
+            display = self.model.display.value();
+        }
+        let mut style = self.engine.get_node_layout_style(self.layout_node_id);
+        style.display = display;
+        self.engine
+            .set_node_layout_style(self.layout_node_id, style);
+
+        if let Some(id) = self.id() {
+            // let node = self.engine.scene.get_node(id.0);
+            let arena = self.engine.scene.nodes.data();
+            let arena = arena.read().unwrap();
+            let mut iter = id.ancestors(&arena);
+            if let Some(node) = self.engine.scene.get_node(id) {
+                let node = node.get();
+                node.insert_flags(RenderableFlags::NEEDS_LAYOUT | RenderableFlags::NEEDS_PAINT);
+            }
+
+            iter.next(); // skip self
+            if let Some(parent_id) = iter.next() {
+                drop(arena);
+                if let Some(parent) = self.engine.scene.get_node(NodeRef(parent_id)) {
+                    let parent = parent.get();
+                    parent
+                        .insert_flags(RenderableFlags::NEEDS_LAYOUT | RenderableFlags::NEEDS_PAINT);
+                }
+            }
+        }
+    }
+    pub fn hidden(&self) -> bool {
+        self.hidden.load(std::sync::atomic::Ordering::Relaxed)
     }
     change_model!(position, Point, RenderableFlags::NEEDS_LAYOUT);
     change_model!(background_color, PaintColor, RenderableFlags::NEEDS_PAINT);
@@ -71,7 +110,6 @@ impl Layer {
     change_model!(shadow_radius, f32, RenderableFlags::NEEDS_PAINT);
     change_model!(shadow_spread, f32, RenderableFlags::NEEDS_PAINT);
     change_model!(shadow_color, Color, RenderableFlags::NEEDS_PAINT);
-    change_model!(content, Option<Picture>, RenderableFlags::NEEDS_PAINT);
     change_model!(opacity, f32, RenderableFlags::NEEDS_PAINT);
 
     pub fn set_size(
@@ -103,7 +141,6 @@ impl Layer {
             tr = self.engine.schedule_change(id, change, animation);
         } else {
             self.model.size.set(value);
-            // self.engine.set_node_layout_size(self.layout, value);
         }
         tr
     }
@@ -121,61 +158,43 @@ impl Layer {
         self.engine.get_node_layout_style(self.layout_node_id)
     }
 
-    // // set content from gl texture
-    pub fn set_content_from_texture(
-        &self,
-        context: &mut gpu::RecordingContext,
-        texture_id: u32,
-        target: skia_safe::gpu::gl::Enum,
-        // _format: skia_safe::gpu::gl::Enum,
-        size: impl Into<Point>,
-    ) {
-        let size = size.into();
-        unsafe {
-            let texture_info = TextureInfo {
-                target,
-                id: texture_id,
-                format: skia_safe::gpu::gl::Format::RGBA8.into(),
-            };
-
-            let texture = BackendTexture::new_gl(
-                (size.x as i32, size.y as i32),
-                skia_safe::gpu::MipMapped::No,
-                texture_info,
-            );
-
-            let image = Image::from_texture(
-                context,
-                &texture,
-                skia_safe::gpu::SurfaceOrigin::TopLeft,
-                skia_safe::ColorType::RGBA8888,
-                skia_safe::AlphaType::Premul,
-                None,
-            )
-            .unwrap();
-
-            let mut recorder = skia_safe::PictureRecorder::new();
-            let canvas = recorder.begin_recording(
-                skia_safe::Rect::from_wh(image.width() as f32, image.height() as f32),
-                None,
-            );
-            canvas.draw_image(&image, (0.0, 0.0), None);
-            let picture = recorder.finish_recording_as_picture(None);
-
-            self.model.content.set(picture);
-            if let Some(id) = self.id() {
-                let change = Arc::new(NoopChange::new(id.0.into()));
-                self.engine.schedule_change(id, change, None);
-            }
+    pub fn set_draw_content<F: Into<ContentDrawFunction>>(&self, content_handler: Option<F>) {
+        let mut model_content = self.model.draw_content.write().unwrap();
+        if let Some(content_handler) = content_handler {
+            *model_content = Some(content_handler.into());
+        } else {
+            *model_content = None;
+        }
+        if let Some(id) = self.id() {
+            let mut node = self.engine.scene.get_node(id).unwrap();
+            let node = node.get_mut();
+            node.insert_flags(RenderableFlags::NEEDS_PAINT);
         }
     }
-
     pub fn add_sublayer(&self, layer: Layer) -> NodeRef {
         self.engine.scene_add_layer(layer, self.id())
     }
 
     pub fn set_blend_mode(&self, blend_mode: BlendMode) {
         self.model.blend_mode.set(blend_mode);
+    }
+    pub fn set_display(&self, display: Display) {
+        self.model.display.set(display);
+    }
+
+    pub fn on_finish<F: Fn(f32) + Send + Sync + 'static>(
+        &self,
+        transaction: TransactionRef,
+        handler: F,
+    ) {
+        self.engine.on_finish(transaction, handler);
+    }
+    pub fn on_update<F: Fn(f32) + Send + Sync + 'static>(
+        &self,
+        transaction: TransactionRef,
+        handler: F,
+    ) {
+        self.engine.on_update(transaction, handler);
     }
 }
 

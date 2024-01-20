@@ -1,9 +1,4 @@
-// use skia_safe::canvas::SaveLayerRec;
 use skia_safe::*;
-
-// use skia_safe::image_filters::{blur, CropRect};
-use skia_safe::PaintStyle;
-use skia_safe::{Canvas, ClipOp, Point, RRect, Rect};
 
 use crate::layers::layer::render_layer::RenderLayer;
 use crate::types::PaintColor;
@@ -31,27 +26,31 @@ pub(crate) fn draw_layer(canvas: &mut Canvas, layer: &RenderLayer) {
             ),
         ],
     );
-
-    let save_count = canvas.save();
-    canvas.clip_rrect(rrbounds, None, None);
-
-    // Draw the background color.
-
     let background_color = match layer.background_color {
         PaintColor::Solid { color } => Color4f::from(color),
         _ => Color4f::new(1.0, 1.0, 1.0, layer.opacity),
     };
+    {
+        if (background_color.a * layer.opacity) > 0.0 {
+            let save_count = canvas.save();
+            canvas.clip_rrect(rrbounds, None, None);
 
-    let mut background_paint = Paint::new(background_color, None);
-    background_paint.set_anti_alias(true);
-    background_paint.set_style(PaintStyle::Fill);
-    // background_paint.set_blend_mode(skia_safe::BlendMode::SrcOver);
+            // Draw the background color.
 
-    canvas.draw_paint(&background_paint);
-    canvas.restore_to_count(save_count);
-
+            let mut background_paint = Paint::new(background_color, None);
+            background_paint.set_anti_alias(true);
+            background_paint.set_style(PaintStyle::Fill);
+            if layer.blend_mode == crate::types::BlendMode::BackgroundBlur {
+                background_paint.set_blend_mode(skia_safe::BlendMode::Luminosity);
+            }
+            if background_color.a > 0.0 {
+                canvas.draw_paint(&background_paint);
+            }
+            canvas.restore_to_count(save_count);
+        }
+    }
     // Draw shadow
-    if layer.shadow_color.a > 0.0 {
+    if layer.shadow_color.alpha > 0.0 {
         let mut shadow_paint = Paint::new(Color4f::from(layer.shadow_color), None);
 
         shadow_paint.set_mask_filter(MaskFilter::blur(
@@ -73,7 +72,7 @@ pub(crate) fn draw_layer(canvas: &mut Canvas, layer: &RenderLayer) {
         );
         let save_count = canvas.save();
         canvas.clip_rrect(rrbounds, Some(ClipOp::Difference), Some(true));
-        shadow_paint.set_alpha_f(layer.opacity);
+        shadow_paint.set_alpha_f(layer.opacity * layer.shadow_color.alpha);
         canvas.draw_rrect(shadow_rrect, &shadow_paint);
         canvas.restore_to_count(save_count);
     }

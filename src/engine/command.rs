@@ -19,12 +19,12 @@ use std::sync::{
 static ATTRIBUTE_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
 #[derive(Debug, Clone)]
-pub struct Attribute<V: Sync> {
+pub struct Attribute<V: Sync + std::fmt::Debug> {
     pub id: usize,
     value: Arc<RwLock<V>>,
 }
 
-impl<V: Sync + Clone> Attribute<V> {
+impl<V: Sync + Clone + std::fmt::Debug> Attribute<V> {
     pub fn new(value: V) -> Attribute<V> {
         let value = Arc::new(RwLock::new(value));
         Self {
@@ -54,7 +54,7 @@ impl<V: Sync + Clone> Attribute<V> {
 /// A representation of a change to a property, including an optional transition
 
 #[derive(Clone, Debug)]
-pub struct AttributeChange<V: Sync> {
+pub struct AttributeChange<V: Sync + std::fmt::Debug> {
     pub from: V,
     pub to: V,
     pub target: Attribute<V>,
@@ -64,7 +64,7 @@ pub struct AttributeChange<V: Sync> {
 /// Representation of a change to a model property, including what subsequent
 /// rendering steps are required
 #[derive(Clone, Debug)]
-pub struct ModelChange<T: Sync> {
+pub struct ModelChange<T: Sync + std::fmt::Debug> {
     pub value_change: AttributeChange<T>,
     pub flag: RenderableFlags,
 }
@@ -84,6 +84,7 @@ impl Transaction {
     }
 }
 
+#[derive(Debug)]
 pub struct NoopChange(usize);
 impl NoopChange {
     pub fn new(id: usize) -> Self {
@@ -106,7 +107,7 @@ impl From<NoopChange> for Option<AnimationRef> {
     }
 }
 
-impl<I: Interpolate + Sync + Clone + 'static> Command for ModelChange<I> {
+impl<I: Interpolate + Sync + Clone + std::fmt::Debug + 'static> Command for ModelChange<I> {
     fn execute(&self, progress: f32) -> RenderableFlags {
         let ModelChange {
             value_change, flag, ..
@@ -121,7 +122,10 @@ impl<I: Interpolate + Sync + Clone + 'static> Command for ModelChange<I> {
         self.value_change.target.id
     }
 }
-impl<I: Interpolate + Sync + Send + Clone + 'static> SyncCommand for ModelChange<I> {}
+impl<I: Interpolate + Sync + Send + Clone + std::fmt::Debug + 'static> SyncCommand
+    for ModelChange<I>
+{
+}
 
 macro_rules! change_model {
     ($variable_name:ident, $variable_type:ty, $flags:expr) => {
@@ -132,24 +136,29 @@ macro_rules! change_model {
                 transition: Option<Transition>,
             )  -> TransactionRef {
                 let value:$variable_type = value.into();
-                let flags = $flags;
 
-                let change: Arc<ModelChange<$variable_type>> = Arc::new(ModelChange {
-                    value_change: self.model.$variable_name.to(value.clone(), transition),
-                    flag: flags,
-                });
+                let mut change: Option<Arc<ModelChange<$variable_type>>> = None;
+                if  self.model.$variable_name.value() != value  {
+                    let flags = $flags;
+                    change = Some(Arc::new(ModelChange {
+                        value_change: self.model.$variable_name.to(value.clone(), transition),
+                        flag: flags,
+                    }));
+                }
                 let mut tr = crate::engine::TransactionRef(0);
                 let id:Option<NodeRef> = *self.id.read().unwrap();
                 if let Some(id) = id {
-                    let animation = transition.map(|t| {
-                        self.engine.add_animation(Animation {
-                            duration: t.duration,
-                            timing: t.timing,
-                            start: t.delay + self.engine.now(),
-                        }, true)
-                    });
+                    if let Some(change) = change {
+                        let animation = transition.map(|t| {
+                            self.engine.add_animation(Animation {
+                                duration: t.duration,
+                                timing: t.timing,
+                                start: t.delay + self.engine.now(),
+                            }, true)
+                        });
 
-                    tr = self.engine.schedule_change(id, change.clone(), animation);
+                        tr = self.engine.schedule_change(id, change.clone(), animation);
+                    }
                 } else {
                     self.model.$variable_name.set(value.clone());
                 }

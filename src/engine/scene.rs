@@ -42,10 +42,13 @@ impl Scene {
         Arc::new(Self::new(width, height))
     }
 
-    pub fn append_node_to(&self, child: NodeRef, parent: NodeRef) {
+    pub(crate) fn append_node_to(&self, child: NodeRef, parent: NodeRef) {
         let nodes = self.nodes.data();
         let mut nodes = nodes.write().unwrap();
-        parent.append(*child, &mut nodes);
+
+        let child = *child;
+        child.detach(&mut nodes);
+        parent.append(child, &mut nodes);
     }
     /// Add a new node to the scene
     fn insert_node(&self, node: &SceneNode, parent: Option<NodeRef>) -> NodeRef {
@@ -76,7 +79,7 @@ impl Scene {
         let node = SceneNode::with_renderable_and_layout(renderable, layout);
         self.insert_node(&node, parent)
     }
-    pub fn remove(&self, id: impl Into<TreeStorageId>) {
+    pub(crate) fn remove(&self, id: impl Into<TreeStorageId>) {
         let id = id.into();
         self.nodes.remove_at(&id);
     }

@@ -93,7 +93,15 @@ impl RenderLayer {
         let shadow_spread = model.shadow_spread.value();
         let shadow_color = model.shadow_color.value();
 
-        let content = model.content.value();
+        let mut content = None;
+        if let Some(draw_func) = model.draw_content.read().unwrap().as_ref() {
+            let mut recorder = skia_safe::PictureRecorder::new();
+            let canvas = recorder.begin_recording(skia_safe::Rect::from_wh(size.x, size.y), None);
+            let caller = draw_func.0.clone();
+            caller(canvas, size.x, size.y);
+            content = recorder.finish_recording_as_picture(None);
+        }
+
         let opacity = model.opacity.value();
         let blend_mode = model.blend_mode.value();
 
@@ -121,10 +129,10 @@ impl Default for RenderLayer {
     fn default() -> Self {
         Self {
             background_color: PaintColor::Solid {
-                color: Color::new_rgba(1.0, 1.0, 1.0, 1.0),
+                color: Color::new_rgba(0.0, 0.0, 0.0, 0.0),
             },
             border_color: PaintColor::Solid {
-                color: Color::new_rgba(0.0, 0.0, 0.0, 1.0),
+                color: Color::new_rgba(0.0, 0.0, 0.0, 0.0),
             },
             border_width: 0.0,
             border_style: BorderStyle::Solid,
@@ -132,7 +140,7 @@ impl Default for RenderLayer {
             size: Point { x: 0.0, y: 0.0 },
             shadow_offset: Point { x: 0.0, y: 0.0 },
             shadow_radius: 0.0,
-            shadow_color: Color::new_rgba(0.0, 0.0, 0.0, 1.0),
+            shadow_color: Color::new_rgba(0.0, 0.0, 0.0, 0.0),
             shadow_spread: 0.0,
             transform: Matrix::new_identity(),
             content: None,

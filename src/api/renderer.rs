@@ -40,7 +40,7 @@ pub extern "C" fn render_scene(
     let engine = unsafe { &*engine };
     // draw_scene(canvas, &engine.scene);
     if let Some(root) = engine.scene_root() {
-        renderer.draw_scene(engine.scene(), root);
+        renderer.draw_scene(engine.scene(), root, None);
     }
     // renderer.surface.flush_and_submit();
 }

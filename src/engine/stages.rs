@@ -1,15 +1,18 @@
 use std::sync::{Arc, RwLock};
 
+use indextree::NodeId;
 use rayon::prelude::{IntoParallelRefIterator, IntoParallelRefMutIterator, ParallelIterator};
-use taffy::{prelude::Size, style_helpers::points};
+use taffy::{prelude::Size, style_helpers::points, tree::LayoutTree, Taffy};
+
+use crate::{layers::layer::render_layer::RenderLayer, prelude::Rectangle};
 
 use super::{
-    node::{try_get_node, DrawCacheManagement, RenderableFlags},
-    storage::FlatStorageId,
+    node::{try_get_node, DrawCacheManagement, RenderableFlags, SceneNode},
+    storage::{FlatStorageId, TreeStorageData},
     AnimationState, Engine, NodeRef, Timestamp,
 };
 
-pub(crate) fn update_animations(engine: &Engine, timestamp: Timestamp) -> Vec<FlatStorageId> {
+pub(crate) fn update_animations(engine: &Engine, timestamp: &Timestamp) -> Vec<FlatStorageId> {
     let finished_animations = Arc::new(RwLock::new(Vec::<FlatStorageId>::new()));
 
     let animations = engine.animations.data();
@@ -79,7 +82,6 @@ pub(crate) fn execute_transactions(engine: &Engine) -> (Vec<NodeRef>, Vec<FlatSt
                 if let Some(ch) = transaction_handlers.get(id) {
                     let callbacks = &ch.on_update;
                     callbacks.iter().for_each(|callback| {
-                        let callback = callback.clone();
                         callback(progress);
                     });
                 }
@@ -88,11 +90,6 @@ pub(crate) fn execute_transactions(engine: &Engine) -> (Vec<NodeRef>, Vec<FlatSt
                 if let Some(node) = scene.get_node(node_id.0) {
                     {
                         if let Some(node) = try_get_node(node) {
-                            if flags.contains(RenderableFlags::NEEDS_LAYOUT) {
-                                let size = node.layer.model.size.value();
-                                engine.set_node_layout_size(node.layout_node_id, size);
-                            }
-
                             updated_nodes.write().unwrap().push(node_id);
                             if done {
                                 node.remove_flags(RenderableFlags::ANIMATING);
@@ -117,46 +114,133 @@ pub(crate) fn execute_transactions(engine: &Engine) -> (Vec<NodeRef>, Vec<FlatSt
 }
 
 pub(crate) fn update_layout_tree(engine: &Engine) {
+    {
+        let arena = engine.scene.nodes.data();
+        let arena = arena.read().unwrap();
+        arena.iter().for_each(|node| {
+            if node.is_removed() {
+                return;
+            }
+            let scene_node = node.get();
+            let size = scene_node.layer.model.size.value();
+            let layout_node_id = scene_node.layout_node_id;
+            engine.set_node_layout_size(layout_node_id, size);
+        });
+    };
     let mut layout = engine.layout_tree.write().unwrap();
     let layout_root = *engine.layout_root.read().unwrap();
 
-    if layout.dirty(layout_root).unwrap() {
-        let scene_size = engine.scene.size.read().unwrap();
+    // if layout.dirty(layout_root).unwrap() {
+    let scene_size = engine.scene.size.read().unwrap();
 
-        layout
-            .compute_layout(
-                layout_root,
-                Size {
-                    width: points(scene_size.x),
-                    height: points(scene_size.y),
-                },
-            )
-            .unwrap();
-        // println!(
-        //     "layout tree updated {:?}",
-        //     layout.layout(layout_root).unwrap()
-        // );
-    }
+    layout
+        .compute_layout(
+            layout_root,
+            Size {
+                width: points(scene_size.x),
+                height: points(scene_size.y),
+            },
+        )
+        .unwrap();
+
+    // }
 }
 
-pub(crate) fn update_nodes(engine: &Engine, nodes_list: Vec<NodeRef>) {
+fn absolute_layout(layout_tree: &Taffy, layout_node_id: taffy::node::Node) -> skia_safe::Rect {
+    let node_layout = layout_tree.layout(layout_node_id).unwrap();
+
+    let mut absolute_x = node_layout.location.x;
+    let mut absolute_y = node_layout.location.y;
+
+    let mut parent = layout_tree.parent(layout_node_id);
+
+    while let Some(parent_node) = parent {
+        let parent_layout = layout_tree.layout(parent_node).unwrap();
+
+        absolute_x += parent_layout.location.x;
+        absolute_y -= parent_layout.location.y;
+        parent = layout_tree.parent(parent_node);
+    }
+
+    skia_safe::Rect::from_xywh(
+        absolute_x,
+        absolute_y,
+        node_layout.size.width,
+        node_layout.size.height,
+    )
+}
+
+pub(crate) fn absolute_bounds(
+    render_layer: &RenderLayer,
+    parent: Option<&RenderLayer>,
+) -> skia_safe::Rect {
+    let mut absolute_x = render_layer.bounds.x;
+    let mut absolute_y = render_layer.bounds.y;
+
+    if let Some(parent_node) = parent {
+        absolute_x += parent_node.bounds.x;
+        absolute_y += parent_node.bounds.y;
+    }
+
+    skia_safe::Rect::from_xywh(
+        absolute_x,
+        absolute_y,
+        render_layer.bounds.width,
+        render_layer.bounds.height,
+    )
+}
+pub(crate) fn update_node(
+    arena: &TreeStorageData<SceneNode>,
+    layout: &Taffy,
+    node_id: NodeId,
+    parent: Option<&RenderLayer>,
+    damage: &mut skia_safe::Rect,
+    force_damage: bool,
+) {
+    let node = arena.get(node_id).unwrap().get();
+
+    let node_layout = layout.layout(node.layout_node_id).unwrap();
+
+    let mut bounds = {
+        let render_layer = node.render_layer.read().unwrap();
+        absolute_bounds(&render_layer, parent)
+    };
+    let _new_layout = node.layout_if_needed(node_layout);
+
+    let render_layer = node.render_layer.read().unwrap();
+    let new_bounds = absolute_bounds(&render_layer, parent);
+    let painted = node.repaint_if_needed();
+    let damaged = painted || bounds.x() != new_bounds.x() || bounds.y() != new_bounds.y();
+    if damaged || force_damage {
+        bounds.join(new_bounds);
+        bounds.outset((4.0, 4.0));
+        damage.join(bounds);
+    }
+    node_id.children(arena).for_each(|child| {
+        update_node(arena, layout, child, Some(&render_layer), damage, damaged);
+    });
+}
+pub(crate) fn update_nodes(engine: &Engine, _nodes_list: Vec<NodeRef>) -> crate::types::Rectangle {
     // iterate in parallel over the nodes and
     // repaint if necessary
     let layout = engine.layout_tree.read().unwrap();
     let arena = engine.scene.nodes.data();
     let arena = arena.read().unwrap();
-    let mut sorted_nodes = nodes_list.clone();
-    sorted_nodes.sort();
-    sorted_nodes.dedup();
-    sorted_nodes.par_iter().for_each(|node_id| {
-        let node = arena.get(node_id.0).unwrap().get();
-        let l = layout.layout(node.layout_node_id).unwrap();
-        // println!("layout: {:?}", l);
-        node.layout_if_needed(l);
-        node.repaint_if_needed();
-    });
-    if !sorted_nodes.is_empty() {
-        // println!("updated nodes: {:?}", sorted_nodes.len());
+
+    let damage = *engine.damage.read().unwrap();
+    let mut damage = skia_safe::Rect::from_xywh(damage.x, damage.y, damage.width, damage.height);
+
+    let node = engine.scene_root.read().unwrap();
+
+    if let Some(root_id) = *node {
+        update_node(&arena, &layout, root_id.0, None, &mut damage, false);
+    }
+
+    Rectangle {
+        x: damage.x(),
+        y: damage.y(),
+        width: damage.width(),
+        height: damage.height(),
     }
 }
 
@@ -180,20 +264,44 @@ pub(crate) fn trigger_callbacks(engine: &Engine) {
 pub(crate) fn cleanup_animations(engine: &Engine, finished_animations: Vec<FlatStorageId>) {
     let animations = engine.animations.data();
     let mut animations = animations.write().unwrap();
+    let handlers = engine.transaction_handlers.data();
+    let mut handlers = handlers.write().unwrap();
 
     let animations_finished_to_remove = finished_animations;
     for animation_id in animations_finished_to_remove.iter() {
         animations.remove(animation_id);
+        handlers.remove(animation_id);
     }
 }
 
 pub(crate) fn cleanup_transactions(engine: &Engine, finished_transations: Vec<FlatStorageId>) {
-    let handlers = engine.transaction_handlers.data();
-    let mut handlers = handlers.write().unwrap();
     let transactions = engine.transactions.data();
     let mut transactions = transactions.write().unwrap();
     for command_id in finished_transations.iter() {
         transactions.remove(command_id);
-        handlers.remove(command_id);
+    }
+}
+
+pub(crate) fn cleanup_nodes(engine: &Engine) {
+    let deleted = {
+        let nodes = engine.scene.nodes.data();
+        let nodes = nodes.read().unwrap();
+        nodes
+            .iter()
+            .filter_map(|node_id| {
+                if node_id.is_removed() {
+                    return None;
+                }
+                let node = node_id.get();
+                if node.is_deleted() {
+                    Some(node.id())
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>()
+    };
+    for id in deleted {
+        engine.scene_remove_layer(id);
     }
 }

@@ -2,7 +2,7 @@ use bitflags::bitflags;
 
 use std::{
     fmt::Debug,
-    sync::{Arc, RwLock},
+    sync::{atomic::AtomicBool, Arc, RwLock},
 };
 use taffy::prelude::{Layout, Node};
 
@@ -29,17 +29,25 @@ pub use draw_cache_management::DrawCacheManagement;
 pub struct DrawCache {
     picture: Picture,
     size: Point,
+    image: Arc<RwLock<Option<skia_safe::Image>>>,
 }
 
 impl DrawCache {
     pub fn new(picture: Picture, size: Point) -> Self {
-        Self { picture, size }
+        Self {
+            picture,
+            size,
+            image: Arc::new(RwLock::new(None)),
+        }
     }
     pub fn picture(&self) -> &Picture {
         &self.picture
     }
     pub fn size(&self) -> &Point {
         &self.size
+    }
+    pub fn draw(&self, canvas: &mut skia_safe::Canvas, paint: &skia_safe::Paint) {
+        canvas.draw_picture(&self.picture, None, Some(paint));
     }
 }
 
@@ -59,6 +67,7 @@ pub struct SceneNode {
     pub draw_cache: Arc<RwLock<Option<DrawCache>>>,
     pub flags: Arc<RwLock<RenderableFlags>>,
     pub layout_node_id: Node,
+    pub deleted: Arc<AtomicBool>,
 }
 
 impl SceneNode {
@@ -77,6 +86,7 @@ impl SceneNode {
             )),
             layout_node_id: layout_node,
             render_layer: Arc::new(RwLock::new(render_layer)),
+            deleted: Arc::new(AtomicBool::new(false)),
         }
     }
     pub fn insert_flags(&self, flags: RenderableFlags) {
@@ -91,10 +101,20 @@ impl SceneNode {
     pub fn transform(&self) -> Matrix {
         self.render_layer.read().unwrap().transform
     }
+    pub fn delete(&self) {
+        self.deleted
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+    }
+    pub fn is_deleted(&self) -> bool {
+        self.deleted.load(std::sync::atomic::Ordering::Relaxed)
+    }
 }
 
 impl DrawCacheManagement for SceneNode {
-    fn repaint_if_needed(&self) {
+    fn repaint_if_needed(&self) -> bool {
+        if self.layer.hidden() {
+            return false;
+        }
         let mut needs_repaint = self
             .flags
             .read()
@@ -103,6 +123,9 @@ impl DrawCacheManagement for SceneNode {
         let mut draw_cache = self.draw_cache.write().unwrap();
         let render_layer = self.render_layer.read().unwrap();
 
+        if render_layer.opacity <= 0.0 {
+            return false;
+        }
         // if the size has changed from the layout, we need to repaint
         // the flag want be set if the size has changed from the layout calculations
         if let Some(dc) = &*draw_cache {
@@ -110,6 +133,9 @@ impl DrawCacheManagement for SceneNode {
                 needs_repaint = true;
                 // println!("Repainting because size changed");
             }
+        }
+        if render_layer.blend_mode == BlendMode::BackgroundBlur {
+            needs_repaint = true;
         }
         if needs_repaint {
             let picture = render_layer.draw_to_picture();
@@ -119,10 +145,13 @@ impl DrawCacheManagement for SceneNode {
                 self.set_need_repaint(false);
             }
         }
+        needs_repaint
     }
 
-    fn layout_if_needed(&self, layout: &Layout) {
-        // TODO check if the layout position has changed
+    fn layout_if_needed(&self, layout: &Layout) -> bool {
+        if self.layer.hidden() {
+            return false;
+        }
         if self
             .flags
             .read()
@@ -133,7 +162,9 @@ impl DrawCacheManagement for SceneNode {
                 RenderLayer::from_model_and_layout(&self.layer.model, layout);
 
             self.set_need_layout(false);
+            return true;
         }
+        false
     }
 
     fn set_need_repaint(&self, need_repaint: bool) {
@@ -147,6 +178,18 @@ impl DrawCacheManagement for SceneNode {
             .write()
             .unwrap()
             .set(RenderableFlags::NEEDS_LAYOUT, need_layout);
+    }
+    fn needs_repaint(&self) -> bool {
+        self.flags
+            .read()
+            .unwrap()
+            .contains(RenderableFlags::NEEDS_PAINT)
+    }
+    fn needs_layout(&self) -> bool {
+        self.flags
+            .read()
+            .unwrap()
+            .contains(RenderableFlags::NEEDS_LAYOUT)
     }
 }
 
