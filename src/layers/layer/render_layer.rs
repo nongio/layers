@@ -76,7 +76,7 @@ impl RenderLayer {
         );
         // merge all transforms keeping into account the anchor point
         let transform = M44::concat(&translate, &identity);
-        // let transform = M44::concat(&transform, &scale);
+        let transform = M44::concat(&transform, &scale);
         // let transform = M44::concat(&transform, &rotate_x);
         // let transform = M44::concat(&transform, &rotate_y);
         // let transform = M44::concat(&transform, &rotate_z);
