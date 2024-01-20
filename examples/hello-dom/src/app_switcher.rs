@@ -1,10 +1,11 @@
 use layers::{prelude::*, skia::Color4f};
 use layers::{skia, types::Size};
 
-#[derive(Clone, Hash)]
+#[derive(Clone, Hash, Debug)]
 pub struct AppSwitcherState {
     pub current_app: usize,
     pub apps: Vec<String>,
+    pub width: i32,
 }
 
 pub struct AppIconState {
@@ -12,174 +13,165 @@ pub struct AppIconState {
     pub is_selected: bool,
     pub index: usize,
 }
-pub fn view_app_icon(state: AppIconState) -> ViewLayer {
-    let mut ICON_SIZE: f32 = 200.0;
-    const PADDING: f32 = 20.0;
+pub fn view_app_icon(state: AppIconState, icon_width: f32) -> ViewLayer {
+    const PADDING: f32 = 35.0;
 
-    let mut selection_background_color = Color::new_hex("#00000000");
-    let mut text_opacity = 0.0;
-    let mut transition = Transition {
-        duration: 2.0,
-        ..Default::default()
-    };
-    if state.is_selected {
-        selection_background_color = Color::new_hex("#00000022");
-        text_opacity = 1.0;
-        ICON_SIZE = 250.0;
-        transition = Transition {
-            duration: 0.3,
-            ..Default::default()
-        };
-    }
-    let picture = {
-        let mut recorder = skia::PictureRecorder::new();
-        let canvas = recorder.begin_recording(skia::Rect::from_wh(500.0, 500.0), None);
+    let draw_picture = move |canvas: &mut skia::Canvas, w: f32, _h: f32| {
+        let paint = skia::Paint::new(Color4f::new(1.0, 0.0, 0.0, 1.0), None);
 
-        recorder.finish_recording_as_picture(None)
+        let width = (w - PADDING * 2.0).max(0.0);
+
+        canvas.draw_rect(
+            skia::Rect::from_xywh(PADDING, PADDING, width, width),
+            &paint,
+        );
     };
     ViewLayerBuilder::default()
+        .id(format!("item_{}", state.name))
         .size((
             Size {
-                width: taffy::Dimension::Points(ICON_SIZE + PADDING * 2.0),
-                height: taffy::Dimension::Points(200.0 + PADDING * 2.0 + 50.0),
-            },
-            Some(transition),
-        ))
-        .background_color((
-            PaintColor::Solid {
-                color: Color::new_rgba(0.0, 0.0, 0.0, 0.3),
+                width: taffy::Dimension::Points(icon_width + PADDING * 2.0),
+                height: taffy::Dimension::Points(icon_width + PADDING * 2.0),
             },
             None,
         ))
-        .layout_style(taffy::Style {
-            display: taffy::Display::Flex,
-            flex_direction: taffy::FlexDirection::Column,
-            justify_content: Some(taffy::JustifyContent::Center),
-            align_items: Some(taffy::AlignItems::Center),
-            gap: taffy::Size {
-                width: taffy::LengthPercentage::Points(0.0),
-                height: taffy::LengthPercentage::Points(0.0),
+        .background_color((
+            PaintColor::Solid {
+                color: Color::new_rgba(1.0, 0.0, 0.0, 0.0),
             },
-            flex_grow: 1.0,
-            flex_shrink: 1.0,
-            max_size: taffy::Size {
-                width: taffy::Dimension::Points(ICON_SIZE * ((state.index + 1) as f32)),
-                height: taffy::Dimension::Points(ICON_SIZE * 2.0),
-            },
-            min_size: taffy::Size {
-                width: taffy::Dimension::Points(60.0),
-                height: taffy::Dimension::Points(ICON_SIZE),
-            },
-            ..Default::default()
-        })
-        .children(vec![ViewLayerBuilder::default()
-            .layout_style(taffy::Style {
-                display: taffy::Display::Flex,
-                flex_direction: taffy::FlexDirection::Column,
-                justify_content: Some(taffy::JustifyContent::Center),
-                align_items: Some(taffy::AlignItems::Center),
-                max_size: taffy::Size {
-                    width: taffy::Dimension::Points(ICON_SIZE + PADDING * 2.0),
-                    height: taffy::Dimension::Points(200.0 + PADDING * 2.0),
-                },
-                min_size: taffy::Size {
-                    width: taffy::Dimension::Points(1.0),
-                    height: taffy::Dimension::Points(1.0),
-                },
-                ..Default::default()
-            })
-            .size((
-                Size::points(ICON_SIZE + PADDING * 2.0, 200.0 + PADDING * 2.0),
-                None,
-            ))
-            .background_color((
-                PaintColor::Solid {
-                    color: selection_background_color,
-                },
-                None,
-            ))
-            .border_corner_radius((BorderRadius::new_single(20.0), None)) //     .children(vec![ViewLayerBuilder::default()
-            .layout_style(taffy::Style {
-                max_size: taffy::Size {
-                    width: taffy::Dimension::Points(ICON_SIZE),
-                    height: taffy::Dimension::Points(ICON_SIZE),
-                },
-                ..Default::default()
-            })
-            .size((Size::points(ICON_SIZE, 200.0), None))
-            .background_color((
-                PaintColor::Solid {
-                    color: Color::new_hex("#00ff00ff"),
-                },
-                None,
-            ))
-            .border_corner_radius((BorderRadius::new_single(100.0), None))
-            .build()
-            .unwrap()])
+            None,
+        ))
+        .border_corner_radius((BorderRadius::new_single(20.0), None))
+        .content(Some(draw_picture))
         .build()
         .unwrap()
 }
 pub fn view_app_switcher(state: &AppSwitcherState) -> ViewLayer {
-    const ICON_SIZE: f32 = 200.0;
-    const PADDING: f32 = 20.0;
+    const COMPONENT_PADDING_H: f32 = 50.0;
+    const COMPONENT_PADDING_V: f32 = 80.0;
+    const ICON_PADDING: f32 = 35.0;
+    const GAP: f32 = 0.0;
+    const ICON_SIZE: f32 = 300.0;
 
+    let available_width = state.width as f32;
+    let apps_len = state.apps.len() as f32;
+    let total_gaps = (apps_len - 1.0) * GAP; // gaps between items
+
+    let total_padding = 2.0 * COMPONENT_PADDING_H + apps_len * ICON_PADDING * 2.0; // padding on both sides
+    let available_icon_size =
+        (available_width - total_padding - total_gaps) / state.apps.len() as f32;
+    let icon_size = ICON_SIZE.min(available_icon_size);
+    let component_width = apps_len * icon_size + total_gaps + total_padding;
+    let component_height = icon_size + ICON_PADDING * 2.0 + COMPONENT_PADDING_V * 2.0;
     let background_color = Color::new_rgba(1.0, 1.0, 1.0, 0.4);
+    let current_app = state.current_app as f32;
+    let mut app_name = "".to_string();
+    if !state.apps.is_empty() {
+        app_name = state.apps[state.current_app].clone();
+    }
+    let draw_container = move |canvas: &mut skia::Canvas, _w, h| {
+        let color = skia::Color4f::new(0.0, 0.0, 0.0, 0.4);
+        let paint = skia::Paint::new(color, None);
+
+        let available_icon_size = h - COMPONENT_PADDING_V * 2.0 - ICON_PADDING * 2.0;
+        let icon_size = ICON_SIZE.min(available_icon_size);
+        let selection_width = icon_size + ICON_PADDING * 2.0;
+        let selection_height = selection_width;
+        let selection_x = COMPONENT_PADDING_H
+            + current_app * (icon_size + ICON_PADDING * 2.0)
+            + GAP * current_app;
+        let selection_y = h / 2.0 - selection_height / 2.0;
+        let rrect = skia::RRect::new_rect_xy(
+            skia::Rect::from_xywh(selection_x, selection_y, selection_width, selection_height),
+            20.0,
+            20.0,
+        );
+        if apps_len > 0.0 {
+            canvas.draw_rrect(rrect, &paint);
+
+            let mut font = skia::Font::default();
+            let font_size = 40.0;
+            font.set_size(font_size);
+            canvas.draw_str_align(
+                &app_name,
+                (
+                    selection_x + selection_width / 2.0,
+                    selection_y + selection_height + font_size,
+                ),
+                &font,
+                &paint,
+                skia::utils::text_utils::Align::Center,
+            );
+        }
+    };
     ViewLayerBuilder::default()
-        .position((Point { x: 0.0, y: 10.0 }, None))
+        .id("apps_switcher")
         .size((
             Size {
-                width: taffy::auto(), //taffy::Dimension::Percent(1.0),
-                height: taffy::Dimension::Points(300.0),
+                width: taffy::Dimension::Points(component_width),
+                height: taffy::Dimension::Points(component_height),
             },
-            None,
+            Some(Transition {
+                duration: 1.0,
+                ..Default::default()
+            }),
         ))
+        .blend_mode(BlendMode::BackgroundBlur)
         .background_color((
             PaintColor::Solid {
                 color: background_color,
             },
             None,
         ))
-        .blend_mode(BlendMode::BackgroundBlur)
+        .content(Some(draw_container))
         .border_corner_radius((BorderRadius::new_single(50.0), None))
         .layout_style(taffy::Style {
+            position: taffy::Position::Relative,
             display: taffy::Display::Flex,
-            padding: taffy::Rect {
-                left: taffy::LengthPercentage::Points(30.0),
-                right: taffy::LengthPercentage::Points(30.0),
-                top: taffy::LengthPercentage::Points(0.0),
-                bottom: taffy::LengthPercentage::Points(0.0),
-            },
             justify_content: Some(taffy::JustifyContent::Center),
             align_items: Some(taffy::AlignItems::Center),
             justify_items: Some(taffy::JustifyItems::Center),
-            gap: taffy::Size {
-                width: taffy::LengthPercentage::Points(20.0),
-                height: taffy::LengthPercentage::Points(PADDING),
-            },
-            max_size: taffy::Size {
-                width: taffy::Dimension::Percent(1.0),
-                height: taffy::Dimension::Points(300.0),
-            },
-            min_size: taffy::Size {
-                width: taffy::Dimension::Points(200.0),
-                height: taffy::Dimension::Points(300.0),
-            },
             ..Default::default()
         })
-        .children(
-            state
-                .apps
-                .iter()
-                .enumerate()
-                .map(|(i, app)| {
-                    view_app_icon(AppIconState {
-                        name: app.clone(),
-                        is_selected: i == state.current_app,
-                        index: i,
+        .children(vec![ViewLayerBuilder::default()
+            .id("apps_container")
+            .size((
+                Size {
+                    width: taffy::Dimension::Auto,
+                    height: taffy::Dimension::Auto,
+                },
+                Some(Transition {
+                    duration: 2.0,
+                    ..Default::default()
+                }),
+            ))
+            .layout_style(taffy::Style {
+                position: taffy::Position::Absolute,
+                display: taffy::Display::Flex,
+                justify_content: Some(taffy::JustifyContent::Center),
+                justify_items: Some(taffy::JustifyItems::Center),
+                align_items: Some(taffy::AlignItems::Baseline),
+                ..Default::default()
+            })
+            .children(
+                state
+                    .apps
+                    .iter()
+                    .enumerate()
+                    .map(|(i, app)| {
+                        view_app_icon(
+                            AppIconState {
+                                name: app.clone(),
+                                is_selected: i == state.current_app,
+                                index: i,
+                            },
+                            icon_size,
+                        )
                     })
-                })
-                .collect(),
-        )
+                    .collect::<Vec<ViewLayer>>(),
+            )
+            .build()
+            .unwrap()])
         .build()
         .unwrap()
 }

@@ -1,21 +1,25 @@
 use std::time::Duration;
 
+use gl_rs::PointParameteriv;
 use glutin::event::WindowEvent;
 use glutin::event_loop::{ControlFlow, EventLoop};
 use glutin::window::WindowBuilder;
 use glutin::GlProfile;
 use layers::types::Size;
 use layers::{prelude::*, skia::ColorType};
+use rand::Rng;
 
 use crate::{
     app_switcher::view_app_switcher,
     app_switcher::AppSwitcherState,
-    list::{view_list, ListState},
-    toggle::{view_toggle, ToggleState},
+    popup_menu::{popup_menu_view, PopupMenuState},
+    // list::{view_list, ListState},
+    // toggle::{view_toggle, ToggleState},
 };
 
 mod app_switcher;
 mod list;
+mod popup_menu;
 mod toggle;
 
 fn main() {
@@ -77,12 +81,14 @@ fn main() {
         windowed_context: WindowedContext,
     }
     let env = Env { windowed_context };
-    let engine = LayersEngine::new(window_width as f32 * 2.0, window_height as f32 * 2.0);
+    let window_width = window_width as f32;
+    let window_height = window_height as f32;
+    let engine = LayersEngine::new(window_width * 2.0, window_height * 2.0);
     let root = engine.new_layer();
     root.set_size(
         Size {
-            width: taffy::Dimension::Points(window_width as f32 * 2.0),
-            height: taffy::Dimension::Points(window_height as f32 * 2.0),
+            width: taffy::Dimension::Points(window_width * 2.0),
+            height: taffy::Dimension::Points(window_height * 2.0),
         },
         None,
     );
@@ -92,19 +98,15 @@ fn main() {
         },
         None,
     );
-    root.set_position(Point { x: 0.0, y: 0.0 }, None);
-    root.set_border_corner_radius(10.0, None);
+    root.set_border_corner_radius(80.0, None);
     root.set_layout_style(taffy::Style {
         position: taffy::Position::Absolute,
+        display: taffy::Display::Flex,
         padding: taffy::Rect {
             left: taffy::LengthPercentage::Points(0.0),
             right: taffy::LengthPercentage::Points(0.0),
             top: taffy::LengthPercentage::Points(0.0),
             bottom: taffy::LengthPercentage::Points(0.0),
-        },
-        size: taffy::Size {
-            width: taffy::Dimension::Percent(1.0),
-            height: taffy::Dimension::Percent(1.0),
         },
         justify_content: Some(taffy::JustifyContent::Center),
         align_items: Some(taffy::AlignItems::Center),
@@ -119,26 +121,27 @@ fn main() {
     let mut draw_frame = -1;
     let last_instant = instant;
 
-    let mut state = AppSwitcherState {
-        current_app: 0,
-        apps: vec![
-            "firefox".into(),
-            "code".into(),
-            "terminal".into(),
-            // "spotify".into(),
-            // "discord".into(),
-            // "steam".into(),
-            // "obs".into(),
-            // "blender".into(),
-        ],
-    };
-    let mut app_switcher_view = layers::prelude::View::new(layer, Box::new(view_app_switcher));
-    app_switcher_view.render(&state);
+    let mut state = PopupMenuState::default();
+    state.items.push("Open in new Window".to_string());
+    state.items.push("Move to Trash".to_string());
+    state.items.push("Get Info".to_string());
+    state.items.push("Rename".to_string());
+    state.items.push("Compress \"Downloads\"".to_string());
+    state.items.push("Duplicate".to_string());
+    state.items.push("Make Alias".to_string());
+    state.items.push("Quick Look".to_string());
+    state.items.push("Copy".to_string());
+    state.items.push("Share".to_string());
 
-    engine.update(0.0);
+    // for n in 0..3 {
+    //     state.items.push(format!("Item {}", n));
+    // }
+    let mut popup_menu = layers::prelude::View::new(layer, Box::new(popup_menu_view));
+    popup_menu.render(&state);
+
     events_loop.run(move |event, _, control_flow| {
         let now = std::time::Instant::now();
-        let dt = (now - last_instant).as_secs_f32();
+        let _dt = (now - last_instant).as_secs_f32();
         let next = now.checked_add(Duration::new(0, 2 * 1000000)).unwrap();
         *control_flow = ControlFlow::WaitUntil(next);
 
@@ -158,7 +161,9 @@ fn main() {
                         layers::skia::gpu::SurfaceOrigin::BottomLeft,
                         0_u32,
                     );
+                    root.set_size(Size::points(size.width as f32, size.height as f32), None);
 
+                    popup_menu.render(&state);
                     env.windowed_context.window().request_redraw();
                 }
                 WindowEvent::CursorMoved { position, .. } => {
@@ -170,7 +175,7 @@ fn main() {
                     state: _button_state,
                     ..
                 } => {
-                    app_switcher_view.render(&state);
+                    // app_switcher_view.render(&state);
                 }
                 WindowEvent::KeyboardInput {
                     device_id: _,
@@ -188,28 +193,30 @@ fn main() {
                                     env.windowed_context.window().request_redraw();
                                     // draw_frame = -1;
                                 }
+                                println!("state {:?}", state);
+                                popup_menu.render(&state);
                             }
                             winit::event::VirtualKeyCode::Tab => {
                                 if input.state == winit::event::ElementState::Released {
-                                    state.current_app = (state.current_app + 1) % state.apps.len();
-                                    println!(
-                                        "current app {} {}",
-                                        state.current_app,
-                                        state.apps.len()
-                                    );
-                                    app_switcher_view.render(&state);
+                                    // state.current_app = (state.current_app + 1) % state.apps.len();
+
+                                    popup_menu.render(&state);
                                 }
                             }
                             winit::event::VirtualKeyCode::A => {
                                 if input.state == winit::event::ElementState::Released {
-                                    state.apps.push("test".into());
-                                    app_switcher_view.render(&state);
+                                    let mut rng = rand::thread_rng();
+                                    let index = rng.gen_range(0..12000);
+                                    // state.apps.push(format!("{}", index));
+                                    // app_switcher_view.render(&state);
                                 }
                             }
                             winit::event::VirtualKeyCode::S => {
                                 if input.state == winit::event::ElementState::Released {
-                                    state.apps.pop();
-                                    app_switcher_view.render(&state);
+                                    // let mut rng = rand::thread_rng();
+                                    // let index = rng.gen_range(0..state.apps.len());
+
+                                    // app_switcher_view.render(&state);
                                 }
                             }
                             winit::event::VirtualKeyCode::Escape => {
@@ -245,8 +252,6 @@ fn main() {
                     // this will be blocking until the GPU is done with the frame
                     env.windowed_context.swap_buffers().unwrap();
                     draw_frame = update_frame;
-                } else {
-                    println!("skipping draw");
                 }
             }
             _ => {}

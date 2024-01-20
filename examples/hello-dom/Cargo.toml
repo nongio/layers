@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-layers = { path = "../../", features = ["export-skia"] }
+layers = { path = "../../", features = ["export-skia", "export-taffy"] }
 glutin = "0.28"
 winit = "0.26.1"
 gl-rs = { package = "gl", version = "0.14.0" }
