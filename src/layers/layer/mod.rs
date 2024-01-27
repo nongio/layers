@@ -144,7 +144,9 @@ impl Layer {
         }
         tr
     }
-
+    pub fn size(&self) -> Size {
+        self.model.size.value()
+    }
     pub fn set_layout_style(&self, style: Style) {
         self.engine
             .set_node_layout_style(self.layout_node_id, style);

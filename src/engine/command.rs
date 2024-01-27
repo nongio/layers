@@ -137,18 +137,17 @@ macro_rules! change_model {
             )  -> TransactionRef {
                 let value:$variable_type = value.into();
 
-                let mut change: Option<Arc<ModelChange<$variable_type>>> = None;
-                if  self.model.$variable_name.value() != value  {
-                    let flags = $flags;
-                    change = Some(Arc::new(ModelChange {
-                        value_change: self.model.$variable_name.to(value.clone(), transition),
-                        flag: flags,
-                    }));
-                }
+                // if  self.model.$variable_name.value() != value  {
+                let flags = $flags;
+                let change = Arc::new(ModelChange {
+                    value_change: self.model.$variable_name.to(value.clone(), transition),
+                    flag: flags,
+                });
+                // }
                 let mut tr = crate::engine::TransactionRef(0);
                 let id:Option<NodeRef> = *self.id.read().unwrap();
                 if let Some(id) = id {
-                    if let Some(change) = change {
+                    // if let Some(change) = change {
                         let animation = transition.map(|t| {
                             self.engine.add_animation(Animation {
                                 duration: t.duration,
@@ -157,8 +156,8 @@ macro_rules! change_model {
                             }, true)
                         });
 
-                        tr = self.engine.schedule_change(id, change.clone(), animation);
-                    }
+                        tr = self.engine.schedule_change(id, change, animation);
+                    // }
                 } else {
                     self.model.$variable_name.set(value.clone());
                 }

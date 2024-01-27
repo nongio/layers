@@ -229,26 +229,26 @@ impl BuildLayerTree for Layer {
                     let scene_node = arena.get(scene_layer_id).unwrap();
                     scene_node.get().clone()
                 };
-                let transition = scene_layer.layer.set_size(
-                    Size {
-                        width: taffy::Dimension::Points(0.0),
-                        height: taffy::Dimension::Points(0.0),
-                    },
-                    Some(Transition {
-                        duration: 0.5,
-                        ..Default::default()
-                    }),
-                );
+                // let transition = scene_layer.layer.set_size(
+                //     Size {
+                //         width: taffy::Dimension::Points(0.0),
+                //         height: taffy::Dimension::Points(0.0),
+                //     },
+                //     Some(Transition {
+                //         duration: 0.5,
+                //         ..Default::default()
+                //     }),
+                // );
 
                 {
                     if let Some(view) = layer_view_map.get(&scene_layer_ref) {
                         unmap_view(view, view_layer_map);
                     }
                 }
-                let scene_layer_clone = scene_layer.clone();
-                scene_layer.layer.on_finish(transition, move |_| {
-                    scene_layer_clone.delete();
-                });
+                // let scene_layer_clone = scene_layer.clone();
+                // scene_layer.layer.on_finish(transition, move |_| {
+                    scene_layer.delete();
+                // });
             }
         }
     }
@@ -288,5 +288,18 @@ impl<S: Hash> View<S> {
             return true;
         }
         false
+    }
+    pub fn get_layer_by_id(&self, id: &str) -> Option<Layer> {
+        let view_layer_map = self.view_layer_map.borrow();
+        let view_layer = view_layer_map.keys().find(|view_layer| view_layer.id == id)?;
+
+        if let Some(node_ref) =  view_layer_map.get(view_layer) {
+            let scene_node= self.layer.engine.scene.get_node(node_ref.0);
+            if let Some(scene_node) = scene_node {
+                let node = scene_node.get();
+                return Some(node.layer.clone())
+            }
+        }
+        None
     }
 }
