@@ -27,6 +27,7 @@ version = "0.62"
 
 # this set of features is required for enabling to use the pre-built
 # binaries of skia-safe
+[target.'cfg(target_os = "linux")'.dependencies.skia-safe]
 features = [
     "binary-cache",
     "egl",
@@ -38,6 +39,9 @@ features = [
     "webp",
     "x11",
 ]
+
+[target.'cfg(target_os = "macos")'.dependencies.skia-safe]
+features = ["binary-cache", "gl", "metal", "svg", "textlayout", "webp"]
 
 [dev-dependencies]
 criterion = "0.3"
