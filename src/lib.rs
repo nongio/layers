@@ -1,8 +1,5 @@
 #![deny(warnings)]
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
-// negative_impl is used to prevent the compiler from using
-// the default implementation of the trait Interpolable for PaintColor
-#![feature(negative_impls)]
 
 //! # Layers engine
 //! Layers is a rendering engine for animated user interfaces. It uses a scene graph to render the nodes in retained mode, optmising the most common UI interpolations (opacity, 2d transformations, blending).

@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use crate::types::{
     BorderRadius, Color, GradientLinear, GradientRadial, PaintColor, Point, Point3d, Size,
 };
-use skia_safe::{Image, Picture};
+use skia_safe::Picture;
 use taffy::style::Dimension;
 
 #[allow(dead_code)]
@@ -242,11 +242,6 @@ impl Interpolable for crate::types::Point {}
 impl Interpolable for crate::types::Point3d {}
 impl Interpolable for crate::types::BorderRadius {}
 impl Interpolable for crate::types::Color {}
-// this negative impl is needed to avoid the default implementation of Interpolate
-// for PaintColor which is not correct
-impl !Interpolable for crate::types::PaintColor {}
-impl !Interpolable for Option<Image> {}
-impl !Interpolable for crate::types::Size {}
 
 impl<V: Interpolable> Interpolate for V {
     fn interpolate(&self, other: &Self, f: f32) -> Self {
