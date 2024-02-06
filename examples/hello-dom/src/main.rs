@@ -11,7 +11,7 @@ use rand::Rng;
 
 use crate::{
     app_switcher::view_app_switcher,
-    app_switcher::AppSwitcherState,
+    app_switcher::{AppIconState, AppSwitcherState},
     popup_menu::{popup_menu_view, PopupMenuState},
     // list::{view_list, ListState},
     // toggle::{view_toggle, ToggleState},
@@ -26,8 +26,8 @@ fn main() {
     type WindowedContext = glutin::ContextWrapper<glutin::PossiblyCurrent, glutin::window::Window>;
 
     use winit::dpi::LogicalSize;
-    let window_width = 800;
-    let window_height = 600;
+    let window_width = 900;
+    let window_height = 800;
 
     let size: LogicalSize<i32> = LogicalSize::new(window_width, window_height);
 
@@ -98,7 +98,7 @@ fn main() {
         },
         None,
     );
-    root.set_border_corner_radius(80.0, None);
+    root.set_border_corner_radius(10.0, None);
     root.set_layout_style(taffy::Style {
         position: taffy::Position::Absolute,
         display: taffy::Display::Flex,
@@ -121,23 +121,19 @@ fn main() {
     let mut draw_frame = -1;
     let last_instant = instant;
 
-    let mut state = PopupMenuState::default();
-    state.items.push("Open in new Window".to_string());
-    state.items.push("Move to Trash".to_string());
-    state.items.push("Get Info".to_string());
-    state.items.push("Rename".to_string());
-    state.items.push("Compress \"Downloads\"".to_string());
-    state.items.push("Duplicate".to_string());
-    state.items.push("Make Alias".to_string());
-    state.items.push("Quick Look".to_string());
-    state.items.push("Copy".to_string());
-    state.items.push("Share".to_string());
+    let mut state = AppSwitcherState {
+        width: 1000,
+        current_app: 0,
+        apps: vec![],
+    };
+
+    state.apps.push("App 1".to_string());
 
     // for n in 0..3 {
     //     state.items.push(format!("Item {}", n));
     // }
-    let mut popup_menu = layers::prelude::View::new(layer, Box::new(popup_menu_view));
-    popup_menu.render(&state);
+    let mut app_switcher = layers::prelude::View::new(layer, Box::new(view_app_switcher));
+    app_switcher.render(&state);
 
     events_loop.run(move |event, _, control_flow| {
         let now = std::time::Instant::now();
@@ -163,7 +159,7 @@ fn main() {
                     );
                     root.set_size(Size::points(size.width as f32, size.height as f32), None);
 
-                    popup_menu.render(&state);
+                    app_switcher.render(&state);
                     env.windowed_context.window().request_redraw();
                 }
                 WindowEvent::CursorMoved { position, .. } => {
@@ -194,25 +190,42 @@ fn main() {
                                     // draw_frame = -1;
                                 }
                                 println!("state {:?}", state);
-                                popup_menu.render(&state);
+                                app_switcher.render(&state);
                             }
                             winit::event::VirtualKeyCode::Tab => {
                                 if input.state == winit::event::ElementState::Released {
-                                    // state.current_app = (state.current_app + 1) % state.apps.len();
+                                    state.current_app = (state.current_app + 1) % state.apps.len();
 
-                                    popup_menu.render(&state);
+                                    app_switcher.render(&state);
                                 }
                             }
                             winit::event::VirtualKeyCode::A => {
                                 if input.state == winit::event::ElementState::Released {
-                                    let mut rng = rand::thread_rng();
-                                    let index = rng.gen_range(0..12000);
+                                    // let mut rng = rand::thread_rng();
+                                    // let index = rng.gen_range(0..12000);
+                                    state.apps.pop();
+                                    app_switcher.render(&state);
+
+                                    // state.apps.push(format!("{}", index));
+                                    // app_switcher_view.render(&state);
+                                }
+                            }
+                            winit::event::VirtualKeyCode::E => {
+                                if input.state == winit::event::ElementState::Released {
+                                    // let mut rng = rand::thread_rng();
+                                    // let index = rng.gen_range(0..12000);
+                                    state.apps[0] = format!("{}!", state.apps[0]);
+                                    app_switcher.render(&state);
+
                                     // state.apps.push(format!("{}", index));
                                     // app_switcher_view.render(&state);
                                 }
                             }
                             winit::event::VirtualKeyCode::S => {
                                 if input.state == winit::event::ElementState::Released {
+                                    state.apps.push("Item".to_string());
+                                    app_switcher.render(&state);
+
                                     // let mut rng = rand::thread_rng();
                                     // let index = rng.gen_range(0..state.apps.len());
 
@@ -247,7 +260,35 @@ fn main() {
                 if draw_frame != update_frame {
                     if let Some(root) = engine.scene_root() {
                         let skia_renderer = skia_renderer.get_mut();
-                        skia_renderer.draw_scene(engine.scene(), root);
+                        let damage = engine.damage();
+                        let damage_rect = layers::skia::Rect::from_xywh(
+                            damage.x,
+                            damage.y,
+                            damage.width,
+                            damage.height,
+                        );
+                        let mut surface = skia_renderer.surface();
+
+                        let canvas = surface.canvas();
+
+                        // canvas.clear(layers::skia::Color4f::new(0.0, 0.0, 0.0, 1.0));
+                        let save_point = canvas.save();
+                        skia_renderer.draw_scene(engine.scene(), root, None);
+
+                        canvas.restore_to_count(save_point);
+                        let mut paint = layers::skia::Paint::new(
+                            layers::skia::Color4f::new(1.0, 0.0, 0.0, 1.0),
+                            None,
+                        );
+                        paint.set_stroke(true);
+                        paint.set_stroke_width(10.0);
+                        canvas.draw_rect(damage_rect, &paint);
+                        // println!(
+                        //     "damage {} {} {} {}",
+                        //     damage.x, damage.y, damage.width, damage.height
+                        // );
+                        engine.clear_damage();
+                        surface.flush_and_submit();
                     }
                     // this will be blocking until the GPU is done with the frame
                     env.windowed_context.swap_buffers().unwrap();

@@ -114,7 +114,7 @@ pub fn popup_menu_view(state: &PopupMenuState) -> ViewLayer {
             },
             None,
         ))
-        .blend_mode(layers::types::BlendMode::BackgroundBlur)
+        // .blend_mode(layers::types::BlendMode::BackgroundBlur)
         .background_color((
             layers::prelude::PaintColor::Solid {
                 color: layers::types::Color::new_rgba255(246, 246, 246, 153),

@@ -205,12 +205,10 @@ impl BuildLayerTree for Layer {
 
                     let scene_layer_id = scene_layer_id.unwrap_or_else(|| {
                         let layer = Layer::with_engine(engine.clone());
-
                         let id = engine.scene_add_layer(layer, Some(id));
                         view_layer_map.insert(child.clone(), id);
                         id
                     });
-
                     let scene_node = engine.scene.get_node(scene_layer_id).unwrap();
                     let scene_layer = scene_node.get().clone();
                     scene_layer.layer.build_layer_tree(child, view_layer_map);
@@ -247,7 +245,7 @@ impl BuildLayerTree for Layer {
                 }
                 // let scene_layer_clone = scene_layer.clone();
                 // scene_layer.layer.on_finish(transition, move |_| {
-                    scene_layer.delete();
+                scene_layer.delete();
                 // });
             }
         }
@@ -291,13 +289,15 @@ impl<S: Hash> View<S> {
     }
     pub fn get_layer_by_id(&self, id: &str) -> Option<Layer> {
         let view_layer_map = self.view_layer_map.borrow();
-        let view_layer = view_layer_map.keys().find(|view_layer| view_layer.id == id)?;
+        let view_layer = view_layer_map
+            .keys()
+            .find(|view_layer| view_layer.id == id)?;
 
-        if let Some(node_ref) =  view_layer_map.get(view_layer) {
-            let scene_node= self.layer.engine.scene.get_node(node_ref.0);
+        if let Some(node_ref) = view_layer_map.get(view_layer) {
+            let scene_node = self.layer.engine.scene.get_node(node_ref.0);
             if let Some(scene_node) = scene_node {
                 let node = scene_node.get();
-                return Some(node.layer.clone())
+                return Some(node.layer.clone());
             }
         }
         None

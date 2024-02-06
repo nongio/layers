@@ -35,7 +35,7 @@ pub fn draw(canvas: &mut skia::Canvas, width: f32, _height: f32) {
     paragraph_style.set_text_direction(skia::textlayout::TextDirection::LTR);
     paragraph_style.set_ellipsis("…");
     let mut paragraph = skia::textlayout::ParagraphBuilder::new(&paragraph_style, font_collection)
-        .add_text("Hello World! 👋🌍")
+        .add_text("Hello, world! 👋🌍")
         .build();
 
     paragraph.layout(width);
@@ -114,6 +114,20 @@ fn main() {
     });
     engine.scene_add_layer(root_layer.clone());
 
+    let other = engine.new_layer();
+    other.set_size(layers::types::Size::points(100.0, 100.0), None);
+    other.set_background_color(
+        PaintColor::Solid {
+            color: Color::new_rgba255(255, 0, 0, 255),
+        },
+        None,
+    );
+    other.set_border_corner_radius(10.0, None);
+    other.set_layout_style(taffy::Style {
+        // position: taffy::Position::Absolute,
+        ..Default::default()
+    });
+    engine.scene_add_layer(other.clone());
     let content_layer = engine.new_layer();
     let inner_content_layer = engine.new_layer();
     inner_content_layer.set_position(
@@ -126,12 +140,12 @@ fn main() {
     inner_content_layer.set_size(layers::types::Size::points(600.0, 600.0), None);
     inner_content_layer.set_background_color(
         PaintColor::Solid {
-            color: Color::new_rgba255(255, 255, 0, 255),
+            color: Color::new_rgba255(255, 255, 0, 100),
         },
         None,
     );
     inner_content_layer.set_border_corner_radius(BorderRadius::new_single(1.0), None);
-    content_layer.set_size(layers::types::Size::points(450.0, 500.0), None);
+    content_layer.set_size(layers::types::Size::points(620.0, 620.0), None);
     content_layer.set_background_color(
         PaintColor::Solid {
             color: Color::new_rgba255(255, 255, 255, 255),
@@ -147,8 +161,9 @@ fn main() {
     engine.scene_add_layer(content_layer.clone());
     engine.scene_add_layer_to(inner_content_layer.clone(), content_layer.id());
     inner_content_layer.set_draw_content(Some(
-        |canvas: &mut layers::skia::Canvas, width, height| {
+        |canvas: &mut layers::skia::Canvas, width, height| -> layers::skia::Rect {
             draw(canvas, width, height);
+            layers::skia::Rect::from_wh(width, height)
         },
     ));
 
@@ -157,6 +172,8 @@ fn main() {
     let mut draw_frame = -1;
     let last_instant = instant;
 
+    let mut w = 1.0;
+    let mut h = 1.0;
     events_loop.run(move |event, _, control_flow| {
         let now = std::time::Instant::now();
         let dt = (now - last_instant).as_secs_f32();
@@ -211,8 +228,8 @@ fn main() {
                                 );
                             }
                             winit::event::VirtualKeyCode::W => {
-                                content_layer.set_size(
-                                    Size::points(800.0, 800.0),
+                                content_layer.set_scale(
+                                    Point { x: 0.5, y: 0.5 },
                                     Some(Transition {
                                         duration: 2.0,
                                         ..Default::default()
@@ -220,14 +237,15 @@ fn main() {
                                 );
                             }
                             winit::event::VirtualKeyCode::S => {
-                                content_layer.set_size(
-                                    Size::points(100.0, 100.0),
+                                content_layer.set_scale(
+                                    Point { x: 2.0, y: 2.0 },
                                     Some(Transition {
                                         duration: 2.0,
                                         ..Default::default()
                                     }),
                                 );
                             }
+
                             winit::event::VirtualKeyCode::D => {
                                 content_layer.set_position(
                                     Point { x: 600.0, y: 600.0 },
@@ -236,6 +254,23 @@ fn main() {
                                         ..Default::default()
                                     }),
                                 );
+                            }
+                            winit::event::VirtualKeyCode::E => {
+                                w += 10.0;
+                                h += 10.0;
+                                content_layer.set_position(
+                                    Point { x: 0.0, y: 0.0 },
+                                    Some(Transition {
+                                        duration: 2.0,
+                                        ..Default::default()
+                                    }),
+                                );
+                                inner_content_layer.set_draw_content(Some(
+                                    move |canvas: &mut layers::skia::Canvas, width, height| -> layers::skia::Rect {
+                                        draw(canvas, width, height);
+                                        layers::skia::Rect::from_wh(w, h)
+                                    },
+                                ));
                             }
                             winit::event::VirtualKeyCode::Escape => {
                                 *control_flow = ControlFlow::Exit;
@@ -259,20 +294,18 @@ fn main() {
                 if update_frame != frame_number {
                     update_frame = frame_number;
                     let dt = 0.016;
-                    // let needs_redraw = engine.update(dt);
-                    // if needs_redraw {
-                    // env.windowed_context.window().request_redraw();
-                    // draw_frame = -1;
-                    // }
+                    let needs_redraw = engine.update(dt);
+                    if needs_redraw {
+                        env.windowed_context.window().request_redraw();
+                        draw_frame = -1;
+                    }
                 }
             }
             Event::RedrawRequested(_) => {
                 if draw_frame != update_frame {
                     if let Some(root) = engine.scene_root() {
                         let skia_renderer = skia_renderer.get_mut();
-                        let damage = engine.damage();
-                        let damage_rect =
-                            skia::Rect::from_xywh(damage.x, damage.y, damage.width, damage.height);
+                        let damage_rect = engine.damage();
 
                         skia_renderer.draw_scene(engine.scene(), root, None);
 

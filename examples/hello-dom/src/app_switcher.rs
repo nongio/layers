@@ -16,8 +16,9 @@ pub struct AppIconState {
 pub fn view_app_icon(state: AppIconState, icon_width: f32) -> ViewLayer {
     const PADDING: f32 = 35.0;
 
+    let name_color = state.name.len() as f32 / 10.0;
     let draw_picture = move |canvas: &mut skia::Canvas, w: f32, _h: f32| {
-        let paint = skia::Paint::new(Color4f::new(1.0, 0.0, 0.0, 1.0), None);
+        let paint = skia::Paint::new(Color4f::new(1.0, 1.0, 0.0, 1.0), None);
 
         let width = (w - PADDING * 2.0).max(0.0);
 
@@ -27,7 +28,7 @@ pub fn view_app_icon(state: AppIconState, icon_width: f32) -> ViewLayer {
         );
     };
     ViewLayerBuilder::default()
-        .id(format!("item_{}", state.name))
+        .id(format!("item_{}", state.index))
         .size((
             Size {
                 width: taffy::Dimension::Points(icon_width + PADDING * 2.0),
@@ -37,12 +38,12 @@ pub fn view_app_icon(state: AppIconState, icon_width: f32) -> ViewLayer {
         ))
         .background_color((
             PaintColor::Solid {
-                color: Color::new_rgba(1.0, 0.0, 0.0, 0.0),
+                color: Color::new_rgba(1.0, name_color, 0.0, 1.0),
             },
-            None,
+            Some(Transition::default()),
         ))
-        .border_corner_radius((BorderRadius::new_single(20.0), None))
-        .content(Some(draw_picture))
+        // .border_corner_radius((BorderRadius::new_single(20.0), None))
+        // .content(Some(draw_picture))
         .build()
         .unwrap()
 }
@@ -63,13 +64,13 @@ pub fn view_app_switcher(state: &AppSwitcherState) -> ViewLayer {
     let icon_size = ICON_SIZE.min(available_icon_size);
     let component_width = apps_len * icon_size + total_gaps + total_padding;
     let component_height = icon_size + ICON_PADDING * 2.0 + COMPONENT_PADDING_V * 2.0;
-    let background_color = Color::new_rgba(1.0, 1.0, 1.0, 0.4);
+    let background_color = Color::new_rgba(1.0, 1.0, 0.5, 0.4);
     let current_app = state.current_app as f32;
     let mut app_name = "".to_string();
     if !state.apps.is_empty() {
         app_name = state.apps[state.current_app].clone();
     }
-    let draw_container = move |canvas: &mut skia::Canvas, _w, h| {
+    let draw_container = move |canvas: &mut skia::Canvas, _w: f32, h: f32| {
         let color = skia::Color4f::new(0.0, 0.0, 0.0, 0.4);
         let paint = skia::Paint::new(color, None);
 
@@ -92,16 +93,16 @@ pub fn view_app_switcher(state: &AppSwitcherState) -> ViewLayer {
             let mut font = skia::Font::default();
             let font_size = 40.0;
             font.set_size(font_size);
-            canvas.draw_str_align(
-                &app_name,
-                (
-                    selection_x + selection_width / 2.0,
-                    selection_y + selection_height + font_size,
-                ),
-                &font,
-                &paint,
-                skia::utils::text_utils::Align::Center,
-            );
+            // canvas.draw_str_align(
+            //     &app_name,
+            //     (
+            //         selection_x + selection_width / 2.0,
+            //         selection_y + selection_height + font_size,
+            //     ),
+            //     &font,
+            //     &paint,
+            //     skia::utils::text_utils::Align::Center,
+            // );
         }
     };
     ViewLayerBuilder::default()
@@ -111,20 +112,22 @@ pub fn view_app_switcher(state: &AppSwitcherState) -> ViewLayer {
                 width: taffy::Dimension::Points(component_width),
                 height: taffy::Dimension::Points(component_height),
             },
-            Some(Transition {
-                duration: 1.0,
-                ..Default::default()
-            }),
+            // Some(Transition {
+            //     duration: 1.0,
+            //     ..Default::default()
+            // }),
+            None,
         ))
-        .blend_mode(BlendMode::BackgroundBlur)
+        // .blend_mode(BlendMode::BackgroundBlur)
         .background_color((
             PaintColor::Solid {
                 color: background_color,
             },
             None,
         ))
-        .content(Some(draw_container))
+        // .content(Some(draw_container))
         .border_corner_radius((BorderRadius::new_single(50.0), None))
+        .border_width((10.0, None))
         .layout_style(taffy::Style {
             position: taffy::Position::Relative,
             display: taffy::Display::Flex,

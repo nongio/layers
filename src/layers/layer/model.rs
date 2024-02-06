@@ -15,14 +15,25 @@ use crate::{
 #[allow(clippy::type_complexity)]
 #[derive(Clone)]
 pub struct ContentDrawFunction(
-    pub Arc<dyn 'static + Fn(&mut skia_safe::Canvas, f32, f32) + Send + Sync>,
+    pub Arc<dyn 'static + Send + Sync + Fn(&mut skia_safe::Canvas, f32, f32) -> skia_safe::Rect>,
 );
 
-impl<F: Fn(&mut skia_safe::Canvas, f32, f32) + Send + Sync + 'static> From<F>
+impl<F: Fn(&mut skia_safe::Canvas, f32, f32) -> skia_safe::Rect + Send + Sync + 'static> From<F>
     for ContentDrawFunction
 {
     fn from(f: F) -> Self {
         ContentDrawFunction(Arc::new(f))
+    }
+}
+
+impl std::fmt::Debug for ContentDrawFunction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ContentDrawFunction").finish()
+    }
+}
+impl PartialEq for ContentDrawFunction {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
     }
 }
 use std::fmt;
