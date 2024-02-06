@@ -332,7 +332,8 @@ fn main() {
                 if draw_frame != update_frame {
                     if let Some(root) = engine.scene_root() {
                         let skia_renderer = skia_renderer.get_mut();
-                        skia_renderer.draw_scene(engine.scene(), root);
+                        skia_renderer.draw_scene(engine.scene(), root, None);
+                        skia_renderer.gr_context.flush_and_submit();
                     }
                     // this will be blocking until the GPU is done with the frame
                     env.windowed_context.swap_buffers().unwrap();

@@ -3,7 +3,7 @@ use skia_safe::*;
 use crate::layers::layer::render_layer::RenderLayer;
 use crate::types::PaintColor;
 
-pub(crate) fn draw_layer(canvas: &mut Canvas, layer: &RenderLayer) -> skia_safe::Rect {
+pub(crate) fn draw_layer(canvas: &Canvas, layer: &RenderLayer) -> skia_safe::Rect {
     let mut draw_damage = skia_safe::Rect::default();
     let bounds = Rect::from_xywh(0.0, 0.0, layer.size.width, layer.size.height);
     let rrbounds = RRect::new_rect_radii(

@@ -15,10 +15,10 @@ use crate::{
 #[allow(clippy::type_complexity)]
 #[derive(Clone)]
 pub struct ContentDrawFunction(
-    pub Arc<dyn 'static + Send + Sync + Fn(&mut skia_safe::Canvas, f32, f32) -> skia_safe::Rect>,
+    pub Arc<dyn 'static + Send + Sync + Fn(&skia_safe::Canvas, f32, f32) -> skia_safe::Rect>,
 );
 
-impl<F: Fn(&mut skia_safe::Canvas, f32, f32) -> skia_safe::Rect + Send + Sync + 'static> From<F>
+impl<F: Fn(&skia_safe::Canvas, f32, f32) -> skia_safe::Rect + Send + Sync + 'static> From<F>
     for ContentDrawFunction
 {
     fn from(f: F) -> Self {

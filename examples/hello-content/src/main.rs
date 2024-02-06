@@ -14,7 +14,7 @@ use layers::{
     types::Size,
 };
 
-pub fn draw(canvas: &mut skia::Canvas, width: f32, _height: f32) {
+pub fn draw(canvas: &skia::Canvas, width: f32, _height: f32) {
     let mut text_style = skia::textlayout::TextStyle::new();
     text_style.set_font_size(60.0);
     let foreground_paint = skia::Paint::new(Color4f::new(0.0, 0.0, 0.0, 1.0), None);
@@ -161,7 +161,7 @@ fn main() {
     engine.scene_add_layer(content_layer.clone());
     engine.scene_add_layer_to(inner_content_layer.clone(), content_layer.id());
     inner_content_layer.set_draw_content(Some(
-        |canvas: &mut layers::skia::Canvas, width, height| -> layers::skia::Rect {
+        |canvas: &layers::skia::Canvas, width, height| -> layers::skia::Rect {
             draw(canvas, width, height);
             layers::skia::Rect::from_wh(width, height)
         },
@@ -266,7 +266,7 @@ fn main() {
                                     }),
                                 );
                                 inner_content_layer.set_draw_content(Some(
-                                    move |canvas: &mut layers::skia::Canvas, width, height| -> layers::skia::Rect {
+                                    move |canvas: &layers::skia::Canvas, width, height| -> layers::skia::Rect {
                                         draw(canvas, width, height);
                                         layers::skia::Rect::from_wh(w, h)
                                     },
@@ -315,8 +315,8 @@ fn main() {
                         paint.set_stroke(true);
                         paint.set_stroke_width(10.0);
                         canvas.draw_rect(damage_rect, &paint);
-
-                        surface.flush_and_submit();
+                        skia_renderer.gr_context.flush_and_submit();
+                        
                     }
                     engine.clear_damage();
                     // this will be blocking until the GPU is done with the frame

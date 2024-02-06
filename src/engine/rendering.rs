@@ -6,7 +6,7 @@ use skia_safe::{Canvas, Matrix};
 /// A trait for objects that can be drawn to a canvas.
 pub trait Drawable {
     /// Draws the entity on the canvas.
-    fn draw(&self, canvas: &mut Canvas) -> skia_safe::Rect;
+    fn draw(&self, canvas: &Canvas) -> skia_safe::Rect;
     /// Returns the area that this drawable occupies.
     fn bounds(&self) -> skia_safe::Rect;
     /// Returns the transformation matrix for this drawable.

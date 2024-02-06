@@ -40,7 +40,7 @@ pub fn popup_menu_item_view(state: &String, selected: bool) -> ViewLayer {
     let font_size = 26.0;
     let height = 44.0;
     let text_padding_left = 44.0;
-    let draw_text = move |canvas: &mut layers::skia::Canvas, w: f32, h: f32| {
+    let draw_text = move |canvas: &layers::skia::Canvas, w: f32, h: f32| -> layers::skia::Rect {
         let mut text_style = skia::textlayout::TextStyle::new();
 
         text_style.set_font_size(font_size);
@@ -88,6 +88,8 @@ pub fn popup_menu_item_view(state: &String, selected: bool) -> ViewLayer {
         paint.set_stroke(true);
         // canvas.draw_rect(bounding_box, &paint);
         paragraph.paint(canvas, (text_x, text_y));
+
+        skia::Rect::from_xywh(0.0, 0.0, w, h)
     };
     ViewLayerBuilder::default()
         .id(format!("popup_menu_item_{}", state))
@@ -139,21 +141,25 @@ pub fn popup_menu_view(state: &PopupMenuState) -> ViewLayer {
             },
             ..Default::default()
         })
-        .content(Some(|canvas: &mut layers::skia::Canvas, w: f32, h: f32| {
-            let mut shadow_rrect =
-                skia::RRect::new_rect_xy(skia::Rect::from_xywh(0.0, 0.0, w, h), 12.0, 12.0);
-            let mut shadow_paint =
-                layers::skia::Paint::new(layers::skia::Color4f::new(0.0, 0.0, 0.0, 0.25), None);
-            shadow_paint.set_mask_filter(MaskFilter::blur(BlurStyle::Normal, 3.0, false));
-            canvas.clip_rrect(shadow_rrect, Some(ClipOp::Difference), Some(true));
-            canvas.draw_rrect(shadow_rrect, &shadow_paint);
+        .content(Some(
+            |canvas: &layers::skia::Canvas, w: f32, h: f32| -> layers::skia::Rect {
+                let mut shadow_rrect =
+                    skia::RRect::new_rect_xy(skia::Rect::from_xywh(0.0, 0.0, w, h), 12.0, 12.0);
+                let mut shadow_paint =
+                    layers::skia::Paint::new(layers::skia::Color4f::new(0.0, 0.0, 0.0, 0.25), None);
+                shadow_paint.set_mask_filter(MaskFilter::blur(BlurStyle::Normal, 3.0, false));
+                canvas.clip_rrect(shadow_rrect, Some(ClipOp::Difference), Some(true));
+                canvas.draw_rrect(shadow_rrect, &shadow_paint);
 
-            shadow_rrect =
-                skia::RRect::new_rect_xy(skia::Rect::from_xywh(0.0, 36.0, w, h), 12.0, 12.0);
-            shadow_paint.set_mask_filter(MaskFilter::blur(BlurStyle::Normal, 100.0, false));
-            shadow_paint.set_color4f(layers::skia::Color4f::new(0.0, 0.0, 0.0, 0.4), None);
-            canvas.draw_rrect(shadow_rrect, &shadow_paint);
-        }))
+                shadow_rrect =
+                    skia::RRect::new_rect_xy(skia::Rect::from_xywh(0.0, 36.0, w, h), 12.0, 12.0);
+                shadow_paint.set_mask_filter(MaskFilter::blur(BlurStyle::Normal, 100.0, false));
+                shadow_paint.set_color4f(layers::skia::Color4f::new(0.0, 0.0, 0.0, 0.4), None);
+                canvas.draw_rrect(shadow_rrect, &shadow_paint);
+
+                skia::Rect::from_xywh(0.0, 0.0, w, h)
+            },
+        ))
         .children(
             state
                 .items

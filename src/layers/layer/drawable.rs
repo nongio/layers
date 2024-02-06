@@ -5,7 +5,7 @@ use crate::{drawing::layer::draw_layer, engine::rendering::Drawable, types::*};
 use super::render_layer::RenderLayer;
 
 impl Drawable for RenderLayer {
-    fn draw(&self, canvas: &mut Canvas) -> skia_safe::Rect {
+    fn draw(&self, canvas: &Canvas) -> skia_safe::Rect {
         draw_layer(canvas, self)
     }
     fn bounds(&self) -> skia_safe::Rect {

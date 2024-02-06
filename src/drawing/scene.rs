@@ -16,7 +16,7 @@ pub trait DrawScene {
     fn draw_scene(&self, scene: &Scene, root_id: NodeRef, damage: Option<skia_safe::Rect>);
 }
 
-pub fn draw_scene(canvas: &mut Canvas, scene: &Scene, root_id: NodeRef) {
+pub fn draw_scene(canvas: &Canvas, scene: &Scene, root_id: NodeRef) {
     let arena = scene.nodes.data();
     let arena = arena.read().unwrap();
     if let Some(_root) = scene.get_node(root_id) {
@@ -27,7 +27,7 @@ pub fn draw_scene(canvas: &mut Canvas, scene: &Scene, root_id: NodeRef) {
 pub fn render_node_tree(
     node_ref: NodeRef,
     arena: &Arena<SceneNode>,
-    canvas: &mut skia_safe::Canvas,
+    canvas: &skia_safe::Canvas,
     context_opacity: f32,
 ) {
     #[cfg(feature = "profile-with-puffin")]
@@ -54,7 +54,7 @@ pub fn render_node_tree(
 pub(crate) fn render_node(
     node_id: NodeRef,
     arena: &Arena<SceneNode>,
-    canvas: &mut skia_safe::Canvas,
+    canvas: &skia_safe::Canvas,
     context_opacity: f32,
 ) -> usize {
     let node_id: TreeStorageId = node_id.into();

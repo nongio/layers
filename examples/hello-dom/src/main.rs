@@ -1,18 +1,16 @@
 use std::time::Duration;
 
-use gl_rs::PointParameteriv;
 use glutin::event::WindowEvent;
 use glutin::event_loop::{ControlFlow, EventLoop};
 use glutin::window::WindowBuilder;
 use glutin::GlProfile;
 use layers::types::Size;
 use layers::{prelude::*, skia::ColorType};
-use rand::Rng;
 
 use crate::{
     app_switcher::view_app_switcher,
-    app_switcher::{AppIconState, AppSwitcherState},
-    popup_menu::{popup_menu_view, PopupMenuState},
+    app_switcher::AppSwitcherState,
+    // popup_menu::{popup_menu_view, PopupMenuState},
     // list::{view_list, ListState},
     // toggle::{view_toggle, ToggleState},
 };
@@ -260,18 +258,12 @@ fn main() {
                 if draw_frame != update_frame {
                     if let Some(root) = engine.scene_root() {
                         let skia_renderer = skia_renderer.get_mut();
-                        let damage = engine.damage();
-                        let damage_rect = layers::skia::Rect::from_xywh(
-                            damage.x,
-                            damage.y,
-                            damage.width,
-                            damage.height,
-                        );
+                        let damage_rect = engine.damage();
+
                         let mut surface = skia_renderer.surface();
 
                         let canvas = surface.canvas();
 
-                        // canvas.clear(layers::skia::Color4f::new(0.0, 0.0, 0.0, 1.0));
                         let save_point = canvas.save();
                         skia_renderer.draw_scene(engine.scene(), root, None);
 
@@ -283,12 +275,9 @@ fn main() {
                         paint.set_stroke(true);
                         paint.set_stroke_width(10.0);
                         canvas.draw_rect(damage_rect, &paint);
-                        // println!(
-                        //     "damage {} {} {} {}",
-                        //     damage.x, damage.y, damage.width, damage.height
-                        // );
+
                         engine.clear_damage();
-                        surface.flush_and_submit();
+                        skia_renderer.gr_context.flush_and_submit();
                     }
                     // this will be blocking until the GPU is done with the frame
                     env.windowed_context.swap_buffers().unwrap();

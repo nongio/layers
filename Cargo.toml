@@ -21,9 +21,11 @@ oklab = "1.0.0"
 taffy = "0.3.18"
 diff-struct = "0.5.1"
 derive_builder = "0.12.0"
+puffin_http = { version = "0.13", optional = true }
+profiling = { version = "1.0" }
 
 [dependencies.skia-safe]
-version = "0.62"
+version = "0.70"
 
 # this set of features is required for enabling to use the pre-built
 # binaries of skia-safe
@@ -50,6 +52,7 @@ paste = "1.0"
 [features]
 export-skia = []
 export-taffy = []
+profile-with-puffin = ["profiling/profile-with-puffin", "puffin_http"]
 
 [[bench]]
 name = "my_benchmark"

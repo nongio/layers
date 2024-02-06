@@ -47,6 +47,7 @@ impl SkiaFboRenderer {
             FramebufferInfo {
                 fboid: fboid.try_into().unwrap(),
                 format: skia_safe::gpu::gl::Format::RGBA8.into(),
+                ..Default::default()
             }
         };
         let backend_render_target = BackendRenderTarget::new_gl(
@@ -112,7 +113,7 @@ impl SkiaFboRenderer {
 impl DrawScene for SkiaFboRenderer {
     fn draw_scene(&self, scene: &Scene, root_id: NodeRef, damage: Option<skia_safe::Rect>) {
         let mut surface = self.surface();
-        let canvas = surface.canvas();
+        let mut canvas = surface.canvas();
         let save_point = canvas.save();
         if let Some(damage) = damage {
             canvas.clip_rect(damage, None, None);
@@ -120,10 +121,10 @@ impl DrawScene for SkiaFboRenderer {
         let arena = scene.nodes.data();
         let arena = &*arena.read().unwrap();
         if let Some(_root) = scene.get_node(root_id) {
-            render_node_tree(root_id, arena, canvas, 1.0);
+            render_node_tree(root_id, arena, &mut canvas, 1.0);
         }
         canvas.restore_to_count(save_point);
-        surface.flush_and_submit();
+        // surface.flush_and_submit();
     }
 }
 

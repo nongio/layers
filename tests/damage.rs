@@ -37,7 +37,7 @@ mod tests {
         layer.set_size(Size::points(100.0, 100.0), None);
         engine.scene_add_layer(layer.clone());
 
-        let draw_func = |_c: &mut skia_safe::Canvas, _w: f32, _h: f32| -> skia_safe::Rect {
+        let draw_func = |_c: &skia_safe::Canvas, _w: f32, _h: f32| -> skia_safe::Rect {
             skia_safe::Rect::from_xywh(0.0, 0.0, 10.0, 10.0)
         };
         layer.set_draw_content(Some(draw_func));
@@ -76,7 +76,7 @@ mod tests {
         );
         engine.scene_add_layer(layer.clone());
 
-        let draw_func = |_c: &mut skia_safe::Canvas, _w: f32, _h: f32| -> skia_safe::Rect {
+        let draw_func = |_c: &skia_safe::Canvas, _w: f32, _h: f32| -> skia_safe::Rect {
             skia_safe::Rect::from_xywh(0.0, 0.0, 10.0, 10.0)
         };
         layer.set_draw_content(Some(draw_func));

@@ -20,7 +20,7 @@ pub struct SkiaImageRenderer {
 }
 impl SkiaImageRenderer {
     pub fn new(height: i32, width: i32, filename: String) -> Self {
-        let surface = Surface::new_raster_n32_premul((width, height)).expect("no surface!");
+        let surface = skia_safe::surfaces::raster_n32_premul((width, height)).expect("no surface!");
         let image_format = skia_safe::EncodedImageFormat::PNG;
         Self {
             surface,
@@ -40,7 +40,7 @@ impl SkiaImageRenderer {
     pub fn save(&mut self) {
         let mut file = File::create(&self.filename).expect("no file!");
         let image = self.surface.image_snapshot();
-        let data = image.encode_to_data(self.image_format).unwrap();
+        let data = image.encode(None, self.image_format, None).unwrap();
         file.write_all(&data).expect("no write!");
     }
 }
@@ -51,6 +51,6 @@ impl DrawScene for SkiaImageRenderer {
 
         let c = surface.canvas();
         draw_scene(c, scene, root_id);
-        surface.flush_and_submit();
+        // surface.flush_and_submit();
     }
 }

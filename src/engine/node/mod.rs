@@ -36,12 +36,16 @@ pub struct DrawCache {
 }
 
 #[allow(dead_code)]
-fn save_image(image: &skia_safe::Image, name: &str) {
+fn save_image<'a>(
+    context: impl Into<Option<&'a mut skia_safe::gpu::DirectContext>>,
+    image: &skia_safe::Image,
+    name: &str,
+) {
     use std::fs::File;
     use std::io::Write;
 
     let data = image
-        .encode_to_data(skia_safe::EncodedImageFormat::PNG)
+        .encode(context.into(), skia_safe::EncodedImageFormat::PNG, None)
         .unwrap();
     let bytes = data.as_bytes();
     let filename = format!("{}.png", name);
@@ -67,44 +71,44 @@ impl DrawCache {
     pub fn draw_picture_to_canvas(&self, canvas: &mut skia_safe::Canvas, paint: &skia_safe::Paint) {
         canvas.draw_picture(&self.picture, None, Some(paint));
     }
-    pub fn draw_to_image(&self, context: &mut skia_safe::gpu::DirectContext) {
+    pub fn draw_to_image(&self, _context: &mut skia_safe::gpu::DirectContext) {
         // Define the width and height of the canvas
-        let width = self.size.width as i32 + self.offset.x as i32 * 2;
-        let height = self.size.height as i32 + self.offset.y as i32 * 2;
-        if width == 0 || height == 0 {
-            return;
-        }
+        // let width = self.size.width as i32 + self.offset.x as i32 * 2;
+        // let height = self.size.height as i32 + self.offset.y as i32 * 2;
+        // if width == 0 || height == 0 {
+        //     return;
+        // }
 
-        let image_info = skia_safe::ImageInfo::new(
-            (width, height),
-            skia_safe::ColorType::RGBA8888,
-            skia_safe::AlphaType::Premul,
-            None,
-        );
+        // let image_info = skia_safe::ImageInfo::new(
+        //     (width, height),
+        //     skia_safe::ColorType::RGBA8888,
+        //     skia_safe::AlphaType::Premul,
+        //     None,
+        // );
 
-        let mut surface = skia_safe::Surface::new_render_target(
-            context,
-            skia_safe::gpu::Budgeted::No,
-            &image_info,
-            None,
-            skia_safe::gpu::SurfaceOrigin::TopLeft,
-            None,
-            None,
-        )
-        .unwrap();
+        // let mut surface = skia_safe::Surface::new_render_target(
+        //     context,
+        //     skia_safe::gpu::Budgeted::No,
+        //     &image_info,
+        //     None,
+        //     skia_safe::gpu::SurfaceOrigin::TopLeft,
+        //     None,
+        //     None,
+        // )
+        // .unwrap();
 
-        // Get the canvas from the surface
-        let canvas = surface.canvas();
-        let translate = skia_safe::Matrix::translate((self.offset.x, self.offset.y));
-        canvas.concat(&translate);
-        self.draw_picture_to_canvas(canvas, &skia_safe::Paint::default());
-        surface.flush_and_submit();
-        let image = surface.image_snapshot();
+        // // Get the canvas from the surface
+        // let canvas = surface.canvas();
+        // let translate = skia_safe::Matrix::translate((self.offset.x, self.offset.y));
+        // canvas.concat(&translate);
+        // self.draw_picture_to_canvas(canvas, &skia_safe::Paint::default());
+        // surface.flush_and_submit();
+        // let image = surface.image_snapshot();
 
-        let mut image_option = self.image.write().unwrap();
-        *image_option = Some(image);
+        // let mut image_option = self.image.write().unwrap();
+        // *image_option = Some(image);
     }
-    pub fn draw(&self, canvas: &mut skia_safe::Canvas, paint: &skia_safe::Paint) {
+    pub fn draw(&self, canvas: &skia_safe::Canvas, paint: &skia_safe::Paint) {
         let image_option = self.image.read().unwrap();
         if self.size.width == 0.0 || self.size.height == 0.0 {
             return;
