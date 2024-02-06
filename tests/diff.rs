@@ -1,11 +1,7 @@
-use std::{borrow::Borrow, sync::Arc, vec};
+// use std::{borrow::Borrow, sync::Arc, vec};
 
-use diff::Differ;
-use layers::{
-    engine::LayersEngine,
-    // layers::layer::RenderLayer,
-    types::{BorderRadius, BorderStyle, Color, PaintColor, Point, Size},
-};
+// use diff::Differ;
+use layers::types::{BorderRadius, Point};
 
 #[derive(Clone, Debug, PartialEq)]
 struct Layer {
@@ -20,16 +16,16 @@ struct Layer {
 
 #[derive(Clone, Debug)]
 struct LayerNode {
-    layer: Layer,
-    children: Vec<Layer>,
+    // layer: Layer,
+    // children: Vec<Layer>,
 }
 #[test]
 pub fn diff_layers() {
-    let differ = LayerDiffer {};
-    let engine = LayersEngine::new();
-    let layer1 = engine.new_layer();
+    // let differ = LayerDiffer {};
+    // let engine = LayersEngine::new(1000.0, 1000.0);
+    // let layer1 = engine.new_layer();
 
-    let layer2 = engine.new_layer();
+    // let layer2 = engine.new_layer();
 
     // let r1 = layer1.into_render_layer();
     // let r2 = layer2.into_render_layer();

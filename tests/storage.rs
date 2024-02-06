@@ -2,7 +2,7 @@ use layers::engine::storage::{FlatStorage, TreeStorage};
 
 #[test]
 pub fn test_flat_storage() {
-    let mut flat = FlatStorage::<usize>::new();
+    let flat = FlatStorage::<usize>::new();
     let id = flat.insert(1);
     let id2 = flat.insert(2);
     let id3 = flat.insert(3);
@@ -17,7 +17,7 @@ pub fn test_flat_storage() {
 
 #[test]
 pub fn test_tree_storage() {
-    let mut tree = TreeStorage::<usize>::new();
+    let tree = TreeStorage::<usize>::new();
     let id = tree.insert(1);
     let id2 = tree.insert(2);
     let id3 = tree.insert(3);

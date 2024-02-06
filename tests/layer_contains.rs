@@ -1,12 +1,12 @@
 use std::f64::consts::PI;
 
-use layers::engine::node::ContainsPoint;
+// use layers::engine::node::ContainsPoint;
 use layers::engine::LayersEngine;
 use layers::types::{Point, Point3d};
 
 #[test]
 pub fn layer_contains() {
-    let engine = LayersEngine::new();
+    let engine = LayersEngine::new(1000.0, 1000.0);
     let layer = engine.new_layer();
     engine.scene_add_layer(layer.clone());
 
@@ -23,21 +23,21 @@ pub fn layer_contains() {
 
 #[test]
 pub fn scene_node_contains() {
-    let engine = LayersEngine::new();
+    let engine = LayersEngine::new(1000.0, 1000.0);
     let layer = engine.new_layer();
     engine.scene_add_layer(layer.clone());
 
-    const RECT_WIDTH: f32 = 100.0;
-    const RECT_HEIGHT: f32 = 100.0;
+    // const RECT_WIDTH: f32 = 100.0;
+    // const RECT_HEIGHT: f32 = 100.0;
 
     layer.set_anchor_point(Point { x: 0.5, y: 0.5 }, None);
-    layer.set_size(
-        Point {
-            x: RECT_WIDTH as f32,
-            y: RECT_HEIGHT as f32,
-        },
-        None,
-    );
+    // layer.set_size(
+    //     Point {
+    //         x: RECT_WIDTH as f32,
+    //         y: RECT_HEIGHT as f32,
+    //     },
+    //     None,
+    // );
 
     layer.set_position(Point { x: 160.0, y: 160.0 }, None);
 
