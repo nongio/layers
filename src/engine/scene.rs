@@ -10,7 +10,7 @@ use taffy::prelude::Node;
 use crate::prelude::{Layer, Point};
 
 use super::{
-    node::SceneNode,
+    node::{RenderableFlags, SceneNode},
     storage::{TreeStorage, TreeStorageId, TreeStorageNode},
     // Engine,
     NodeRef,
@@ -49,6 +49,8 @@ impl Scene {
         let child = *child;
         child.detach(&mut nodes);
         parent.append(child, &mut nodes);
+        let scene_node = nodes.get(child).unwrap().get();
+        scene_node.insert_flags(RenderableFlags::NEEDS_PAINT);
     }
     /// Add a new node to the scene
     fn insert_node(&self, node: &SceneNode, parent: Option<NodeRef>) -> NodeRef {

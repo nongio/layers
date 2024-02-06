@@ -3,8 +3,9 @@ use skia_safe::*;
 use crate::layers::layer::render_layer::RenderLayer;
 use crate::types::PaintColor;
 
-pub(crate) fn draw_layer(canvas: &mut Canvas, layer: &RenderLayer) {
-    let bounds = Rect::from_xywh(0.0, 0.0, layer.size.x, layer.size.y);
+pub(crate) fn draw_layer(canvas: &mut Canvas, layer: &RenderLayer) -> skia_safe::Rect {
+    let mut draw_damage = skia_safe::Rect::default();
+    let bounds = Rect::from_xywh(0.0, 0.0, layer.size.width, layer.size.height);
     let rrbounds = RRect::new_rect_radii(
         bounds,
         &[
@@ -32,13 +33,13 @@ pub(crate) fn draw_layer(canvas: &mut Canvas, layer: &RenderLayer) {
     };
     {
         if (background_color.a * layer.opacity) > 0.0 {
-            let save_count = canvas.save();
+            // let save_count = canvas.save();
             canvas.clip_rrect(rrbounds, None, None);
 
             // Draw the background color.
 
             let mut background_paint = Paint::new(background_color, None);
-            background_paint.set_anti_alias(true);
+            // background_paint.set_anti_alias(true);
             background_paint.set_style(PaintStyle::Fill);
             if layer.blend_mode == crate::types::BlendMode::BackgroundBlur {
                 background_paint.set_blend_mode(skia_safe::BlendMode::Luminosity);
@@ -46,7 +47,9 @@ pub(crate) fn draw_layer(canvas: &mut Canvas, layer: &RenderLayer) {
             if background_color.a > 0.0 {
                 canvas.draw_paint(&background_paint);
             }
-            canvas.restore_to_count(save_count);
+            // canvas.restore_to_count(save_count);
+
+            draw_damage.join(bounds);
         }
     }
     // Draw shadow
@@ -58,23 +61,24 @@ pub(crate) fn draw_layer(canvas: &mut Canvas, layer: &RenderLayer) {
             layer.shadow_radius,
             false,
         ));
-        shadow_paint.set_anti_alias(true);
+        // shadow_paint.set_anti_alias(true);
 
         let shadow_rrect = RRect::new_rect_xy(
             Rect::from_xywh(
                 layer.shadow_offset.x,
                 layer.shadow_offset.y,
-                layer.size.x,
-                layer.size.y,
+                layer.size.width,
+                layer.size.height,
             ),
             layer.border_corner_radius.top_left,
             layer.border_corner_radius.top_right,
         );
-        let save_count = canvas.save();
-        canvas.clip_rrect(rrbounds, Some(ClipOp::Difference), Some(true));
+        // let save_count = canvas.save();
+        // canvas.clip_rrect(rrbounds, Some(ClipOp::Difference), Some(true));
         shadow_paint.set_alpha_f(layer.opacity * layer.shadow_color.alpha);
         canvas.draw_rrect(shadow_rrect, &shadow_paint);
-        canvas.restore_to_count(save_count);
+        // canvas.restore_to_count(save_count);
+        draw_damage.join(bounds);
     }
 
     // Draw border
@@ -88,11 +92,15 @@ pub(crate) fn draw_layer(canvas: &mut Canvas, layer: &RenderLayer) {
         border_paint.set_style(PaintStyle::Stroke);
         border_paint.set_stroke_width(layer.border_width);
         canvas.draw_rrect(rrbounds, &border_paint);
+        draw_damage.join(bounds.with_outset((layer.border_width / 2.0, layer.border_width / 2.0)));
     }
 
     // Draw content if any
     if let Some(content) = &layer.content {
         canvas.clip_rrect(rrbounds, Some(ClipOp::Intersect), Some(true));
         content.playback(canvas);
+        draw_damage.join(layer.content_damage);
     }
+
+    draw_damage
 }

@@ -1,15 +1,14 @@
 use crate::prelude::BlendMode;
 use crate::prelude::BorderRadius;
-use crate::types::Rectangle;
 
 use skia_safe::{Canvas, Matrix};
 
 /// A trait for objects that can be drawn to a canvas.
 pub trait Drawable {
     /// Draws the entity on the canvas.
-    fn draw(&self, canvas: &mut Canvas);
+    fn draw(&self, canvas: &mut Canvas) -> skia_safe::Rect;
     /// Returns the area that this drawable occupies.
-    fn bounds(&self) -> Rectangle;
+    fn bounds(&self) -> skia_safe::Rect;
     /// Returns the transformation matrix for this drawable.
     fn transform(&self) -> Matrix;
     /// Returns the opacity of this drawable.

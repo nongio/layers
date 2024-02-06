@@ -2,9 +2,9 @@ use std::sync::{Arc, RwLock};
 
 use indextree::NodeId;
 use rayon::prelude::{IntoParallelRefIterator, IntoParallelRefMutIterator, ParallelIterator};
-use taffy::{prelude::Size, style_helpers::points, tree::LayoutTree, Taffy};
+use taffy::{prelude::Size, style_helpers::points, Taffy};
 
-use crate::{layers::layer::render_layer::RenderLayer, prelude::Rectangle};
+use crate::layers::layer::render_layer::RenderLayer;
 
 use super::{
     node::{try_get_node, DrawCacheManagement, RenderableFlags, SceneNode},
@@ -12,6 +12,7 @@ use super::{
     AnimationState, Engine, NodeRef, Timestamp,
 };
 
+#[profiling::function]
 pub(crate) fn update_animations(engine: &Engine, timestamp: &Timestamp) -> Vec<FlatStorageId> {
     let finished_animations = Arc::new(RwLock::new(Vec::<FlatStorageId>::new()));
 
@@ -48,6 +49,7 @@ pub(crate) fn update_animations(engine: &Engine, timestamp: &Timestamp) -> Vec<F
     vec.clone()
 }
 
+#[profiling::function]
 pub(crate) fn execute_transactions(engine: &Engine) -> (Vec<NodeRef>, Vec<FlatStorageId>, bool) {
     let updated_nodes = Arc::new(RwLock::new(Vec::<NodeRef>::new()));
     let transactions_finished = Arc::new(RwLock::new(Vec::<FlatStorageId>::new()));
@@ -86,6 +88,7 @@ pub(crate) fn execute_transactions(engine: &Engine) -> (Vec<NodeRef>, Vec<FlatSt
                     });
                 }
                 let flags = command.change.execute(progress);
+
                 let node_id = command.node_id;
                 if let Some(node) = scene.get_node(node_id.0) {
                     {
@@ -113,6 +116,7 @@ pub(crate) fn execute_transactions(engine: &Engine) -> (Vec<NodeRef>, Vec<FlatSt
     )
 }
 
+#[profiling::function]
 pub(crate) fn update_layout_tree(engine: &Engine) {
     {
         let arena = engine.scene.nodes.data();
@@ -146,89 +150,67 @@ pub(crate) fn update_layout_tree(engine: &Engine) {
     // }
 }
 
-fn absolute_layout(layout_tree: &Taffy, layout_node_id: taffy::node::Node) -> skia_safe::Rect {
-    let node_layout = layout_tree.layout(layout_node_id).unwrap();
-
-    let mut absolute_x = node_layout.location.x;
-    let mut absolute_y = node_layout.location.y;
-
-    let mut parent = layout_tree.parent(layout_node_id);
-
-    while let Some(parent_node) = parent {
-        let parent_layout = layout_tree.layout(parent_node).unwrap();
-
-        absolute_x += parent_layout.location.x;
-        absolute_y -= parent_layout.location.y;
-        parent = layout_tree.parent(parent_node);
-    }
-
-    skia_safe::Rect::from_xywh(
-        absolute_x,
-        absolute_y,
-        node_layout.size.width,
-        node_layout.size.height,
-    )
-}
-
-pub(crate) fn absolute_bounds(
-    render_layer: &RenderLayer,
-    parent: Option<&RenderLayer>,
-) -> skia_safe::Rect {
-    let mut absolute_x = render_layer.bounds.x;
-    let mut absolute_y = render_layer.bounds.y;
-
-    if let Some(parent_node) = parent {
-        absolute_x += parent_node.bounds.x;
-        absolute_y += parent_node.bounds.y;
-    }
-
-    skia_safe::Rect::from_xywh(
-        absolute_x,
-        absolute_y,
-        render_layer.bounds.width,
-        render_layer.bounds.height,
-    )
-}
 pub(crate) fn update_node(
     arena: &TreeStorageData<SceneNode>,
     layout: &Taffy,
     node_id: NodeId,
     parent: Option<&RenderLayer>,
     damage: &mut skia_safe::Rect,
-    force_damage: bool,
-) {
+    parent_changed: bool,
+) -> RenderLayer {
     let node = arena.get(node_id).unwrap().get();
 
     let node_layout = layout.layout(node.layout_node_id).unwrap();
 
     let mut bounds = {
         let render_layer = node.render_layer.read().unwrap();
-        absolute_bounds(&render_layer, parent)
+        render_layer.transformed_bounds
     };
-    let _new_layout = node.layout_if_needed(node_layout);
 
-    let render_layer = node.render_layer.read().unwrap();
-    let new_bounds = absolute_bounds(&render_layer, parent);
-    let painted = node.repaint_if_needed();
-    let damaged = painted || bounds.x() != new_bounds.x() || bounds.y() != new_bounds.y();
-    if damaged || force_damage {
+    let matrix = parent.map(|p| &p.transform);
+    let _new_layout = node.layout_if_needed(node_layout, matrix);
+
+    let new_bounds = {
+        let render_layer = node.render_layer.read().unwrap();
+        render_layer.transformed_bounds
+    };
+    let mut node_damage = node.repaint_if_needed();
+
+    let layout_changed = bounds != new_bounds;
+
+    if layout_changed || parent_changed {
         bounds.join(new_bounds);
-        bounds.outset((4.0, 4.0));
-        damage.join(bounds);
+        node_damage.join(bounds);
     }
+    damage.join(node_damage);
+    let parent_changed = parent_changed || !node_damage.is_empty();
+    let mut render_layer = node.render_layer.write().unwrap();
     node_id.children(arena).for_each(|child| {
-        update_node(arena, layout, child, Some(&render_layer), damage, damaged);
+        let child_render_layer = update_node(
+            arena,
+            layout,
+            child,
+            Some(&render_layer),
+            damage,
+            parent_changed,
+        );
+        render_layer
+            .bounds_with_children
+            .join(child_render_layer.bounds_with_children);
     });
+
+    render_layer.clone()
 }
-pub(crate) fn update_nodes(engine: &Engine, _nodes_list: Vec<NodeRef>) -> crate::types::Rectangle {
+#[profiling::function]
+
+pub(crate) fn update_nodes(engine: &Engine, _nodes_list: Vec<NodeRef>) -> skia_safe::Rect {
     // iterate in parallel over the nodes and
     // repaint if necessary
     let layout = engine.layout_tree.read().unwrap();
     let arena = engine.scene.nodes.data();
     let arena = arena.read().unwrap();
 
-    let damage = *engine.damage.read().unwrap();
-    let mut damage = skia_safe::Rect::from_xywh(damage.x, damage.y, damage.width, damage.height);
+    let mut damage = *engine.damage.read().unwrap();
 
     let node = engine.scene_root.read().unwrap();
 
@@ -236,14 +218,9 @@ pub(crate) fn update_nodes(engine: &Engine, _nodes_list: Vec<NodeRef>) -> crate:
         update_node(&arena, &layout, root_id.0, None, &mut damage, false);
     }
 
-    Rectangle {
-        x: damage.x(),
-        y: damage.y(),
-        width: damage.width(),
-        height: damage.height(),
-    }
+    damage
 }
-
+#[profiling::function]
 pub(crate) fn trigger_callbacks(engine: &Engine) {
     let animations = engine.animations.data();
     let animations = animations.read().unwrap();
@@ -260,7 +237,7 @@ pub(crate) fn trigger_callbacks(engine: &Engine) {
             }
         });
 }
-
+#[profiling::function]
 pub(crate) fn cleanup_animations(engine: &Engine, finished_animations: Vec<FlatStorageId>) {
     let animations = engine.animations.data();
     let mut animations = animations.write().unwrap();
@@ -273,7 +250,7 @@ pub(crate) fn cleanup_animations(engine: &Engine, finished_animations: Vec<FlatS
         handlers.remove(animation_id);
     }
 }
-
+#[profiling::function]
 pub(crate) fn cleanup_transactions(engine: &Engine, finished_transations: Vec<FlatStorageId>) {
     let transactions = engine.transactions.data();
     let mut transactions = transactions.write().unwrap();
@@ -281,8 +258,9 @@ pub(crate) fn cleanup_transactions(engine: &Engine, finished_transations: Vec<Fl
         transactions.remove(command_id);
     }
 }
-
-pub(crate) fn cleanup_nodes(engine: &Engine) {
+#[profiling::function]
+pub(crate) fn cleanup_nodes(engine: &Engine) -> skia_safe::Rect {
+    let mut damage = skia_safe::Rect::default();
     let deleted = {
         let nodes = engine.scene.nodes.data();
         let nodes = nodes.read().unwrap();
@@ -294,6 +272,8 @@ pub(crate) fn cleanup_nodes(engine: &Engine) {
                 }
                 let node = node_id.get();
                 if node.is_deleted() {
+                    let bounds = node.bounds_with_children();
+                    damage.join(bounds);
                     Some(node.id())
                 } else {
                     None
@@ -304,4 +284,5 @@ pub(crate) fn cleanup_nodes(engine: &Engine) {
     for id in deleted {
         engine.scene_remove_layer(id);
     }
+    damage
 }

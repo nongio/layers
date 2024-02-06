@@ -119,7 +119,7 @@ pub struct Engine {
     transaction_handlers: FlatStorage<TransitionCallbacks>,
     pub layout_tree: RwLock<Taffy>,
     layout_root: RwLock<taffy::node::Node>,
-    pub damage: RwLock<crate::types::Rectangle>,
+    pub damage: RwLock<skia_safe::Rect>,
 }
 #[derive(Clone, Copy, Debug)]
 pub struct TransactionRef(pub FlatStorageId);
@@ -213,11 +213,11 @@ impl LayersEngine {
     pub fn scene_layer_at(&self, point: Point) -> Option<NodeRef> {
         self.engine.layer_at(point)
     }
-    pub fn damage(&self) -> crate::types::Rectangle {
+    pub fn damage(&self) -> skia_safe::Rect {
         *self.engine.damage.read().unwrap()
     }
     pub fn clear_damage(&self) {
-        *self.engine.damage.write().unwrap() = crate::types::Rectangle::default();
+        *self.engine.damage.write().unwrap() = skia_safe::Rect::default();
     }
     pub fn root_layer(&self) -> Option<SceneNode> {
         let root_id = self.scene_root()?;
@@ -233,10 +233,10 @@ impl std::fmt::Debug for LayersEngine {
 }
 impl Engine {
     fn new(width: f32, height: f32) -> Self {
-        rayon::ThreadPoolBuilder::new()
-            .num_threads(2)
-            .build_global()
-            .unwrap();
+        // rayon::ThreadPoolBuilder::new()
+        //     .num_threads(2)
+        //     .build_global()
+        //     .unwrap();
         let mut layout_tree = Taffy::new();
         let layout_root = RwLock::new(
             layout_tree
@@ -250,7 +250,7 @@ impl Engine {
 
         let scene = Scene::create(width, height);
         let scene_root = RwLock::new(None);
-        let damage = RwLock::new(crate::types::Rectangle::default());
+        let damage = RwLock::new(skia_safe::Rect::default());
         Engine {
             scene,
             transactions: FlatStorage::new(),
@@ -432,6 +432,7 @@ impl Engine {
         let mut timestamp = self.timestamp.write().unwrap();
         *timestamp = Timestamp(timestamp.0 + dt);
     }
+    #[profiling::function]
     pub fn update(&self, dt: f32) -> bool {
         let mut timestamp = self.timestamp.write().unwrap();
         let t = Timestamp(timestamp.0 + dt);
@@ -440,11 +441,13 @@ impl Engine {
         let finished_animations = update_animations(self, &t);
         *timestamp = t;
         // 1.2 Execute transactions using the updated animations
-        let (updated_nodes, finished_transitions, _needs_redraw) = execute_transactions(self);
+        let (mut updated_nodes, finished_transitions, _needs_redraw) = execute_transactions(self);
         let needs_draw = !updated_nodes.is_empty();
+
         // merge the updated nodes with the nodes that are part of the layout calculation
-        let updated_nodes: Vec<NodeRef>;
         {
+            #[cfg(feature = "profile-with-puffin")]
+            profiling::puffin::profile_scope!("needs_layout");
             let arena = self.scene.nodes.data();
             let arena = arena.read().unwrap();
             updated_nodes = arena
@@ -455,6 +458,7 @@ impl Engine {
                     }
                     let scene_node = node.get();
                     // let layout = self.get_node_layout_style(scene_node.layout_node_id);
+                    // if
                     // if layout.position != Position::Absolute {
                     scene_node.insert_flags(RenderableFlags::NEEDS_LAYOUT);
                     scene_node.id()
@@ -468,8 +472,7 @@ impl Engine {
         update_layout_tree(self);
 
         // 3.0 update render nodes and trigger repaint
-        let damage = update_nodes(self, updated_nodes);
-        *self.damage.write().unwrap() = damage;
+        let mut damage = update_nodes(self, updated_nodes);
         // 4.0 trigger the callbacks for the listeners on the transitions
         trigger_callbacks(self);
 
@@ -479,8 +482,9 @@ impl Engine {
         cleanup_transactions(self, finished_transitions);
 
         // 6.0 cleanup the nodes that are marked as removed
-        cleanup_nodes(self);
-
+        let removed_damage = cleanup_nodes(self);
+        damage.join(removed_damage);
+        *self.damage.write().unwrap() = damage;
         needs_draw
     }
 

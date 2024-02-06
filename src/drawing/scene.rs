@@ -48,7 +48,7 @@ pub fn render_node_tree(
         render_node_tree(child_ref, arena, canvas, context_opacity);
     });
 
-    canvas.restore_to_count(restore_transform);
+    // canvas.restore_to_count(restore_transform);
 }
 
 pub(crate) fn render_node(
@@ -64,20 +64,23 @@ pub(crate) fn render_node(
     let opacity = context_opacity * node_opacity;
 
     let blend_mode = render_layer.blend_mode;
-    let restore_transform = canvas.save();
-    canvas.concat(&render_layer.transform);
+    let restore_transform = 0; //canvas.save();
+    if render_layer.size.width <= 0.0 || render_layer.size.height <= 0.0 {
+        return restore_transform;
+    }
+    canvas.set_matrix(&render_layer.transform);
 
     let draw_cache = node.draw_cache.read().unwrap();
 
     let before_backdrop = canvas.save();
 
     let bounds_to_origin =
-        skia_safe::Rect::from_xywh(0.0, 0.0, render_layer.size.x, render_layer.size.y);
+        skia_safe::Rect::from_xywh(0.0, 0.0, render_layer.size.width, render_layer.size.height);
 
     let mut paint = skia_safe::Paint::default();
     paint.set_alpha_f(opacity);
 
-    if blend_mode == crate::prelude::BlendMode::BackgroundBlur {
+    if blend_mode == crate::prelude::BlendMode::BackgroundBlur && opacity > 0.0 {
         let border_corner_radius = render_layer.border_corner_radius;
         let rrbounds = skia_safe::RRect::new_rect_radii(
             bounds_to_origin,

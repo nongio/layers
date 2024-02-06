@@ -94,10 +94,12 @@ impl Layer {
         self.hidden.load(std::sync::atomic::Ordering::Relaxed)
     }
     change_model!(position, Point, RenderableFlags::NEEDS_LAYOUT);
-    change_model!(background_color, PaintColor, RenderableFlags::NEEDS_PAINT);
     change_model!(scale, Point, RenderableFlags::NEEDS_LAYOUT);
     change_model!(rotation, Point3d, RenderableFlags::NEEDS_LAYOUT);
     change_model!(anchor_point, Point, RenderableFlags::NEEDS_LAYOUT);
+    change_model!(opacity, f32, RenderableFlags::NEEDS_LAYOUT);
+
+    change_model!(background_color, PaintColor, RenderableFlags::NEEDS_PAINT);
     change_model!(
         border_corner_radius,
         BorderRadius,
@@ -110,7 +112,6 @@ impl Layer {
     change_model!(shadow_radius, f32, RenderableFlags::NEEDS_PAINT);
     change_model!(shadow_spread, f32, RenderableFlags::NEEDS_PAINT);
     change_model!(shadow_color, Color, RenderableFlags::NEEDS_PAINT);
-    change_model!(opacity, f32, RenderableFlags::NEEDS_PAINT);
 
     pub fn set_size(
         &self,
@@ -118,7 +119,7 @@ impl Layer {
         transition: Option<Transition>,
     ) -> TransactionRef {
         let value: Size = value.into();
-        let flags = RenderableFlags::NEEDS_LAYOUT | RenderableFlags::NEEDS_PAINT;
+        let flags = RenderableFlags::NEEDS_LAYOUT;
 
         let change: Arc<ModelChange<Size>> = Arc::new(ModelChange {
             value_change: self.model.size.to(value, transition),
@@ -206,5 +207,11 @@ impl fmt::Debug for Layer {
             .field("id", &self.id())
             // .field("model", &self.model)
             .finish()
+    }
+}
+
+impl PartialEq for Layer {
+    fn eq(&self, other: &Self) -> bool {
+        self.id() == other.id()
     }
 }

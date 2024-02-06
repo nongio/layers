@@ -107,22 +107,26 @@ impl From<NoopChange> for Option<AnimationRef> {
     }
 }
 
-impl<I: Interpolate + Sync + Clone + std::fmt::Debug + 'static> Command for ModelChange<I> {
+impl<I: Interpolate + PartialEq + std::fmt::Debug + Send + Sync + Clone> Command
+    for ModelChange<I>
+{
     fn execute(&self, progress: f32) -> RenderableFlags {
         let ModelChange {
             value_change, flag, ..
         } = &self;
-
-        value_change
-            .target
-            .set(value_change.from.interpolate(&value_change.to, progress));
-        *flag
+        let value_to = value_change.from.interpolate(&value_change.to, progress);
+        if value_change.from != value_to {
+            value_change.target.set(value_to);
+            *flag
+        } else {
+            RenderableFlags::empty()
+        }
     }
     fn value_id(&self) -> usize {
         self.value_change.target.id
     }
 }
-impl<I: Interpolate + Sync + Send + Clone + std::fmt::Debug + 'static> SyncCommand
+impl<I: Interpolate + Sync + PartialEq + Send + Clone + std::fmt::Debug + 'static> SyncCommand
     for ModelChange<I>
 {
 }

@@ -1,4 +1,5 @@
 use bitflags::bitflags;
+// use skia_safe::surface;
 
 use std::{
     fmt::Debug,
@@ -28,26 +29,120 @@ pub use draw_cache_management::DrawCacheManagement;
 #[derive(Clone, Debug)]
 pub struct DrawCache {
     picture: Picture,
-    size: Point,
     image: Arc<RwLock<Option<skia_safe::Image>>>,
+    size: skia_safe::Size,
+    offset: skia_safe::Point,
+    // surface: Arc<RwLock<Option<skia_safe::Surface>>>,
+}
+
+#[allow(dead_code)]
+fn save_image(image: &skia_safe::Image, name: &str) {
+    use std::fs::File;
+    use std::io::Write;
+
+    let data = image
+        .encode_to_data(skia_safe::EncodedImageFormat::PNG)
+        .unwrap();
+    let bytes = data.as_bytes();
+    let filename = format!("{}.png", name);
+    let mut file = File::create(filename).unwrap();
+    file.write_all(bytes).unwrap();
 }
 
 impl DrawCache {
-    pub fn new(picture: Picture, size: Point) -> Self {
+    pub fn new(picture: Picture, size: skia_safe::Size, offset: skia_safe::Point) -> Self {
         Self {
             picture,
             size,
             image: Arc::new(RwLock::new(None)),
+            offset,
         }
     }
     pub fn picture(&self) -> &Picture {
         &self.picture
     }
-    pub fn size(&self) -> &Point {
+    pub fn size(&self) -> &skia_safe::Size {
         &self.size
     }
-    pub fn draw(&self, canvas: &mut skia_safe::Canvas, paint: &skia_safe::Paint) {
+    pub fn draw_picture_to_canvas(&self, canvas: &mut skia_safe::Canvas, paint: &skia_safe::Paint) {
         canvas.draw_picture(&self.picture, None, Some(paint));
+    }
+    pub fn draw_to_image(&self, context: &mut skia_safe::gpu::DirectContext) {
+        // Define the width and height of the canvas
+        let width = self.size.width as i32 + self.offset.x as i32 * 2;
+        let height = self.size.height as i32 + self.offset.y as i32 * 2;
+        if width == 0 || height == 0 {
+            return;
+        }
+
+        let image_info = skia_safe::ImageInfo::new(
+            (width, height),
+            skia_safe::ColorType::RGBA8888,
+            skia_safe::AlphaType::Premul,
+            None,
+        );
+
+        let mut surface = skia_safe::Surface::new_render_target(
+            context,
+            skia_safe::gpu::Budgeted::No,
+            &image_info,
+            None,
+            skia_safe::gpu::SurfaceOrigin::TopLeft,
+            None,
+            None,
+        )
+        .unwrap();
+
+        // Get the canvas from the surface
+        let canvas = surface.canvas();
+        let translate = skia_safe::Matrix::translate((self.offset.x, self.offset.y));
+        canvas.concat(&translate);
+        self.draw_picture_to_canvas(canvas, &skia_safe::Paint::default());
+        surface.flush_and_submit();
+        let image = surface.image_snapshot();
+
+        let mut image_option = self.image.write().unwrap();
+        *image_option = Some(image);
+    }
+    pub fn draw(&self, canvas: &mut skia_safe::Canvas, paint: &skia_safe::Paint) {
+        let image_option = self.image.read().unwrap();
+        if self.size.width == 0.0 || self.size.height == 0.0 {
+            return;
+        }
+        if let Some(image) = image_option.as_ref() {
+            // let mut paint = paint.clone();
+            // let resampler = skia_safe::CubicResampler::catmull_rom();
+            // let matrix = skia_safe::Matrix::translate((self.offset.x, self.offset.y));
+            // paint.set_shader(image.to_shader(
+            //     (skia_safe::TileMode::Repeat, skia_safe::TileMode::Repeat),
+            //     skia_safe::SamplingOptions::from(resampler),
+            //     // skia_safe::SamplingOptions::default(),
+            //     &matrix,
+            // ));
+            // let rect = skia_safe::Rect::from_xywh(0.0, 0.0, self.size.width, self.size.height);
+            // canvas.draw_rect(rect, &paint);
+            canvas.draw_image_rect_with_sampling_options(
+                image,
+                None,
+                skia_safe::Rect::from_xywh(
+                    -self.offset.x,
+                    -self.offset.y,
+                    self.size.width + self.offset.x * 2.0,
+                    self.size.height + self.offset.y * 2.0,
+                ),
+                skia_safe::SamplingOptions::default(),
+                // skia_safe::SamplingOptions::from(resampler),
+                paint,
+            );
+            // canvas.draw_image(image, (-self.offset.x, -self.offset.y), Some(paint));
+        } else {
+            // drop(image_option);
+            canvas.draw_picture(&self.picture, None, Some(paint));
+            // if let Some(mut surface) = unsafe { canvas.surface() } {
+            //     let mut ctx = surface.recording_context().unwrap();
+            //     self.draw_to_image(&mut ctx.as_direct_context().unwrap());
+            // }
+        }
     }
 }
 
@@ -95,11 +190,29 @@ impl SceneNode {
     pub fn remove_flags(&self, flags: RenderableFlags) {
         self.flags.write().unwrap().remove(flags);
     }
-    pub fn bounds(&self) -> Rectangle {
-        self.render_layer.read().unwrap().bounds
+    pub fn bounds(&self) -> skia_safe::Rect {
+        let render_layer = self.render_layer.read().unwrap();
+        render_layer.bounds.with_outset((
+            render_layer.border_width / 2.0,
+            render_layer.border_width / 2.0,
+        ))
+    }
+    pub fn transformed_bounds(&self) -> skia_safe::Rect {
+        let render_layer = self.render_layer.read().unwrap();
+        render_layer.transformed_bounds.with_outset((
+            render_layer.border_width / 2.0,
+            render_layer.border_width / 2.0,
+        ))
+    }
+    pub fn bounds_with_children(&self) -> skia_safe::Rect {
+        let render_layer = self.render_layer.read().unwrap();
+        render_layer.bounds_with_children.with_outset((
+            render_layer.border_width / 2.0,
+            render_layer.border_width / 2.0,
+        ))
     }
     pub fn transform(&self) -> Matrix {
-        self.render_layer.read().unwrap().transform
+        self.render_layer.read().unwrap().transform.to_m33()
     }
     pub fn delete(&self) {
         self.deleted
@@ -111,9 +224,11 @@ impl SceneNode {
 }
 
 impl DrawCacheManagement for SceneNode {
-    fn repaint_if_needed(&self) -> bool {
+    fn repaint_if_needed(&self) -> skia_safe::Rect {
+        let mut damage = skia_safe::Rect::default();
+
         if self.layer.hidden() {
-            return false;
+            return damage;
         }
         let mut needs_repaint = self
             .flags
@@ -123,32 +238,52 @@ impl DrawCacheManagement for SceneNode {
         let mut draw_cache = self.draw_cache.write().unwrap();
         let render_layer = self.render_layer.read().unwrap();
 
-        if render_layer.opacity <= 0.0 {
-            return false;
-        }
         // if the size has changed from the layout, we need to repaint
         // the flag want be set if the size has changed from the layout calculations
         if let Some(dc) = &*draw_cache {
             if render_layer.size != *dc.size() {
                 needs_repaint = true;
-                // println!("Repainting because size changed");
             }
         }
         if render_layer.blend_mode == BlendMode::BackgroundBlur {
             needs_repaint = true;
         }
         if needs_repaint {
-            let picture = render_layer.draw_to_picture();
+            let (picture, layer_damage) = render_layer.draw_to_picture();
+            let (layer_damage, _) = render_layer.transform.to_m33().map_rect(layer_damage);
+            // println!(
+            //     "layer dmg {} {} {} {}",
+            //     layer_damage.x(),
+            //     layer_damage.y(),
+            //     layer_damage.width(),
+            //     layer_damage.height()
+            // );
+            damage.join(layer_damage);
             if let Some(picture) = picture {
-                let new_cache = DrawCache::new(picture, render_layer.size);
-                *draw_cache = Some(new_cache);
+                if let Some(dc) = &mut *draw_cache {
+                    dc.picture = picture;
+                    dc.size = render_layer.size;
+                    dc.image.write().unwrap().take();
+                } else {
+                    let size = render_layer.size;
+
+                    let new_cache = DrawCache::new(
+                        picture,
+                        size,
+                        skia_safe::Point {
+                            x: render_layer.border_width / 2.0,
+                            y: render_layer.border_width / 2.0,
+                        },
+                    );
+                    *draw_cache = Some(new_cache);
+                }
                 self.set_need_repaint(false);
             }
         }
-        needs_repaint
+        damage
     }
 
-    fn layout_if_needed(&self, layout: &Layout) -> bool {
+    fn layout_if_needed(&self, layout: &Layout, matrix: Option<&M44>) -> bool {
         if self.layer.hidden() {
             return false;
         }
@@ -158,8 +293,8 @@ impl DrawCacheManagement for SceneNode {
             .unwrap()
             .contains(RenderableFlags::NEEDS_LAYOUT)
         {
-            *self.render_layer.write().unwrap() =
-                RenderLayer::from_model_and_layout(&self.layer.model, layout);
+            let mut render_layer = self.render_layer.write().unwrap();
+            render_layer.update_with_model_and_layout(&self.layer.model, layout, matrix);
 
             self.set_need_layout(false);
             return true;

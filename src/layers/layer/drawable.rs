@@ -5,14 +5,14 @@ use crate::{drawing::layer::draw_layer, engine::rendering::Drawable, types::*};
 use super::render_layer::RenderLayer;
 
 impl Drawable for RenderLayer {
-    fn draw(&self, canvas: &mut Canvas) {
-        draw_layer(canvas, self);
+    fn draw(&self, canvas: &mut Canvas) -> skia_safe::Rect {
+        draw_layer(canvas, self)
     }
-    fn bounds(&self) -> Rectangle {
+    fn bounds(&self) -> skia_safe::Rect {
         self.bounds
     }
     fn transform(&self) -> Matrix {
-        self.transform
+        self.transform.to_m33()
     }
     fn opacity(&self) -> f32 {
         self.opacity
