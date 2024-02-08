@@ -1,6 +1,7 @@
 //! Types used in the library to describe Layers properties
 use oklab::{oklab_to_srgb, srgb_to_oklab, Oklab, RGB};
 use skia_safe::Color4f;
+use skia_safe::Vector;
 
 pub use skia_safe::{Image, Matrix, Picture, M44, V3};
 
@@ -129,6 +130,18 @@ pub struct BorderRadius {
     pub top_right: f32,
     pub bottom_right: f32,
     pub bottom_left: f32,
+}
+
+#[allow(clippy::from_over_into)]
+impl Into<[Vector; 4]> for BorderRadius {
+    fn into(self) -> [Vector; 4] {
+        [
+            skia_safe::Point::new(self.top_left, self.top_left),
+            skia_safe::Point::new(self.top_right, self.top_right),
+            skia_safe::Point::new(self.bottom_left, self.bottom_left),
+            skia_safe::Point::new(self.bottom_right, self.bottom_right),
+        ]
+    }
 }
 
 impl BorderRadius {

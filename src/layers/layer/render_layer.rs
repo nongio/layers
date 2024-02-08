@@ -6,7 +6,9 @@ use super::model::{ContentDrawFunction, ModelLayer};
 #[repr(C)]
 pub struct RenderLayer {
     pub bounds: skia_safe::Rect,
+    pub rbounds: skia_safe::RRect,
     pub transformed_bounds: skia_safe::Rect,
+    pub transformed_rbounds: skia_safe::RRect,
     pub bounds_with_children: skia_safe::Rect,
     pub background_color: PaintColor,
     pub border_color: PaintColor,
@@ -141,6 +143,9 @@ impl RenderLayer {
         self.bounds = bounds;
         self.transformed_bounds = transformed_bounds;
         self.bounds_with_children = bounds_with_children;
+        self.rbounds = skia_safe::RRect::new_rect_radii(bounds, &border_corner_radius.into());
+        self.transformed_rbounds =
+            skia_safe::RRect::new_rect_radii(transformed_bounds, &border_corner_radius.into());
     }
 
     pub fn from_model_and_layout(
@@ -162,7 +167,8 @@ impl RenderLayer {
         let border_width = model.border_width.value();
 
         let bounds = skia_safe::Rect::from_xywh(0.0, 0.0, size.width, size.height);
-
+        let border_corner_radius = model.border_corner_radius.value();
+        let rbounds = skia_safe::RRect::new_rect_radii(bounds, &border_corner_radius.into());
         let rotation = model.rotation.value();
         let anchor_point = model.anchor_point.value();
         let scale = model.scale.value();
@@ -210,11 +216,12 @@ impl RenderLayer {
 
         // let matrix = transform.to_m33();
         let (transformed_bounds, _) = transform.to_m33().map_rect(bounds);
+        let transformed_rbounds =
+            skia_safe::RRect::new_rect_radii(transformed_bounds, &border_corner_radius.into());
         let bounds_with_children = transformed_bounds;
         let background_color = model.background_color.value();
         let border_color = model.border_color.value();
 
-        let border_corner_radius = model.border_corner_radius.value();
         let shadow_offset = model.shadow_offset.value();
         let shadow_radius = model.shadow_radius.value();
         let shadow_spread = model.shadow_spread.value();
@@ -255,6 +262,8 @@ impl RenderLayer {
             bounds_with_children,
             content_draw_func,
             content_damage,
+            rbounds,
+            transformed_rbounds,
         }
     }
 }
@@ -285,6 +294,8 @@ impl Default for RenderLayer {
             bounds_with_children: skia_safe::Rect::default(),
             content_draw_func: None,
             content_damage: skia_safe::Rect::default(),
+            rbounds: skia_safe::RRect::default(),
+            transformed_rbounds: skia_safe::RRect::default(),
         }
     }
 }
