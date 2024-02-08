@@ -23,6 +23,7 @@ pub struct Layer {
     pub(crate) model: Arc<ModelLayer>,
     pub layout_node_id: Node,
     pub hidden: Arc<AtomicBool>,
+    pub(crate) image_cache: Arc<AtomicBool>,
 }
 
 impl Layer {
@@ -44,6 +45,7 @@ impl Layer {
             model,
             layout_node_id: layout,
             hidden: Arc::new(AtomicBool::new(false)),
+            image_cache: Arc::new(AtomicBool::new(false)),
         }
     }
     pub fn set_id(&self, id: NodeRef) {
@@ -173,6 +175,9 @@ impl Layer {
             let node = node.get_mut();
             node.insert_flags(RenderableFlags::NEEDS_PAINT);
         }
+    }
+    pub fn set_image_cache(&self, value: bool) {
+        self.image_cache.store(value, std::sync::atomic::Ordering::Relaxed);
     }
     pub fn add_sublayer(&self, layer: Layer) -> NodeRef {
         self.engine.scene_add_layer(layer, self.id())

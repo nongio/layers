@@ -32,6 +32,7 @@ pub struct DrawCache {
     image: Arc<RwLock<Option<skia_safe::Image>>>,
     size: skia_safe::Size,
     offset: skia_safe::Point,
+    cache_to_image: bool,
     // surface: Arc<RwLock<Option<skia_safe::Surface>>>,
 }
 
@@ -54,12 +55,18 @@ fn save_image<'a>(
 }
 
 impl DrawCache {
-    pub fn new(picture: Picture, size: skia_safe::Size, offset: skia_safe::Point) -> Self {
+    pub fn new(
+        picture: Picture,
+        size: skia_safe::Size,
+        offset: skia_safe::Point,
+        cache_to_image: bool,
+    ) -> Self {
         Self {
             picture,
             size,
             image: Arc::new(RwLock::new(None)),
             offset,
+            cache_to_image,
         }
     }
     pub fn picture(&self) -> &Picture {
@@ -68,45 +75,47 @@ impl DrawCache {
     pub fn size(&self) -> &skia_safe::Size {
         &self.size
     }
-    pub fn draw_picture_to_canvas(&self, canvas: &mut skia_safe::Canvas, paint: &skia_safe::Paint) {
+    pub fn draw_picture_to_canvas(&self, canvas: &skia_safe::Canvas, paint: &skia_safe::Paint) {
         canvas.draw_picture(&self.picture, None, Some(paint));
     }
-    pub fn draw_to_image(&self, _context: &mut skia_safe::gpu::DirectContext) {
+    pub fn draw_to_image(&self, context: &mut skia_safe::gpu::DirectContext) {
         // Define the width and height of the canvas
-        // let width = self.size.width as i32 + self.offset.x as i32 * 2;
-        // let height = self.size.height as i32 + self.offset.y as i32 * 2;
-        // if width == 0 || height == 0 {
-        //     return;
-        // }
+        let width = self.size.width as i32 + self.offset.x as i32 * 2;
+        let height = self.size.height as i32 + self.offset.y as i32 * 2;
+        if width == 0 || height == 0 {
+            return;
+        }
 
-        // let image_info = skia_safe::ImageInfo::new(
-        //     (width, height),
-        //     skia_safe::ColorType::RGBA8888,
-        //     skia_safe::AlphaType::Premul,
-        //     None,
-        // );
+        let image_info = skia_safe::ImageInfo::new(
+            (width, height),
+            skia_safe::ColorType::RGBA8888,
+            skia_safe::AlphaType::Premul,
+            None,
+        );
 
-        // let mut surface = skia_safe::Surface::new_render_target(
-        //     context,
-        //     skia_safe::gpu::Budgeted::No,
-        //     &image_info,
-        //     None,
-        //     skia_safe::gpu::SurfaceOrigin::TopLeft,
-        //     None,
-        //     None,
-        // )
-        // .unwrap();
+        let mut surface = skia_safe::gpu::surfaces::render_target(
+            context,
+            skia_safe::gpu::Budgeted::No,
+            &image_info,
+            None,
+            skia_safe::gpu::SurfaceOrigin::TopLeft,
+            None,
+            None,
+            false,
+        )
+        .unwrap();
 
         // // Get the canvas from the surface
-        // let canvas = surface.canvas();
-        // let translate = skia_safe::Matrix::translate((self.offset.x, self.offset.y));
-        // canvas.concat(&translate);
-        // self.draw_picture_to_canvas(canvas, &skia_safe::Paint::default());
-        // surface.flush_and_submit();
-        // let image = surface.image_snapshot();
+        let canvas = surface.canvas();
+        let translate = skia_safe::Matrix::translate((self.offset.x, self.offset.y));
+        canvas.concat(&translate);
+        self.draw_picture_to_canvas(canvas, &skia_safe::Paint::default());
+        context.flush_and_submit_surface(&mut surface, None);
 
-        // let mut image_option = self.image.write().unwrap();
-        // *image_option = Some(image);
+        let image = surface.image_snapshot();
+
+        let mut image_option = self.image.write().unwrap();
+        *image_option = Some(image);
     }
     pub fn draw(&self, canvas: &skia_safe::Canvas, paint: &skia_safe::Paint) {
         let image_option = self.image.read().unwrap();
@@ -140,12 +149,14 @@ impl DrawCache {
             );
             // canvas.draw_image(image, (-self.offset.x, -self.offset.y), Some(paint));
         } else {
-            // drop(image_option);
+            drop(image_option);
             canvas.draw_picture(&self.picture, None, Some(paint));
-            // if let Some(mut surface) = unsafe { canvas.surface() } {
-            //     let mut ctx = surface.recording_context().unwrap();
-            //     self.draw_to_image(&mut ctx.as_direct_context().unwrap());
-            // }
+            if self.cache_to_image {
+                if let Some(surface) = unsafe { canvas.surface() } {
+                    let mut ctx = surface.recording_context().unwrap();
+                    self.draw_to_image(&mut ctx.as_direct_context().unwrap());
+                }
+            }
         }
     }
 }
@@ -278,6 +289,9 @@ impl DrawCacheManagement for SceneNode {
                             x: render_layer.border_width / 2.0,
                             y: render_layer.border_width / 2.0,
                         },
+                        self.layer
+                            .image_cache
+                            .load(std::sync::atomic::Ordering::Relaxed),
                     );
                     *draw_cache = Some(new_cache);
                 }

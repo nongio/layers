@@ -56,6 +56,8 @@ pub struct ViewLayer {
     pub opacity: Option<(f32, Option<Transition>)>,
     #[builder(setter(into, strip_option), default)]
     pub children: Option<Vec<ViewLayer>>,
+    #[builder(setter(into, strip_option), default)]
+    pub image_cache: Option<bool>,
 }
 
 impl fmt::Debug for ViewLayer {
@@ -178,6 +180,10 @@ impl BuildLayerTree for Layer {
 
         if let Some(content) = view_layer_tree.content.clone() {
             scene_layer.set_draw_content(Some(content));
+        }
+
+        if let Some(image_cache) = view_layer_tree.image_cache {
+            scene_layer.set_image_cache(image_cache);
         }
 
         let id = scene_layer.id();

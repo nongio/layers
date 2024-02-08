@@ -172,6 +172,7 @@ impl LayersEngine {
             id: Arc::new(RwLock::new(None)),
             layout_node_id: layout,
             hidden: Arc::new(AtomicBool::new(false)),
+            image_cache: Arc::new(AtomicBool::new(false)),
         }
     }
     pub fn new_animation(&self, transition: Transition) -> AnimationRef {
