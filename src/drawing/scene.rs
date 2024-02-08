@@ -1,7 +1,8 @@
 #![allow(warnings)]
 
-use indextree::Arena;
+use indextree::{Arena, NodeId};
 use skia_safe::Canvas;
+use skia_safe::Contains;
 
 use crate::engine::{
     node::{DrawCacheManagement, SceneNode},
@@ -11,6 +12,7 @@ use crate::engine::{
 };
 
 use super::layer::draw_layer;
+use std::iter::IntoIterator;
 
 pub trait DrawScene {
     fn draw_scene(&self, scene: &Scene, root_id: NodeRef, damage: Option<skia_safe::Rect>);
@@ -23,7 +25,57 @@ pub fn draw_scene(canvas: &Canvas, scene: &Scene, root_id: NodeRef) {
         render_node_tree(root_id, &arena, canvas, 1.0);
     }
 }
+pub fn node_tree_list(
+    node_ref: NodeRef,
+    arena: &Arena<SceneNode>,
+    context_opacity: f32,
+) -> Vec<(NodeRef, f32)> {
+    let mut nodes = Vec::new();
+    let node_id: TreeStorageId = node_ref.into();
 
+    let node = arena.get(node_id).unwrap().get();
+    let render_layer = node.render_layer.read().unwrap();
+    let context_opacity = render_layer.opacity * context_opacity;
+    if !node.layer.hidden() && context_opacity > 0.0 {
+        nodes.push((node_ref, context_opacity));
+        let children = node_id.children(arena).collect::<Vec<NodeId>>();
+        for child_id in children.iter() {
+            let child_ref = NodeRef(child_id.clone());
+
+            nodes.extend(node_tree_list(child_ref, arena, context_opacity));
+        }
+    }
+    nodes
+}
+
+pub fn node_tree_list_visible<'a>(
+    nodes: impl std::iter::DoubleEndedIterator<Item = &'a (NodeRef, f32)>,
+    arena: &Arena<SceneNode>,
+) -> Vec<(NodeRef, f32)> {
+    let mut visible_nodes = Vec::new();
+    let mut damage = Vec::<skia_safe::RRect>::new();
+
+    for (node_ref, context_opacity) in nodes.into_iter().rev() {
+        let node_id: TreeStorageId = node_ref.clone().into();
+        let node = arena.get(node_id).unwrap().get();
+        let render_layer = node.render_layer.read().unwrap();
+        let rbounds = render_layer.transformed_rbounds;
+        let bounds = render_layer.transformed_bounds;
+
+        let is_covered = damage.iter().any(|rect| rect.contains(bounds));
+        // If the rectangle is not completely covered, add the node to visible_nodes
+        if !is_covered {
+            visible_nodes.push((node_ref.clone(), context_opacity.clone()));
+
+            if context_opacity.to_bits() == 1_f32.to_bits()
+                && render_layer.blend_mode != crate::prelude::BlendMode::BackgroundBlur
+            {
+                damage.push(rbounds);
+            }
+        }
+    }
+    visible_nodes
+}
 pub fn render_node_tree(
     node_ref: NodeRef,
     arena: &Arena<SceneNode>,
