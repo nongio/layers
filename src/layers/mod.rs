@@ -112,7 +112,8 @@ impl PartialEq for ViewLayer {
 
 impl Eq for ViewLayer {}
 
-impl Into<Vec<ViewLayer> > for ViewLayer {
+#[allow(clippy::from_over_into)]
+impl Into<Vec<ViewLayer>> for ViewLayer {
     fn into(self) -> Vec<ViewLayer> {
         vec![self]
     }
