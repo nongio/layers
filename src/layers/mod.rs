@@ -2,14 +2,17 @@
 
 use core::fmt;
 use std::{
-    cell::RefCell,
     collections::{hash_map::DefaultHasher, HashMap, HashSet},
     hash::{Hash, Hasher},
+    sync::{Arc, RwLock},
 };
 
 use derive_builder::Builder;
 
-use self::layer::{model::ContentDrawFunction, Layer};
+use self::layer::{
+    model::{ContentDrawFunction, PointerHandlerFunction},
+    Layer,
+};
 use crate::prelude::*;
 use crate::{engine::NodeRef, types::Size};
 use indextree::NodeId;
@@ -20,8 +23,8 @@ pub mod layer;
 #[derive(Clone, Builder, Default)]
 #[builder(public, default)]
 pub struct ViewLayer {
-    #[builder(setter(custom))]
-    pub id: String,
+    #[builder(setter(into, strip_option))]
+    pub key: String,
     #[builder(setter(into, strip_option), default)]
     pub background_color: Option<(PaintColor, Option<Transition>)>,
     #[builder(setter(into, strip_option), default)]
@@ -58,12 +61,14 @@ pub struct ViewLayer {
     pub children: Option<Vec<ViewLayer>>,
     #[builder(setter(into, strip_option), default)]
     pub image_cache: Option<bool>,
+    #[builder(setter(custom))]
+    pub on_pointer_move: Option<PointerHandlerFunction>,
 }
 
 impl fmt::Debug for ViewLayer {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("ViewLayer")
-            .field("id", &self.id)
+            .field("key", &self.key)
             .field("background_color", &self.background_color)
             .field("border_color", &self.border_color)
             .field("border_width", &self.border_width)
@@ -96,23 +101,24 @@ fn unmap_view(view: &ViewLayer, view_layer_map: &mut HashMap<ViewLayer, NodeRef>
 
 impl Hash for ViewLayer {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.id.hash(state);
+        self.key.hash(state);
     }
 }
 impl PartialEq for ViewLayer {
     fn eq(&self, other: &Self) -> bool {
-        self.id == other.id
+        self.key == other.key
     }
 }
 
 impl Eq for ViewLayer {}
 
-impl ViewLayerBuilder {
-    pub fn id(&mut self, id: impl Into<String>) -> &mut Self {
-        let id = id.into();
-        self.id = Some(id);
-        self
+impl Into<Vec<ViewLayer> > for ViewLayer {
+    fn into(self) -> Vec<ViewLayer> {
+        vec![self]
     }
+}
+
+impl ViewLayerBuilder {
     pub fn content<F: Into<ContentDrawFunction>>(
         &mut self,
         content_handler: Option<F>,
@@ -121,6 +127,14 @@ impl ViewLayerBuilder {
             let content = Some(content_handler.into());
             self.content = Some(content);
         }
+        self
+    }
+    pub fn on_pointer_move<F: Into<PointerHandlerFunction>>(
+        &mut self,
+        on_pointer_move: F,
+    ) -> &mut Self {
+        let on_pointer_move = Some(on_pointer_move.into());
+        self.on_pointer_move = Some(on_pointer_move);
         self
     }
 }
@@ -135,6 +149,9 @@ impl BuildLayerTree for Layer {
         view_layer_map: &mut HashMap<ViewLayer, NodeRef>,
     ) {
         let scene_layer = self.clone();
+
+        scene_layer.set_key(view_layer_tree.key.clone());
+
         if let Some((position, transition)) = view_layer_tree.position {
             scene_layer.set_position(position, transition);
         }
@@ -185,7 +202,10 @@ impl BuildLayerTree for Layer {
         if let Some(image_cache) = view_layer_tree.image_cache {
             scene_layer.set_image_cache(image_cache);
         }
-
+        if let Some(on_pointer_move) = view_layer_tree.on_pointer_move.clone() {
+            scene_layer.remove_all_handlers();
+            scene_layer.add_on_pointer_move(on_pointer_move);
+        }
         let id = scene_layer.id();
         let engine = scene_layer.engine;
         if let Some(id) = id {
@@ -212,9 +232,11 @@ impl BuildLayerTree for Layer {
                     let scene_layer_id = scene_layer_id.unwrap_or_else(|| {
                         let layer = Layer::with_engine(engine.clone());
                         let id = engine.scene_add_layer(layer, Some(id));
+
                         view_layer_map.insert(child.clone(), id);
                         id
                     });
+
                     let scene_node = engine.scene.get_node(scene_layer_id).unwrap();
                     let scene_layer = scene_node.get().clone();
                     scene_layer.layer.build_layer_tree(child, view_layer_map);
@@ -258,46 +280,83 @@ impl BuildLayerTree for Layer {
     }
 }
 
-pub struct View<S: Hash> {
-    view_layer_map: RefCell<HashMap<ViewLayer, NodeRef>>,
-    render_function: Box<dyn Fn(&S) -> ViewLayer>,
-    last_state: Option<u64>,
-    last_view: Option<ViewLayer>,
+#[allow(clippy::type_complexity)]
+#[derive(Clone)]
+pub struct View<S: Hash + Clone> {
+    view_layer_map: Arc<RwLock<HashMap<ViewLayer, NodeRef>>>,
+    render_function: Arc<dyn Fn(&S, &View<S>) -> ViewLayer + Sync + Send>,
+    last_state: Arc<RwLock<Option<u64>>>,
+    pub state: Arc<RwLock<S>>,
     pub layer: Layer,
 }
 
+impl<S: Hash + Clone> std::fmt::Debug for View<S> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("View")
+            // .field("layer", &self.layer)
+            .field("last_state", &self.last_state)
+            .finish()
+    }
+}
 // impl View for a function that accept an argument
-impl<S: Hash> View<S> {
-    pub fn new(layer: Layer, render_function: Box<dyn Fn(&S) -> ViewLayer>) -> Self {
-        Self {
+#[allow(clippy::type_complexity)]
+impl<S: Hash + Clone> View<S> {
+    pub fn new(
+        layer: Layer,
+        initial_state: S,
+        render_function: Box<dyn Fn(&S, &View<S>) -> ViewLayer + Sync + Send>,
+    ) -> Self {
+        let view = Self {
             layer,
-            render_function,
-            last_state: None,
-            last_view: None,
-            view_layer_map: RefCell::new(HashMap::new()),
+            render_function: Arc::from(render_function),
+            last_state: Arc::new(RwLock::new(None)),
+            view_layer_map: Arc::new(RwLock::new(HashMap::new())),
+            state: Arc::new(RwLock::new(initial_state)),
+        };
+        {
+            let state = view.state.read().unwrap();
+            view.render(&state);
         }
+        view
     }
 
-    pub fn render(&mut self, state: &S) -> bool {
+    pub fn render(&self, state: &S) {
+        let view = (self.render_function)(state, self);
+        let mut view_layer_map = self.view_layer_map.write().unwrap();
+        self.layer.build_layer_tree(&view, &mut view_layer_map);
+    }
+    pub fn get_state(&self) -> S {
+        self.state.read().unwrap().clone()
+    }
+    pub fn set_state(&self, state: S) {
+        *self.state.write().unwrap() = state;
+    }
+    pub fn update_state(&self, state: S) -> bool {
         let mut hasher = DefaultHasher::new();
         state.hash(&mut hasher);
         let state_hash = hasher.finish();
 
-        if self.last_state.is_none() || self.last_state.as_ref().unwrap() != &state_hash {
-            let view = (self.render_function)(state);
-            self.last_state = Some(state_hash);
-            self.last_view = Some(view.clone());
-            self.layer
-                .build_layer_tree(&view, &mut self.view_layer_map.borrow_mut());
+        let mut last_state = self.last_state.write().unwrap();
+        if last_state.is_none() || last_state.as_ref().unwrap() != &state_hash {
+            let mut state_mut = self.state.write().unwrap();
+            *state_mut = state;
+            *last_state = Some(state_hash);
+            self.render(&state_mut);
             return true;
         }
         false
     }
+
     pub fn get_layer_by_id(&self, id: &str) -> Option<Layer> {
-        let view_layer_map = self.view_layer_map.borrow();
+        let view_layer_map = self.view_layer_map.read().unwrap();
+        let keys = view_layer_map
+            .keys()
+            .map(|vl| vl.key.clone())
+            .collect::<Vec<String>>();
+        println!("view_layer_map: {:?}", keys);
         let view_layer = view_layer_map
             .keys()
-            .find(|view_layer| view_layer.id == id)?;
+            .find(|view_layer| view_layer.key == id)?;
 
         if let Some(node_ref) = view_layer_map.get(view_layer) {
             let scene_node = self.layer.engine.scene.get_node(node_ref.0);

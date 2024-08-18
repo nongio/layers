@@ -28,7 +28,7 @@ pub fn view_app_icon(state: AppIconState, icon_width: f32) -> ViewLayer {
         );
     };
     ViewLayerBuilder::default()
-        .id(format!("item_{}", state.index))
+        .key(format!("item_{}", state.index))
         .size((
             Size {
                 width: taffy::Dimension::Points(icon_width + PADDING * 2.0),
@@ -47,7 +47,7 @@ pub fn view_app_icon(state: AppIconState, icon_width: f32) -> ViewLayer {
         .build()
         .unwrap()
 }
-pub fn view_app_switcher(state: &AppSwitcherState) -> ViewLayer {
+pub fn view_app_switcher(state: &AppSwitcherState, _view: &View<AppSwitcherState>) -> ViewLayer {
     const COMPONENT_PADDING_H: f32 = 50.0;
     const COMPONENT_PADDING_V: f32 = 80.0;
     const ICON_PADDING: f32 = 35.0;
@@ -106,7 +106,7 @@ pub fn view_app_switcher(state: &AppSwitcherState) -> ViewLayer {
         }
     };
     ViewLayerBuilder::default()
-        .id("apps_switcher")
+        .key("apps_switcher")
         .size((
             Size {
                 width: taffy::Dimension::Points(component_width),
@@ -137,7 +137,7 @@ pub fn view_app_switcher(state: &AppSwitcherState) -> ViewLayer {
             ..Default::default()
         })
         .children(vec![ViewLayerBuilder::default()
-            .id("apps_container")
+            .key("apps_container")
             .size((
                 Size {
                     width: taffy::Dimension::Auto,

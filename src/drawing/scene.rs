@@ -155,10 +155,13 @@ pub(crate) fn render_node(
         canvas.clip_rrect(rrbounds, skia_safe::ClipOp::Intersect, Some(true));
 
         let mut save_layer_rec = skia_safe::canvas::SaveLayerRec::default();
-        let crop_rect = Some(skia_safe::image_filters::CropRect::from(bounds_to_origin));
+        let SAFE_MARGIN = 100.0;
+        let crop_rect = Some(skia_safe::image_filters::CropRect::from(
+            bounds_to_origin.with_outset((SAFE_MARGIN, SAFE_MARGIN)),
+        ));
 
         let blur = skia_safe::image_filters::blur(
-            (50.0, 50.0),
+            (25.0, 25.0),
             skia_safe::TileMode::Clamp,
             None,
             crop_rect,
@@ -186,4 +189,57 @@ pub(crate) fn render_node(
     // }
 
     restore_transform
+}
+
+pub fn debug_scene(scene: &Scene, root_id: NodeRef) {
+    let arena = scene.nodes.data();
+    let arena = arena.read().unwrap();
+    if let Some(_root) = scene.get_node(root_id) {
+        debug_node_tree(root_id, &arena, 1.0, 0);
+    }
+}
+
+pub fn debug_node_tree(
+    node_ref: NodeRef,
+    arena: &Arena<SceneNode>,
+    context_opacity: f32,
+    level: usize,
+) {
+    let node_id: TreeStorageId = node_ref.into();
+    let scene_node = arena.get(node_id).unwrap().get();
+    if scene_node.layer.hidden() {
+        return;
+    }
+    debug_node(node_ref, arena, context_opacity, level);
+
+    let render_layer = scene_node.render_layer.read().unwrap();
+    let context_opacity = render_layer.opacity * context_opacity;
+    node_id.children(arena).for_each(|child_id| {
+        let child_ref = NodeRef(child_id);
+        debug_node_tree(child_ref, arena, context_opacity, level + 1);
+    });
+}
+
+pub fn debug_node(node_id: NodeRef, arena: &Arena<SceneNode>, context_opacity: f32, level: usize) {
+    let node_id: TreeStorageId = node_id.into();
+    let node = arena.get(node_id).unwrap().get();
+    let render_layer = node.render_layer.read().unwrap();
+
+    let bounds =
+        skia_safe::Rect::from_xywh(0.0, 0.0, render_layer.size.width, render_layer.size.height);
+
+    println!(
+        "{}Layer key: {:?} position: {:?} size: {:?} opacity: {:?}",
+        "* ".repeat(level),
+        node.layer.key(),
+        (
+            render_layer.transformed_bounds.x(),
+            render_layer.transformed_bounds.y()
+        ),
+        (
+            render_layer.transformed_bounds.width(),
+            render_layer.transformed_bounds.height()
+        ),
+        render_layer.opacity,
+    );
 }

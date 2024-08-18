@@ -18,15 +18,21 @@ pub mod scene;
 mod stages;
 pub mod storage;
 
+use indextree::NodeId;
 use taffy::prelude::*;
 
 use std::{
+    collections::HashMap,
+    hash::Hash,
     ops::Deref,
-    sync::{atomic::AtomicBool, Arc, RwLock},
+    sync::{
+        atomic::{AtomicBool, AtomicUsize},
+        Arc, RwLock,
+    },
 };
 
 use crate::{
-    layers::layer::{Layer, ModelLayer},
+    layers::layer::{model::PointerHandlerFunction, Layer, ModelLayer},
     types::Point,
 };
 
@@ -81,7 +87,7 @@ pub struct AnimationState {
     pub(crate) is_finished: bool,
 }
 
-type FnCallback = Arc<dyn 'static + Fn(f32) + Send + Sync>;
+type FnTransactionCallback = Arc<dyn 'static + Fn(f32) + Send + Sync>;
 
 pub enum TransactionEventType {
     Start,
@@ -90,9 +96,9 @@ pub enum TransactionEventType {
 }
 #[derive(Clone)]
 pub struct TransitionCallbacks {
-    pub on_start: Vec<FnCallback>,
-    pub on_finish: Vec<FnCallback>,
-    pub on_update: Vec<FnCallback>,
+    pub on_start: Vec<FnTransactionCallback>,
+    pub on_finish: Vec<FnTransactionCallback>,
+    pub on_update: Vec<FnTransactionCallback>,
 }
 
 impl TransitionCallbacks {
@@ -110,6 +116,23 @@ impl Default for TransitionCallbacks {
     }
 }
 
+#[derive(Clone)]
+pub struct PointerCallback {
+    pub on_move: HashMap<usize, PointerHandlerFunction>,
+}
+
+impl PointerCallback {
+    pub fn new() -> Self {
+        Self {
+            on_move: HashMap::new(),
+        }
+    }
+}
+impl Default for PointerCallback {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 pub struct Engine {
     pub scene: Arc<Scene>,
     scene_root: RwLock<Option<NodeRef>>,
@@ -120,6 +143,12 @@ pub struct Engine {
     pub layout_tree: RwLock<Taffy>,
     layout_root: RwLock<taffy::node::Node>,
     pub damage: RwLock<skia_safe::Rect>,
+    // pointer handlers
+    pointer_handlers: FlatStorage<PointerCallback>,
+    // pointer_down_handlers: FlatStorage<PointerDownCallback>,
+    // pointer_up_handlers: FlatStorage<PointerUpCallback>,
+    // pointer_hover_handlers: FlatStorage<PointerHoverCallback>,
+    // pointer_leave_handlers: FlatStorage<PointerLeaveCallback>,
 }
 #[derive(Clone, Copy, Debug)]
 pub struct TransactionRef(pub FlatStorageId);
@@ -170,6 +199,7 @@ impl LayersEngine {
             engine: self.engine.clone(),
             model,
             id: Arc::new(RwLock::new(None)),
+            key: Arc::new(RwLock::new(String::new())),
             layout_node_id: layout,
             hidden: Arc::new(AtomicBool::new(false)),
             image_cache: Arc::new(AtomicBool::new(false)),
@@ -201,6 +231,9 @@ impl LayersEngine {
     pub fn scene_get_node(&self, node: NodeRef) -> Option<TreeStorageNode<SceneNode>> {
         self.engine.scene_get_node(node)
     }
+    pub fn scene_get_node_parent(&self, node: NodeRef) -> Option<NodeRef> {
+        self.engine.scene_get_node_parent(node)
+    }
     pub fn scene(&self) -> &Arc<Scene> {
         &self.engine.scene
     }
@@ -225,6 +258,9 @@ impl LayersEngine {
         let node = self.scene_get_node(root_id)?;
         Some(node.get().clone())
     }
+    pub fn pointer_move(&self, point: impl Into<Point>, root_id: NodeId) {
+        self.engine.pointer_move(point, root_id);
+    }
 }
 
 impl std::fmt::Debug for LayersEngine {
@@ -232,6 +268,9 @@ impl std::fmt::Debug for LayersEngine {
         f.debug_struct("LayersEngine").finish()
     }
 }
+
+static UNIQ_POINTER_HANDLER_ID: AtomicUsize = AtomicUsize::new(0);
+
 impl Engine {
     fn new(width: f32, height: f32) -> Self {
         // rayon::ThreadPoolBuilder::new()
@@ -262,6 +301,7 @@ impl Engine {
             layout_root,
             scene_root,
             damage,
+            pointer_handlers: FlatStorage::new(),
         }
     }
     pub fn create(width: f32, height: f32) -> Arc<Self> {
@@ -361,6 +401,11 @@ impl Engine {
     }
     pub fn scene_get_node(&self, node: NodeRef) -> Option<TreeStorageNode<SceneNode>> {
         self.scene.get_node(node)
+    }
+    pub fn scene_get_node_parent(&self, node: NodeRef) -> Option<NodeRef> {
+        let node = self.scene.get_node(node)?;
+        let parent = node.parent();
+        parent.map(NodeRef)
     }
     pub fn now(&self) -> f32 {
         self.timestamp.read().unwrap().0
@@ -536,7 +581,7 @@ impl Engine {
                     .transaction_handlers
                     .get(&animation.0)
                     .unwrap_or_else(TransitionCallbacks::new);
-                let handler = Arc::new(handler) as FnCallback;
+                let handler = Arc::new(handler) as FnTransactionCallback;
                 match event_type {
                     TransactionEventType::Start => ch.on_start.push(handler),
                     TransactionEventType::Finish => ch.on_finish.push(handler),
@@ -570,6 +615,66 @@ impl Engine {
         handler: F,
     ) {
         self.add_transaction_handler(transaction, TransactionEventType::Update, handler);
+    }
+
+    #[allow(clippy::unwrap_or_default)]
+    pub fn add_pointer_handler<F: Into<PointerHandlerFunction>>(
+        &self,
+        layer_node: NodeRef,
+        handler: F,
+    ) -> usize {
+        let node_id = layer_node.0.into();
+        let mut pointer_callback = self
+            .pointer_handlers
+            .get(&node_id)
+            .unwrap_or_else(PointerCallback::new);
+        let handler = handler.into();
+        let handler_id = UNIQ_POINTER_HANDLER_ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        pointer_callback.on_move.insert(handler_id, handler);
+
+        self.pointer_handlers
+            .insert_with_id(pointer_callback, node_id);
+
+        handler_id
+    }
+
+    pub fn remove_pointer_handler(&self, layer_node: NodeRef, handler_id: usize) {
+        let node_id = layer_node.0.into();
+        if let Some(mut pointer_callback) = self.pointer_handlers.get(&node_id) {
+            pointer_callback.on_move.remove(&handler_id);
+            self.pointer_handlers
+                .insert_with_id(pointer_callback, node_id);
+        }
+    }
+
+    pub fn remove_all_handlers(&self, layer_node: NodeRef) {
+        let node_id = layer_node.0.into();
+        if let Some(mut pointer_callback) = self.pointer_handlers.get(&node_id) {
+            pointer_callback.on_move.clear();
+        }
+    }
+
+    pub fn pointer_move(&self, point: impl Into<Point>, root_id: NodeId) {
+        let p = point.into();
+        let arena = self.scene.nodes.data();
+        let arena = arena.read().unwrap();
+
+        // let root_node = arena.get(root_id).unwrap().get();
+
+        for node_id in root_id.reverse_children(&arena) {
+            let scene_node = arena.get(node_id).unwrap().get();
+            if scene_node.contains(p) {
+                self.pointer_move(p, node_id);
+            }
+        }
+        let root_node = arena.get(root_id).unwrap().get();
+        if root_node.contains(p) {
+            if let Some(pointer_handler) = self.pointer_handlers.get(&root_id.into()) {
+                for handler in pointer_handler.on_move.values() {
+                    handler.0(p.x, p.y);
+                }
+            }
+        }
     }
 }
 

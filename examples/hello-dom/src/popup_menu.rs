@@ -92,7 +92,7 @@ pub fn popup_menu_item_view(state: &String, selected: bool) -> ViewLayer {
         skia::Rect::from_xywh(0.0, 0.0, w, h)
     };
     ViewLayerBuilder::default()
-        .id(format!("popup_menu_item_{}", state))
+        .key(format!("popup_menu_item_{}", state))
         .size((
             layers::types::Size {
                 width: taffy::style::Dimension::Points(350.0),
@@ -108,7 +108,7 @@ pub fn popup_menu_item_view(state: &String, selected: bool) -> ViewLayer {
 }
 pub fn popup_menu_view(state: &PopupMenuState) -> ViewLayer {
     ViewLayerBuilder::default()
-        .id("popup_menu")
+        .key("popup_menu")
         .size((
             layers::types::Size {
                 width: taffy::style::Dimension::Auto,

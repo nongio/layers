@@ -130,8 +130,9 @@ fn main() {
     // for n in 0..3 {
     //     state.items.push(format!("Item {}", n));
     // }
-    let mut app_switcher = layers::prelude::View::new(layer, Box::new(view_app_switcher));
-    app_switcher.render(&state);
+    let app_switcher =
+        layers::prelude::View::new(layer, state.clone(), Box::new(view_app_switcher));
+    // app_switcher.render(&state);
 
     events_loop.run(move |event, _, control_flow| {
         let now = std::time::Instant::now();

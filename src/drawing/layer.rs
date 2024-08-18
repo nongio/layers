@@ -33,7 +33,7 @@ pub(crate) fn draw_layer(canvas: &Canvas, layer: &RenderLayer) -> skia_safe::Rec
     };
     {
         if (background_color.a * layer.opacity) > 0.0 {
-            // let save_count = canvas.save();
+            let save_count = canvas.save();
             canvas.clip_rrect(rrbounds, None, None);
 
             // Draw the background color.
@@ -47,7 +47,7 @@ pub(crate) fn draw_layer(canvas: &Canvas, layer: &RenderLayer) -> skia_safe::Rec
             if background_color.a > 0.0 {
                 canvas.draw_paint(&background_paint);
             }
-            // canvas.restore_to_count(save_count);
+            canvas.restore_to_count(save_count);
 
             draw_damage.join(bounds);
         }
@@ -63,21 +63,19 @@ pub(crate) fn draw_layer(canvas: &Canvas, layer: &RenderLayer) -> skia_safe::Rec
         ));
         // shadow_paint.set_anti_alias(true);
 
-        let shadow_rrect = RRect::new_rect_xy(
-            Rect::from_xywh(
-                layer.shadow_offset.x,
-                layer.shadow_offset.y,
-                layer.size.width,
-                layer.size.height,
-            ),
-            layer.border_corner_radius.top_left,
-            layer.border_corner_radius.top_right,
-        );
-        // let save_count = canvas.save();
-        // canvas.clip_rrect(rrbounds, Some(ClipOp::Difference), Some(true));
+        let shadow_rect = Rect::from_xywh(
+            layer.shadow_offset.x,
+            layer.shadow_offset.y,
+            layer.size.width,
+            layer.size.height,
+        )
+        .with_outset((layer.shadow_spread, layer.shadow_spread));
+        let shadow_rrect = RRect::new_rect_radii(shadow_rect, &layer.border_corner_radius.into());
+        let save_count = canvas.save();
+        canvas.clip_rrect(rrbounds, Some(ClipOp::Difference), Some(true));
         shadow_paint.set_alpha_f(layer.opacity * layer.shadow_color.alpha);
         canvas.draw_rrect(shadow_rrect, &shadow_paint);
-        // canvas.restore_to_count(save_count);
+        canvas.restore_to_count(save_count);
         draw_damage.join(bounds);
     }
 

@@ -1,0 +1,147 @@
+use std::sync::{Arc, RwLock};
+
+use layers::engine::LayersEngine;
+use layers::types::Size;
+
+/// it should call the pointer move handler
+#[test]
+pub fn pointer_move() {
+    let engine = LayersEngine::new(1000.0, 1000.0);
+    let layer = engine.new_layer();
+    layer.set_size(Size::points(200.0, 200.0), None);
+    layer.set_position((0.0, 0.0), None);
+    engine.scene_add_layer(layer.clone());
+
+    engine.update(0.016);
+    let called = Arc::new(RwLock::new(0));
+    let c = called.clone();
+
+    layer.add_on_pointer_move(move |_, _| {
+        let mut c = c.write().unwrap();
+        *c += 1;
+        println!("pointer move!!");
+    });
+    let root_id = engine.scene_root().unwrap();
+    engine.pointer_move((0.0, 0.0), root_id.0);
+
+    let called = called.read().unwrap();
+    assert_eq!(*called, 1);
+}
+
+/// it should not call the pointer move handler
+#[test]
+pub fn pointer_doesnt_move() {
+    let engine = LayersEngine::new(1000.0, 1000.0);
+    let layer = engine.new_layer();
+    layer.set_size(Size::points(200.0, 200.0), None);
+    layer.set_position((200.0, 200.0), None);
+    engine.scene_add_layer(layer.clone());
+    engine.update(0.016);
+
+    let called = Arc::new(RwLock::new(0));
+    let c = called.clone();
+
+    layer.add_on_pointer_move(move |_, _| {
+        let mut c = c.write().unwrap();
+        *c += 1;
+        println!("pointer move!!");
+    });
+    let root_id = engine.scene_root().unwrap();
+    engine.pointer_move((0.0, 0.0), root_id.0);
+
+    let called = called.read().unwrap();
+    assert_eq!(*called, 0);
+}
+
+/// it should not call the pointer move handler
+#[test]
+pub fn pointer_move_nested() {
+    let engine = LayersEngine::new(1000.0, 1000.0);
+    let layer = engine.new_layer();
+    layer.set_size(Size::points(200.0, 200.0), None);
+    layer.set_position((200.0, 200.0), None);
+    engine.scene_add_layer(layer.clone());
+
+    let layer2 = engine.new_layer();
+    layer2.set_size(Size::points(200.0, 200.0), None);
+    layer2.set_position((200.0, 200.0), None);
+    engine.scene_add_layer_to(layer2.clone(), layer.id());
+
+    engine.update(0.016);
+
+    let called = Arc::new(RwLock::new(0));
+    let c = called.clone();
+
+    layer2.add_on_pointer_move(move |_, _| {
+        let mut c = c.write().unwrap();
+        *c += 1;
+        println!("pointer move!!");
+    });
+    let root_id = engine.scene_root().unwrap();
+
+    engine.pointer_move((400.0, 400.0), root_id.0);
+
+    let called = called.read().unwrap();
+    assert_eq!(*called, 1);
+}
+
+/// it should not call the pointer move handler
+#[test]
+pub fn pointer_doesnt_move_nested() {
+    let engine = LayersEngine::new(1000.0, 1000.0);
+    let layer = engine.new_layer();
+    layer.set_size(Size::points(200.0, 200.0), None);
+    layer.set_position((200.0, 200.0), None);
+    engine.scene_add_layer(layer.clone());
+
+    let layer2 = engine.new_layer();
+    layer2.set_size(Size::points(200.0, 200.0), None);
+    layer2.set_position((200.0, 200.0), None);
+    engine.scene_add_layer_to(layer2.clone(), layer.id());
+
+    engine.update(0.016);
+
+    let called = Arc::new(RwLock::new(0));
+    let c = called.clone();
+
+    layer2.add_on_pointer_move(move |_, _| {
+        let mut c = c.write().unwrap();
+        *c += 1;
+        println!("pointer move!!");
+    });
+    let root_id = engine.scene_root().unwrap();
+
+    engine.pointer_move((100.0, 100.0), root_id.0);
+
+    let called = called.read().unwrap();
+    assert_eq!(*called, 0);
+}
+
+/// it should not call the pointer move handler
+#[test]
+pub fn pointer_remove() {
+    let engine = LayersEngine::new(1000.0, 1000.0);
+    let layer = engine.new_layer();
+    layer.set_size(Size::points(200.0, 200.0), None);
+    layer.set_position((0.0, 0.0), None);
+
+    engine.scene_add_layer(layer.clone());
+
+    engine.update(0.016);
+    let called = Arc::new(RwLock::new(0));
+    let c = called.clone();
+
+    let handler_id = layer.add_on_pointer_move(move |_, _| {
+        let mut c = c.write().unwrap();
+        *c += 1;
+        println!("**** pointer move!!");
+    });
+
+    layer.remove_on_pointer_move(handler_id);
+    let root_id = engine.scene_root().unwrap();
+
+    engine.pointer_move((0.0, 0.0), root_id.0);
+
+    let called = called.read().unwrap();
+    assert_eq!(*called, 0);
+}

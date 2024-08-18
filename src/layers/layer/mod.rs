@@ -1,8 +1,8 @@
 pub(crate) mod drawable;
 pub(crate) mod model;
 pub(crate) mod render_layer;
-use self::model::ContentDrawFunction;
 pub(crate) use self::model::ModelLayer;
+use self::model::{ContentDrawFunction, PointerHandlerFunction};
 
 use std::sync::{atomic::AtomicBool, RwLock};
 use std::{fmt, sync::Arc};
@@ -18,8 +18,9 @@ use crate::types::*;
 
 #[derive(Clone)]
 pub struct Layer {
-    pub(crate) engine: Arc<Engine>,
+    pub engine: Arc<Engine>,
     pub id: Arc<RwLock<Option<NodeRef>>>,
+    pub key: Arc<RwLock<String>>,
     pub(crate) model: Arc<ModelLayer>,
     pub layout_node_id: Node,
     pub hidden: Arc<AtomicBool>,
@@ -29,6 +30,7 @@ pub struct Layer {
 impl Layer {
     pub fn with_engine(engine: Arc<Engine>) -> Self {
         let id = Arc::new(RwLock::new(None));
+        let key = Arc::new(RwLock::new(String::new()));
         let model = Arc::new(ModelLayer::default());
 
         let mut lt = engine.layout_tree.write().unwrap();
@@ -42,6 +44,7 @@ impl Layer {
         Self {
             engine: engine.clone(),
             id,
+            key,
             model,
             layout_node_id: layout,
             hidden: Arc::new(AtomicBool::new(false)),
@@ -54,6 +57,13 @@ impl Layer {
     pub fn id(&self) -> Option<NodeRef> {
         let id = *self.id.read().unwrap();
         id
+    }
+    pub fn set_key(&self, key: String) {
+        *self.key.write().unwrap() = key;
+    }
+    pub fn key(&self) -> String {
+        let key = self.key.read().unwrap();
+        key.clone()
     }
     pub fn set_hidden(&self, hidden: bool) {
         self.hidden
@@ -177,7 +187,8 @@ impl Layer {
         }
     }
     pub fn set_image_cache(&self, value: bool) {
-        self.image_cache.store(value, std::sync::atomic::Ordering::Relaxed);
+        self.image_cache
+            .store(value, std::sync::atomic::Ordering::Relaxed);
     }
     pub fn add_sublayer(&self, layer: Layer) -> NodeRef {
         self.engine.scene_add_layer(layer, self.id())
@@ -203,6 +214,62 @@ impl Layer {
         handler: F,
     ) {
         self.engine.on_update(transaction, handler);
+    }
+    pub fn add_on_pointer_move<F: Into<PointerHandlerFunction>>(
+        &self,
+        handler: F,
+    ) -> Option<usize> {
+        let handler = handler.into();
+        let id = self.id();
+        if let Some(id) = id {
+            let handler_id = self.engine.add_pointer_handler(id, handler);
+            return Some(handler_id);
+        }
+        None
+    }
+
+    pub fn remove_on_pointer_move(&self, handler_id: Option<usize>) {
+        if let Some(id) = self.id() {
+            let handler_id = handler_id.unwrap();
+            self.engine.remove_pointer_handler(id, handler_id);
+        }
+    }
+    pub fn remove_all_handlers(&self) {
+        if let Some(id) = self.id() {
+            self.engine.remove_all_handlers(id);
+        }
+    }
+
+    pub fn render_position(&self) -> Point {
+        let id = self.id();
+        if let Some(id) = id {
+            let node = self.engine.scene.get_node(id).unwrap();
+            let render_layer = node.get().render_layer.clone();
+            let rl = render_layer.read().unwrap();
+
+            return Point {
+                x: rl.transformed_bounds.x(),
+                y: rl.transformed_bounds.y(),
+            };
+        }
+        Point { x: 0.0, y: 0.0 }
+    }
+    pub fn render_size(&self) -> Point {
+        let id = self.id();
+        if let Some(id) = id {
+            let node = self.engine.scene.get_node(id).unwrap();
+            let render_layer = node.get().render_layer.clone();
+            let rl = render_layer.read().unwrap();
+
+            return Point {
+                x: rl.transformed_bounds.width(),
+                y: rl.transformed_bounds.height(),
+            };
+        }
+        Point {
+            x: 0.0,
+            y: 0.0,
+        }
     }
 }
 
