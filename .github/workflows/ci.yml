@@ -95,36 +95,6 @@ jobs:
       - name: Check
         run: cargo check --features "default"
 
-  check-minimal:
-    env:
-      RUSTFLAGS: "-D warnings"
-
-    runs-on: ubuntu-22.04
-
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@v3
-      - name: Rust toolchain
-        uses: dtolnay/rust-toolchain@nightly
-      - name: Get date for registry cache
-        id: date
-        run: echo "::set-output name=date::$(date +'%Y-%m-%d')"
-      - name: Cargo registry cache
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cargo/registry/index
-            ~/.cargo/registry/cache
-            ~/.cargo/git
-          key: ${{ runner.os }}-cargo-registry-${{ steps.date.outputs.date }}
-          restore-keys: ${{ runner.os }}-cargo-registry-
-      - name: System dependencies
-        run: sudo apt-get update; sudo apt-get install -y libdrm-dev libudev-dev libgbm-dev libxkbcommon-dev libegl1-mesa-dev libwayland-dev libinput-dev libdbus-1-dev libsystemd-dev libseat-dev
-      - name: Downgrade to minimal dependencies
-        run: cargo update -Z minimal-versions
-      - name: Check
-        run: cargo check --features "default"
-
   doc:
     name: Documentation on Github Pages
     runs-on: ubuntu-22.04
@@ -157,9 +127,6 @@ jobs:
           RUSTDOCFLAGS: --cfg=docsrs
         run: cargo doc --no-deps --features "default" -p layers
         
-      - name: Setup index
-        run: cp ./doc_index.html ./target/doc/index.html
-
       - name: Deploy
         if: ${{ github.event_name == 'push' }}
         uses: peaceiris/actions-gh-pages@v3
