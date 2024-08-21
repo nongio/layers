@@ -7,6 +7,10 @@ build = "build.rs"
 [lib]
 crate-type = ["lib", "cdylib"] # Creates dynamic lib
 
+[package.metadata.docs.rs]
+features = ["default"]
+rustdoc-args = ["--cfg", "docsrs"]
+
 [dependencies]
 gl-rs = { package = "gl", version = "0.14.0" }
 foreign-types-shared = "0.1.1"
@@ -54,6 +58,7 @@ paste = "1.0"
 export-skia = []
 export-taffy = []
 profile-with-puffin = ["profiling/profile-with-puffin", "puffin_http"]
+default = ["export-skia", "export-taffy"]
 
 [[bench]]
 name = "my_benchmark"
