@@ -26,10 +26,10 @@ profiling = { version = "1.0" }
 
 [dependencies.skia-safe]
 version = "0.70"
-
 # this set of features is required for enabling to use the pre-built
 # binaries of skia-safe
 [target.'cfg(target_os = "linux")'.dependencies.skia-safe]
+version = "0.70"
 features = [
     "binary-cache",
     "egl",
@@ -43,6 +43,7 @@ features = [
 ]
 
 [target.'cfg(target_os = "macos")'.dependencies.skia-safe]
+version = "0.70"
 features = ["binary-cache", "gl", "metal", "svg", "textlayout", "webp"]
 
 [dev-dependencies]
