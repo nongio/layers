@@ -30,7 +30,7 @@ pub struct RenderLayer {
 
 impl RenderLayer {
     #![allow(unused_variables, dead_code)]
-    pub fn update_with_model_and_layout(
+    pub(crate) fn update_with_model_and_layout(
         &mut self,
         model: &ModelLayer,
         layout: &taffy::layout::Layout,
@@ -148,7 +148,7 @@ impl RenderLayer {
             skia_safe::RRect::new_rect_radii(transformed_bounds, &border_corner_radius.into());
     }
 
-    pub fn from_model_and_layout(
+    pub(crate) fn from_model_and_layout(
         model: &ModelLayer,
         layout: &taffy::layout::Layout,
         matrix: Option<&M44>,
