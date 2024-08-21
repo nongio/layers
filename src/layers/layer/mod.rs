@@ -266,10 +266,7 @@ impl Layer {
                 y: rl.transformed_bounds.height(),
             };
         }
-        Point {
-            x: 0.0,
-            y: 0.0,
-        }
+        Point { x: 0.0, y: 0.0 }
     }
 }
 

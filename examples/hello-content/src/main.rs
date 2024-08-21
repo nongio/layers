@@ -316,7 +316,6 @@ fn main() {
                         paint.set_stroke_width(10.0);
                         canvas.draw_rect(damage_rect, &paint);
                         skia_renderer.gr_context.flush_and_submit();
-                        
                     }
                     engine.clear_damage();
                     // this will be blocking until the GPU is done with the frame
