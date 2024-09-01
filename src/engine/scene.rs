@@ -42,6 +42,10 @@ impl Scene {
         Arc::new(Self::new(width, height))
     }
 
+    /// Append the child node to the parent node.
+    ///
+    /// The child node is first detached from the scene and then appended the new parent.
+    /// After appending, the child node is marked as needing paint (NEEDS_PAINT).
     pub(crate) fn append_node_to(&self, child: NodeRef, parent: NodeRef) {
         let nodes = self.nodes.data();
         let mut nodes = nodes.write().unwrap();

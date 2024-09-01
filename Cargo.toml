@@ -27,6 +27,7 @@ diff-struct = "0.5.1"
 derive_builder = "0.12.0"
 puffin_http = { version = "0.13", optional = true }
 profiling = { version = "1.0" }
+rand = "0.8.5"
 
 [dependencies.skia-safe]
 version = "0.70"

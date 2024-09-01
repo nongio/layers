@@ -341,29 +341,33 @@ impl Engine {
         let layer: Layer = layer.into();
         let layout = layer.layout_node_id;
 
-        let parent = parent.or_else(|| {
+        let new_parent = parent.or_else(|| {
             let scene_root = *self.scene_root.read().unwrap();
             scene_root
         });
-        let id = if parent.is_none() {
+        let mut layout_tree = self.layout_tree.write().unwrap();
+        if layer.id().is_some() {
+            if let Some(layout_parent) = layout_tree.parent(layout) {
+                layout_tree.remove_child(layout_parent, layout).unwrap();
+            }
+        }
+        let layer_id = if new_parent.is_none() {
             // if we append to a scene without a root, we set the layer as the root
             self.scene_set_root(layer)
         } else {
-            let parent = parent.unwrap();
+            let new_parent = new_parent.unwrap();
             let id = layer.id().unwrap_or_else(|| {
                 let id = self.scene.add(layer.clone(), layout);
                 layer.set_id(id);
                 id
             });
 
-            let parent_node = self.scene.get_node(parent).unwrap();
-            let parent_node = parent_node.get();
-            parent_node.set_need_layout(true);
+            let new_parent_node = self.scene.get_node(new_parent).unwrap();
+            let new_parent_node = new_parent_node.get();
+            new_parent_node.set_need_layout(true);
 
-            let parent_layout = parent_node.layout_node_id;
-            self.scene.append_node_to(id, parent);
-
-            let mut layout_tree = self.layout_tree.write().unwrap();
+            let parent_layout = new_parent_node.layout_node_id;
+            self.scene.append_node_to(id, new_parent);
             layout_tree.add_child(parent_layout, layout).unwrap();
             let res = layout_tree.mark_dirty(parent_layout);
             if let Some(err) = res.err() {
@@ -371,7 +375,7 @@ impl Engine {
             }
             id
         };
-        id
+        layer_id
     }
     pub fn scene_remove_layer(&self, layer: impl Into<Option<NodeRef>>) {
         let layer_id: Option<NodeRef> = layer.into();
