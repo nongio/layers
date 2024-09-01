@@ -90,11 +90,11 @@ impl fmt::Debug for ViewLayer {
     }
 }
 
-fn unmap_view(view: &ViewLayer, view_layer_map: &mut HashMap<ViewLayer, NodeRef>) {
-    view_layer_map.remove(view);
+fn cache_remove_viewlayer(view: &ViewLayer, cache_viewlayer: &mut HashMap<ViewLayer, NodeRef>) {
+    cache_viewlayer.remove(view);
     if let Some(children) = view.children.clone() {
         for child in children.iter() {
-            unmap_view(child, view_layer_map);
+            cache_remove_viewlayer(child, cache_viewlayer);
         }
     }
 }
@@ -140,77 +140,86 @@ impl ViewLayerBuilder {
     }
 }
 pub trait BuildLayerTree {
-    fn build_layer_tree(&self, tree: &ViewLayer, view_layer_map: &mut HashMap<ViewLayer, NodeRef>);
+    fn build_layer_tree(&self, tree: &ViewLayer, cache_viewlayer: &mut HashMap<ViewLayer, NodeRef>);
+}
+pub fn unique_layer_key() -> String {
+    format!("layer_{}", rand::random::<u64>())
 }
 
 impl BuildLayerTree for Layer {
     fn build_layer_tree(
         &self,
-        view_layer_tree: &ViewLayer,
-        view_layer_map: &mut HashMap<ViewLayer, NodeRef>,
+        viewlayer_tree: &ViewLayer,
+        cache_viewlayer: &mut HashMap<ViewLayer, NodeRef>,
     ) {
         let scene_layer = self.clone();
+        let key = if viewlayer_tree.key.is_empty() {
+            // generate a random key
+            unique_layer_key()
+        } else {
+            viewlayer_tree.key.clone()
+        };
 
-        scene_layer.set_key(view_layer_tree.key.clone());
+        scene_layer.set_key(key);
 
-        if let Some((position, transition)) = view_layer_tree.position {
+        if let Some((position, transition)) = viewlayer_tree.position {
             scene_layer.set_position(position, transition);
         }
-        if let Some((scale, transition)) = view_layer_tree.scale {
+        if let Some((scale, transition)) = viewlayer_tree.scale {
             scene_layer.set_scale(scale, transition);
         }
-        if let Some((background_color, transition)) = view_layer_tree.background_color.clone() {
+        if let Some((background_color, transition)) = viewlayer_tree.background_color.clone() {
             scene_layer.set_background_color(background_color, transition);
         }
-        if let Some((border_color, transition)) = view_layer_tree.border_color {
+        if let Some((border_color, transition)) = viewlayer_tree.border_color {
             scene_layer.set_border_color(border_color, transition);
         }
-        if let Some((border_width, transition)) = view_layer_tree.border_width {
+        if let Some((border_width, transition)) = viewlayer_tree.border_width {
             scene_layer.set_border_width(border_width, transition);
         }
-        if let Some((border_corner_radius, transition)) = view_layer_tree.border_corner_radius {
+        if let Some((border_corner_radius, transition)) = viewlayer_tree.border_corner_radius {
             scene_layer.set_border_corner_radius(border_corner_radius, transition);
         }
-        if let Some((size, transition)) = view_layer_tree.size {
+        if let Some((size, transition)) = viewlayer_tree.size {
             scene_layer.set_size(size, transition);
         }
-        if let Some((shadow_offset, transition)) = view_layer_tree.shadow_offset {
+        if let Some((shadow_offset, transition)) = viewlayer_tree.shadow_offset {
             scene_layer.set_shadow_offset(shadow_offset, transition);
         }
-        if let Some((shadow_radius, transition)) = view_layer_tree.shadow_radius {
+        if let Some((shadow_radius, transition)) = viewlayer_tree.shadow_radius {
             scene_layer.set_shadow_radius(shadow_radius, transition);
         }
-        if let Some((shadow_color, transition)) = view_layer_tree.shadow_color {
+        if let Some((shadow_color, transition)) = viewlayer_tree.shadow_color {
             scene_layer.set_shadow_color(shadow_color, transition);
         }
-        if let Some((shadow_spread, transition)) = view_layer_tree.shadow_spread {
+        if let Some((shadow_spread, transition)) = viewlayer_tree.shadow_spread {
             scene_layer.set_shadow_spread(shadow_spread, transition);
         }
-        if let Some(layout_style) = view_layer_tree.layout_style.clone() {
+        if let Some(layout_style) = viewlayer_tree.layout_style.clone() {
             scene_layer.set_layout_style(layout_style);
         }
-        if let Some((opacity, transition)) = view_layer_tree.opacity {
+        if let Some((opacity, transition)) = viewlayer_tree.opacity {
             scene_layer.set_opacity(opacity, transition);
         }
-        if let Some(blend_mode) = view_layer_tree.blend_mode {
+        if let Some(blend_mode) = viewlayer_tree.blend_mode {
             scene_layer.set_blend_mode(blend_mode);
         }
 
-        if let Some(content) = view_layer_tree.content.clone() {
+        if let Some(content) = viewlayer_tree.content.clone() {
             scene_layer.set_draw_content(Some(content));
         }
 
-        if let Some(image_cache) = view_layer_tree.image_cache {
+        if let Some(image_cache) = viewlayer_tree.image_cache {
             scene_layer.set_image_cache(image_cache);
         }
-        if let Some(on_pointer_move) = view_layer_tree.on_pointer_move.clone() {
+        if let Some(on_pointer_move) = viewlayer_tree.on_pointer_move.clone() {
             scene_layer.remove_all_handlers();
             scene_layer.add_on_pointer_move(on_pointer_move);
         }
         let id = scene_layer.id();
         let engine = scene_layer.engine;
         if let Some(id) = id {
-            let mut existing_scene_child_layers: HashSet<NodeId> = {
+            let mut old_scene_layers: HashSet<NodeId> = {
                 let arena = engine.scene.nodes.data();
                 let arena = arena.read().unwrap();
                 id.0.children(&arena).collect()
@@ -220,34 +229,42 @@ impl BuildLayerTree for Layer {
 
             let mut layer_view_map: HashMap<NodeRef, ViewLayer> = HashMap::new();
             {
-                for (view_layer, node_id) in view_layer_map.iter() {
+                // this seems like a copy...
+                for (view_layer, node_id) in cache_viewlayer.iter() {
                     layer_view_map.insert(*node_id, view_layer.clone());
                 }
             }
 
-            if let Some(children) = view_layer_tree.children.as_ref() {
+            if let Some(children) = viewlayer_tree.children.as_ref() {
                 for child in children.iter() {
+                    let mut child = child.clone();
+                    child.key = if child.key.is_empty() {
+                        unique_layer_key()
+                    } else {
+                        child.key.clone()
+                    };
                     // check if there is already a layer for this child otherwise create one
-                    let scene_layer_id = { view_layer_map.get(child).cloned() };
+                    let scene_layer_id = { cache_viewlayer.get(&child).cloned() };
 
                     let scene_layer_id = scene_layer_id.unwrap_or_else(|| {
                         let layer = Layer::with_engine(engine.clone());
                         let id = engine.scene_add_layer(layer, Some(id));
-
-                        view_layer_map.insert(child.clone(), id);
+                        cache_viewlayer.insert(child.clone(), id);
                         id
                     });
 
                     let scene_node = engine.scene.get_node(scene_layer_id).unwrap();
                     let scene_layer = scene_node.get().clone();
-                    scene_layer.layer.build_layer_tree(child, view_layer_map);
+                    // re-add the layer to the parent in case it is not in the right order
+                    engine.scene_add_layer(scene_layer.layer.clone(), Some(id));
+                    scene_layer.layer.build_layer_tree(&child, cache_viewlayer);
 
-                    existing_scene_child_layers.remove(&scene_layer_id);
+                    old_scene_layers.remove(&scene_layer_id);
                 }
             }
 
             // remove remaining extra layers
-            for scene_layer_id in existing_scene_child_layers {
+            for scene_layer_id in old_scene_layers {
                 let scene_layer_ref = NodeRef(scene_layer_id);
 
                 let scene_layer = {
@@ -269,7 +286,7 @@ impl BuildLayerTree for Layer {
 
                 {
                     if let Some(view) = layer_view_map.get(&scene_layer_ref) {
-                        unmap_view(view, view_layer_map);
+                        cache_remove_viewlayer(view, cache_viewlayer);
                     }
                 }
                 // let scene_layer_clone = scene_layer.clone();
@@ -284,7 +301,7 @@ impl BuildLayerTree for Layer {
 #[allow(clippy::type_complexity)]
 #[derive(Clone)]
 pub struct View<S: Hash + Clone> {
-    view_layer_map: Arc<RwLock<HashMap<ViewLayer, NodeRef>>>,
+    viewlayer_node_map: Arc<RwLock<HashMap<ViewLayer, NodeRef>>>,
     render_function: Arc<dyn Fn(&S, &View<S>) -> ViewLayer + Sync + Send>,
     last_state: Arc<RwLock<Option<u64>>>,
     pub state: Arc<RwLock<S>>,
@@ -311,7 +328,7 @@ impl<S: Hash + Clone> View<S> {
             layer,
             render_function: Arc::from(render_function),
             last_state: Arc::new(RwLock::new(None)),
-            view_layer_map: Arc::new(RwLock::new(HashMap::new())),
+            viewlayer_node_map: Arc::new(RwLock::new(HashMap::new())),
             state: Arc::new(RwLock::new(initial_state)),
         };
         {
@@ -323,8 +340,8 @@ impl<S: Hash + Clone> View<S> {
 
     pub fn render(&self, state: &S) {
         let view = (self.render_function)(state, self);
-        let mut view_layer_map = self.view_layer_map.write().unwrap();
-        self.layer.build_layer_tree(&view, &mut view_layer_map);
+        let mut viewlayer_node_map = self.viewlayer_node_map.write().unwrap();
+        self.layer.build_layer_tree(&view, &mut viewlayer_node_map);
     }
     pub fn get_state(&self) -> S {
         self.state.read().unwrap().clone()
@@ -349,7 +366,7 @@ impl<S: Hash + Clone> View<S> {
     }
 
     pub fn get_layer_by_id(&self, id: &str) -> Option<Layer> {
-        let view_layer_map = self.view_layer_map.read().unwrap();
+        let view_layer_map = self.viewlayer_node_map.read().unwrap();
         let keys = view_layer_map
             .keys()
             .map(|vl| vl.key.clone())
