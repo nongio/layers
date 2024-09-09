@@ -6,12 +6,12 @@ use std::sync::Arc;
 pub struct ListState {
     pub values: Vec<String>,
 }
-pub fn view_list(_state: ListState) -> ViewLayer {
+pub fn view_list(_state: ListState) -> LayerTree {
     const PADDING: f32 = 5.0;
 
     let background_color = Color::new_hex("#0075FF");
 
-    ViewLayerBuilder::default()
+    LayerTreeBuilder::default()
         .position((Point { x: 30.0, y: 330.0 }, None))
         .size((
             Size {
@@ -39,7 +39,7 @@ pub fn view_list(_state: ListState) -> ViewLayer {
                 timing: TimingFunction::default(),
             }),
         ))
-        .children(vec![ViewLayerBuilder::default()
+        .children(vec![LayerTreeBuilder::default()
             .position((
                 Point {
                     x: PADDING,

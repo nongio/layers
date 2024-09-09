@@ -2,7 +2,7 @@ use std::cell::RefCell;
 
 pub use layers::taffy;
 use layers::{
-    prelude::{ViewLayer, ViewLayerBuilder},
+    prelude::{LayerTree, LayerTreeBuilder},
     skia::{self, BlurStyle, ClipOp, MaskFilter},
     taffy::geometry::Point,
 };
@@ -31,7 +31,7 @@ thread_local! {
     };
 }
 
-pub fn popup_menu_item_view(state: &String, selected: bool) -> ViewLayer {
+pub fn popup_menu_item_view(state: &String, selected: bool) -> LayerTree {
     let mut bg_color = layers::types::Color::new_rgba(0.8, 0.8, 0.8, 0.0);
     if selected {
         bg_color = layers::types::Color::new_hex("#0A82FF");
@@ -91,40 +91,31 @@ pub fn popup_menu_item_view(state: &String, selected: bool) -> ViewLayer {
 
         skia::Rect::from_xywh(0.0, 0.0, w, h)
     };
-    ViewLayerBuilder::default()
+    LayerTreeBuilder::default()
         .key(format!("popup_menu_item_{}", state))
-        .size((
-            layers::types::Size {
-                width: taffy::style::Dimension::Points(350.0),
-                height: taffy::style::Dimension::Points(height),
-            },
-            None,
-        ))
-        .background_color((layers::prelude::PaintColor::Solid { color: bg_color }, None))
-        .border_corner_radius((layers::types::BorderRadius::new_single(10.0), None))
+        .size(layers::types::Size {
+            width: taffy::style::Dimension::Points(350.0),
+            height: taffy::style::Dimension::Points(height),
+        })
+        .background_color(layers::prelude::PaintColor::Solid { color: bg_color })
+        .border_corner_radius(layers::types::BorderRadius::new_single(10.0))
         .content(Some(draw_text))
         .build()
         .unwrap()
 }
-pub fn popup_menu_view(state: &PopupMenuState) -> ViewLayer {
-    ViewLayerBuilder::default()
+pub fn popup_menu_view(state: &PopupMenuState) -> LayerTree {
+    LayerTreeBuilder::default()
         .key("popup_menu")
-        .size((
-            layers::types::Size {
-                width: taffy::style::Dimension::Auto,
-                height: taffy::style::Dimension::Auto,
-            },
-            None,
-        ))
+        .size(layers::types::Size {
+            width: taffy::style::Dimension::Auto,
+            height: taffy::style::Dimension::Auto,
+        })
         // .blend_mode(layers::types::BlendMode::BackgroundBlur)
-        .background_color((
-            layers::prelude::PaintColor::Solid {
-                color: layers::types::Color::new_rgba255(246, 246, 246, 153),
-            },
-            None,
-        ))
-        .scale((layers::prelude::Point { x: 1.5, y: 1.5 }, None))
-        .border_corner_radius((layers::types::BorderRadius::new_single(12.0), None))
+        .background_color(layers::prelude::PaintColor::Solid {
+            color: layers::types::Color::new_rgba255(246, 246, 246, 153),
+        })
+        .scale(layers::prelude::Point { x: 1.5, y: 1.5 })
+        .border_corner_radius(layers::types::BorderRadius::new_single(12.0))
         .shadow_color((layers::types::Color::new_rgba(0.0, 0.0, 0.0, 0.25), None))
         .shadow_offset((layers::types::Point { x: 0.0, y: 7.0 }, None))
         .shadow_radius((22.0, None))
@@ -166,7 +157,7 @@ pub fn popup_menu_view(state: &PopupMenuState) -> ViewLayer {
                 .iter()
                 .enumerate()
                 .map(|(index, item)| popup_menu_item_view(item, index == 1))
-                .collect::<Vec<ViewLayer>>(),
+                .collect::<Vec<LayerTree>>(),
         )
         .build()
         .unwrap()
