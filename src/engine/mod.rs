@@ -19,8 +19,10 @@ mod stages;
 pub mod storage;
 
 use indextree::NodeId;
+use node::ContainsPoint;
 use taffy::prelude::*;
 
+use core::fmt;
 use std::{
     collections::HashMap,
     hash::Hash,
@@ -32,14 +34,14 @@ use std::{
 };
 
 use crate::{
-    layers::layer::{model::PointerHandlerFunction, Layer, ModelLayer},
+    layers::layer::{model::PointerHandlerFunction, state::LayerDataProps, Layer, ModelLayer},
     types::Point,
 };
 
 use self::{
     animation::{Animation, Transition},
     command::NoopChange,
-    node::{ContainsPoint, DrawCacheManagement, RenderableFlags, SceneNode},
+    node::{DrawCacheManagement, RenderableFlags, SceneNode},
     scene::Scene,
     stages::{
         cleanup_animations, cleanup_nodes, cleanup_transactions, execute_transactions,
@@ -157,9 +159,15 @@ pub struct TransactionRef(pub FlatStorageId);
 pub struct AnimationRef(FlatStorageId);
 
 /// An identifier for a node in the three storage
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, std::cmp::Ord, Hash)]
+#[derive(Clone, Copy, PartialEq, PartialOrd, Eq, std::cmp::Ord, Hash)]
 pub struct NodeRef(pub TreeStorageId);
 
+impl fmt::Debug for NodeRef {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let index: usize = self.0.into();
+        write!(f, "NodeRef({})", index)
+    }
+}
 #[derive(Clone)]
 pub struct HandlerRef(FlatStorageId);
 
@@ -203,6 +211,7 @@ impl LayersEngine {
             layout_node_id: layout,
             hidden: Arc::new(AtomicBool::new(false)),
             image_cache: Arc::new(AtomicBool::new(false)),
+            state: Arc::new(RwLock::new(LayerDataProps::default())),
         }
     }
     pub fn new_animation(&self, transition: Transition) -> AnimationRef {
@@ -258,7 +267,7 @@ impl LayersEngine {
         let node = self.scene_get_node(root_id)?;
         Some(node.get().clone())
     }
-    pub fn pointer_move(&self, point: impl Into<Point>, root_id: NodeId) {
+    pub fn pointer_move(&self, point: impl Into<Point>, root_id: impl Into<NodeId>) {
         self.engine.pointer_move(point, root_id);
     }
 }
@@ -396,7 +405,7 @@ impl Engine {
                             }
                         }
                     }
-
+                    // remove layout node
                     let mut layout_tree = self.layout_tree.write().unwrap();
                     layout_tree.remove(node.layout_node_id).unwrap();
                 }
@@ -655,23 +664,29 @@ impl Engine {
         let node_id = layer_node.0.into();
         if let Some(mut pointer_callback) = self.pointer_handlers.get(&node_id) {
             pointer_callback.on_move.clear();
+            self.pointer_handlers
+                .insert_with_id(pointer_callback, node_id);
         }
     }
 
-    pub fn pointer_move(&self, point: impl Into<Point>, root_id: NodeId) {
+    pub fn pointer_move(&self, point: impl Into<Point>, root_id: impl Into<NodeId>) {
         let p = point.into();
-        let arena = self.scene.nodes.data();
-        let arena = arena.read().unwrap();
+        let root_id = root_id.into();
+        let (root_node, children) = self.scene.with_arena(|arena| {
+            let root_node = arena.get(root_id).unwrap().get().clone();
+            let children: Vec<NodeId> = root_id.children(arena).collect();
+            (root_node, children)
+        });
 
         // let root_node = arena.get(root_id).unwrap().get();
-
-        for node_id in root_id.reverse_children(&arena) {
-            let scene_node = arena.get(node_id).unwrap().get();
-            if scene_node.contains(p) {
-                self.pointer_move(p, node_id);
+        for node_id in children {
+            if let Some(scene_node) = self.scene.get_node(node_id) {
+                let scene_node = scene_node.get();
+                if scene_node.contains(p) {
+                    self.pointer_move(p, node_id);
+                }
             }
         }
-        let root_node = arena.get(root_id).unwrap().get();
         if root_node.contains(p) {
             if let Some(pointer_handler) = self.pointer_handlers.get(&root_id.into()) {
                 for handler in pointer_handler.on_move.values() {

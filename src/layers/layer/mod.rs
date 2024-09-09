@@ -1,17 +1,21 @@
 pub(crate) mod drawable;
 pub(crate) mod model;
 pub(crate) mod render_layer;
+pub(crate) mod state;
+
 pub(crate) use self::model::ModelLayer;
 use self::model::{ContentDrawFunction, PointerHandlerFunction};
 
+use skia::Contains;
+use state::LayerDataProps;
 use std::sync::{atomic::AtomicBool, RwLock};
 use std::{fmt, sync::Arc};
 use taffy::style::Style;
 use taffy::{prelude::Node, style::Display};
 
-use crate::engine::animation::*;
 use crate::engine::command::*;
 use crate::engine::node::RenderableFlags;
+use crate::engine::{animation::*, storage::TreeStorageId};
 use crate::engine::{Engine, NodeRef, TransactionRef};
 
 use crate::types::*;
@@ -19,12 +23,13 @@ use crate::types::*;
 #[derive(Clone)]
 pub struct Layer {
     pub engine: Arc<Engine>,
-    pub id: Arc<RwLock<Option<NodeRef>>>,
-    pub key: Arc<RwLock<String>>,
+    pub(crate) id: Arc<RwLock<Option<NodeRef>>>,
+    pub(crate) key: Arc<RwLock<String>>,
+    pub(crate) hidden: Arc<AtomicBool>,
+    pub(crate) layout_node_id: Node,
     pub(crate) model: Arc<ModelLayer>,
-    pub layout_node_id: Node,
-    pub hidden: Arc<AtomicBool>,
     pub(crate) image_cache: Arc<AtomicBool>,
+    pub(crate) state: Arc<RwLock<LayerDataProps>>,
 }
 
 impl Layer {
@@ -49,6 +54,7 @@ impl Layer {
             layout_node_id: layout,
             hidden: Arc::new(AtomicBool::new(false)),
             image_cache: Arc::new(AtomicBool::new(false)),
+            state: Arc::new(RwLock::new(LayerDataProps::new())),
         }
     }
     pub fn set_id(&self, id: NodeRef) {
@@ -267,6 +273,45 @@ impl Layer {
             };
         }
         Point { x: 0.0, y: 0.0 }
+    }
+    pub fn render_bounds(&self) -> skia_safe::Rect {
+        let id = self.id();
+        if let Some(id) = id {
+            let node = self.engine.scene.get_node(id).unwrap();
+            let render_layer = node.get().render_layer.clone();
+            let rl = render_layer.read().unwrap();
+
+            return rl.transformed_bounds;
+        }
+        skia_safe::Rect::default()
+    }
+    pub fn cointains_point(&self, point: skia_safe::Point) -> bool {
+        self.render_bounds().contains(point)
+    }
+    pub fn children(&self) -> Vec<NodeRef> {
+        if let Some(node_ref) = self.id() {
+            let node_id: TreeStorageId = node_ref.into();
+            return {
+                let arena = self.engine.scene.nodes.data();
+                let arena = arena.read().unwrap();
+                node_id.children(&arena).map(NodeRef).collect()
+            };
+        }
+        vec![]
+    }
+    pub fn with_state<F, T>(&self, f: F) -> T
+    where
+        F: FnOnce(&LayerDataProps) -> T,
+    {
+        let data = self.state.read().unwrap();
+        f(&data)
+    }
+    pub fn with_mut_state<F, T>(&self, f: F) -> T
+    where
+        F: FnOnce(&mut LayerDataProps) -> T,
+    {
+        let mut data = self.state.write().unwrap();
+        f(&mut data)
     }
 }
 
