@@ -7,7 +7,7 @@ use std::sync::Arc;
 pub struct ToggleState {
     pub value: bool,
 }
-pub fn view_toggle(state: ToggleState) -> ViewLayer {
+pub fn view_toggle(state: ToggleState) -> LayerTree {
     const SIZE: f32 = 50.0;
     const PADDING: f32 = 5.0;
     const TOGGLE_SIZE: f32 = SIZE * 2.0;
@@ -22,7 +22,7 @@ pub fn view_toggle(state: ToggleState) -> ViewLayer {
         Color::new_hex("#00B407")
     };
 
-    ViewLayerBuilder::default()
+    LayerTreeBuilder::default()
         .position((Point { x: 30.0, y: 30.0 }, None))
         .size((
             Size {
@@ -50,7 +50,7 @@ pub fn view_toggle(state: ToggleState) -> ViewLayer {
                 timing: TimingFunction::default(),
             }),
         ))
-        .children(vec![ViewLayerBuilder::default()
+        .children(vec![LayerTreeBuilder::default()
             .position((
                 Point {
                     x: position,

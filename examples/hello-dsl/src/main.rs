@@ -17,8 +17,8 @@ impl LayersBuilder {
 }
 
 #[allow(non_snake_case)]
-pub fn LayerView() -> ViewLayerBuilder {
-    ViewLayerBuilder::default()
+pub fn LayerView() -> LayerTreeBuilder {
+    LayerTreeBuilder::default()
 }
 fn main() {
     if let Ok(root) = ::syn::parse2::<LayerItem>(quote!(
