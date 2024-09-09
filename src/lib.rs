@@ -36,6 +36,7 @@ mod layers;
 pub mod prelude;
 pub mod renderer;
 pub mod types;
+pub mod view;
 #[cfg(feature = "export-skia")]
 pub extern crate skia_safe as skia;
 #[cfg(feature = "export-taffy")]

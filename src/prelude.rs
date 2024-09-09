@@ -8,11 +8,11 @@ pub use super::{
     layers::{
         layer::model::{ContentDrawError, ContentDrawFunction},
         layer::Layer,
-        BuildLayerTree, View, ViewLayer, ViewLayerBuilder,
     },
     types::{
         BlendMode, BorderRadius, BorderStyle, Color, Image, Matrix, PaintColor, Point, Rectangle,
     },
+    view::{BuildLayerTree, LayerTree, LayerTreeBuilder, RenderLayerTree, View},
 };
 pub mod taffy {
     pub use taffy::prelude::*;

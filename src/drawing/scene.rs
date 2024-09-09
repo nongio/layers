@@ -215,8 +215,10 @@ pub fn debug_node_tree(
     let render_layer = scene_node.render_layer.read().unwrap();
     let context_opacity = render_layer.opacity * context_opacity;
     node_id.children(arena).for_each(|child_id| {
-        let child_ref = NodeRef(child_id);
-        debug_node_tree(child_ref, arena, context_opacity, level + 1);
+        if !child_id.is_removed(arena) {
+            let child_ref = NodeRef(child_id);
+            debug_node_tree(child_ref, arena, context_opacity, level + 1);
+        }
     });
 }
 
@@ -229,8 +231,9 @@ pub fn debug_node(node_id: NodeRef, arena: &Arena<SceneNode>, context_opacity: f
         skia_safe::Rect::from_xywh(0.0, 0.0, render_layer.size.width, render_layer.size.height);
 
     println!(
-        "{}Layer key: {:?} position: {:?} size: {:?} opacity: {:?}",
+        "{}Layer({}) key: {:?} position: {:?} size: {:?} opacity: {:?}",
         "* ".repeat(level),
+        node.id().unwrap().0,
         node.layer.key(),
         (
             render_layer.transformed_bounds.x(),

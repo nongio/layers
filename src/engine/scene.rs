@@ -5,6 +5,7 @@
 //! The tree is stored in a memory arena using IndexTree, which allow fast read/write and thread safe parallel iterations.
 
 use std::sync::{Arc, RwLock};
+use indextree::Arena;
 use taffy::prelude::Node;
 
 use crate::prelude::{Layer, Point};
@@ -88,5 +89,19 @@ impl Scene {
     pub(crate) fn remove(&self, id: impl Into<TreeStorageId>) {
         let id = id.into();
         self.nodes.remove_at(&id);
+    }
+
+    pub(crate) fn with_arena<T>(&self, f: impl FnOnce(&Arena<SceneNode>) -> T) -> T{
+        let arena_guard = self.nodes.data();
+        let arena_guard = arena_guard.read();
+        let arena = &*arena_guard.unwrap();
+        f(arena)
+    }
+
+    pub(crate) fn with_arena_mut<T>(&self, f: impl FnOnce(&mut Arena<SceneNode>) -> T) -> T{
+        let arena_guard = self.nodes.data();
+        let arena_guard = arena_guard.write();
+        let arena = &mut *arena_guard.unwrap();
+        f(arena)
     }
 }
