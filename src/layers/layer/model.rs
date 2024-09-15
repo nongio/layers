@@ -38,6 +38,8 @@ impl PartialEq for ContentDrawFunction {
 }
 use std::fmt;
 
+use super::Layer;
+
 #[derive(Debug)]
 pub struct ContentDrawError {
     pub message: String,
@@ -53,9 +55,9 @@ impl Error for ContentDrawError {}
 
 #[allow(clippy::type_complexity)]
 #[derive(Clone)]
-pub struct PointerHandlerFunction(pub Arc<dyn 'static + Send + Sync + Fn(f32, f32)>);
+pub struct PointerHandlerFunction(pub Arc<dyn 'static + Send + Sync + Fn(Layer, f32, f32)>);
 
-impl<F: Fn(f32, f32) + Send + Sync + 'static> From<F> for PointerHandlerFunction {
+impl<F: Fn(Layer, f32, f32) + Send + Sync + 'static> From<F> for PointerHandlerFunction {
     fn from(f: F) -> Self {
         PointerHandlerFunction(Arc::new(f))
     }
@@ -85,8 +87,8 @@ impl Default for ModelLayer {
     fn default() -> Self {
         let position = Attribute::new(Point { x: 0.0, y: 0.0 });
         let size = Attribute::new(Size {
-            width: taffy::style::Dimension::Points(0.0),
-            height: taffy::style::Dimension::Points(0.0),
+            width: taffy::style::Dimension::Length(0.0),
+            height: taffy::style::Dimension::Length(0.0),
         });
         let anchor_point = Attribute::new(Point { x: 0.0, y: 0.0 });
         let scale = Attribute::new(Point { x: 1.0, y: 1.0 });

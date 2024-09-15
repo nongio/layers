@@ -31,8 +31,8 @@ pub struct Size {
 impl Size {
     pub fn points(width: f32, height: f32) -> Self {
         Size {
-            width: taffy::style::Dimension::Points(width),
-            height: taffy::style::Dimension::Points(height),
+            width: taffy::style::Dimension::Length(width),
+            height: taffy::style::Dimension::Length(height),
         }
     }
     pub fn percent(width: f32, height: f32) -> Self {

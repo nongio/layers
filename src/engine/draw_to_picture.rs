@@ -15,7 +15,9 @@ where
         let mut recorder = PictureRecorder::new();
 
         let r = self.bounds();
-        const SAFE_MARGIN: f32 = 10.0; // FIXME - this is a hack to make sure we don't clip the edges of the picture
+        // FIXME - this is a hack to make sure we don't clip the edges of the picture
+        // and the shadow. We should find a better way to handle this.
+        const SAFE_MARGIN: f32 = 50.0;
 
         let canvas = recorder.begin_recording(
             Rect::from_xywh(

@@ -1,22 +1,21 @@
 use layers::prelude::*;
 use layers::{prelude::timing::TimingFunction, types::Size};
 use std::string::String;
-use std::sync::Arc;
 
 pub struct ListState {
     pub values: Vec<String>,
 }
-pub fn view_list(_state: ListState) -> ViewLayer {
+pub fn view_list(_state: ListState) -> LayerTree {
     const PADDING: f32 = 5.0;
 
     let background_color = Color::new_hex("#0075FF");
 
-    ViewLayerBuilder::default()
+    LayerTreeBuilder::default()
         .position((Point { x: 30.0, y: 330.0 }, None))
         .size((
             Size {
-                width: taffy::Dimension::Points(300.0),
-                height: taffy::Dimension::Points(30.0),
+                width: taffy::Dimension::Length(300.0),
+                height: taffy::Dimension::Length(30.0),
             },
             None,
         ))
@@ -39,7 +38,7 @@ pub fn view_list(_state: ListState) -> ViewLayer {
                 timing: TimingFunction::default(),
             }),
         ))
-        .children(vec![ViewLayerBuilder::default()
+        .children(vec![LayerTreeBuilder::default()
             .position((
                 Point {
                     x: PADDING,
@@ -49,8 +48,8 @@ pub fn view_list(_state: ListState) -> ViewLayer {
             ))
             .size((
                 Size {
-                    width: taffy::Dimension::Points(290.0),
-                    height: taffy::Dimension::Points(20.0),
+                    width: taffy::Dimension::Length(290.0),
+                    height: taffy::Dimension::Length(20.0),
                 },
                 None,
             ))

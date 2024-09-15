@@ -5,7 +5,7 @@ use std::{
     fmt::Debug,
     sync::{atomic::AtomicBool, Arc, RwLock},
 };
-use taffy::prelude::{Layout, Node};
+use taffy::prelude::{Layout, NodeId as TaffyNodeId};
 
 use crate::{
     layers::layer::{render_layer::RenderLayer, Layer},
@@ -176,15 +176,16 @@ pub struct SceneNode {
     pub(crate) render_layer: Arc<RwLock<RenderLayer>>,
     pub draw_cache: Arc<RwLock<Option<DrawCache>>>,
     pub flags: Arc<RwLock<RenderableFlags>>,
-    pub layout_node_id: Node,
+    pub layout_node_id: TaffyNodeId,
     pub deleted: Arc<AtomicBool>,
+    pub(crate) pointer_hover: Arc<AtomicBool>,
 }
 
 impl SceneNode {
     pub fn id(&self) -> Option<NodeRef> {
         self.layer.id()
     }
-    pub fn with_renderable_and_layout(layer: Layer, layout_node: Node) -> Self {
+    pub fn with_renderable_and_layout(layer: Layer, layout_node: TaffyNodeId) -> Self {
         let render_layer = RenderLayer::default();
         Self {
             layer,
@@ -197,6 +198,7 @@ impl SceneNode {
             layout_node_id: layout_node,
             render_layer: Arc::new(RwLock::new(render_layer)),
             deleted: Arc::new(AtomicBool::new(false)),
+            pointer_hover: Arc::new(AtomicBool::new(false)),
         }
     }
     pub fn insert_flags(&self, flags: RenderableFlags) {

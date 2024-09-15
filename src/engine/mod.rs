@@ -19,8 +19,10 @@ mod stages;
 pub mod storage;
 
 use indextree::NodeId;
+use node::ContainsPoint;
 use taffy::prelude::*;
 
+use core::fmt;
 use std::{
     collections::HashMap,
     hash::Hash,
@@ -32,14 +34,14 @@ use std::{
 };
 
 use crate::{
-    layers::layer::{model::PointerHandlerFunction, Layer, ModelLayer},
+    layers::layer::{model::PointerHandlerFunction, state::LayerDataProps, Layer, ModelLayer},
     types::Point,
 };
 
 use self::{
     animation::{Animation, Transition},
     command::NoopChange,
-    node::{ContainsPoint, DrawCacheManagement, RenderableFlags, SceneNode},
+    node::{DrawCacheManagement, RenderableFlags, SceneNode},
     scene::Scene,
     stages::{
         cleanup_animations, cleanup_nodes, cleanup_transactions, execute_transactions,
@@ -119,12 +121,20 @@ impl Default for TransitionCallbacks {
 #[derive(Clone)]
 pub struct PointerCallback {
     pub on_move: HashMap<usize, PointerHandlerFunction>,
+    pub on_in: HashMap<usize, PointerHandlerFunction>,
+    pub on_out: HashMap<usize, PointerHandlerFunction>,
+    pub on_down: HashMap<usize, PointerHandlerFunction>,
+    pub on_up: HashMap<usize, PointerHandlerFunction>,
 }
 
 impl PointerCallback {
     pub fn new() -> Self {
         Self {
             on_move: HashMap::new(),
+            on_in: HashMap::new(),
+            on_out: HashMap::new(),
+            on_down: HashMap::new(),
+            on_up: HashMap::new(),
         }
     }
 }
@@ -133,6 +143,14 @@ impl Default for PointerCallback {
         Self::new()
     }
 }
+pub(crate) enum PointerEventType {
+    Move,
+    In,
+    Out,
+    Down,
+    Up,
+}
+
 pub struct Engine {
     pub scene: Arc<Scene>,
     scene_root: RwLock<Option<NodeRef>>,
@@ -140,15 +158,13 @@ pub struct Engine {
     animations: FlatStorage<AnimationState>,
     pub timestamp: RwLock<Timestamp>,
     transaction_handlers: FlatStorage<TransitionCallbacks>,
-    pub layout_tree: RwLock<Taffy>,
-    layout_root: RwLock<taffy::node::Node>,
+    pub layout_tree: RwLock<TaffyTree>,
+    layout_root: RwLock<taffy::prelude::NodeId>,
     pub damage: RwLock<skia_safe::Rect>,
     // pointer handlers
+    pointer_position: RwLock<Point>,
+    current_hover_node: RwLock<Option<NodeId>>,
     pointer_handlers: FlatStorage<PointerCallback>,
-    // pointer_down_handlers: FlatStorage<PointerDownCallback>,
-    // pointer_up_handlers: FlatStorage<PointerUpCallback>,
-    // pointer_hover_handlers: FlatStorage<PointerHoverCallback>,
-    // pointer_leave_handlers: FlatStorage<PointerLeaveCallback>,
 }
 #[derive(Clone, Copy, Debug)]
 pub struct TransactionRef(pub FlatStorageId);
@@ -157,9 +173,15 @@ pub struct TransactionRef(pub FlatStorageId);
 pub struct AnimationRef(FlatStorageId);
 
 /// An identifier for a node in the three storage
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, std::cmp::Ord, Hash)]
+#[derive(Clone, Copy, PartialEq, PartialOrd, Eq, std::cmp::Ord, Hash)]
 pub struct NodeRef(pub TreeStorageId);
 
+impl fmt::Debug for NodeRef {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let index: usize = self.0.into();
+        write!(f, "NodeRef({})", index)
+    }
+}
 #[derive(Clone)]
 pub struct HandlerRef(FlatStorageId);
 
@@ -203,6 +225,7 @@ impl LayersEngine {
             layout_node_id: layout,
             hidden: Arc::new(AtomicBool::new(false)),
             image_cache: Arc::new(AtomicBool::new(false)),
+            state: Arc::new(RwLock::new(LayerDataProps::default())),
         }
     }
     pub fn new_animation(&self, transition: Transition) -> AnimationRef {
@@ -258,7 +281,7 @@ impl LayersEngine {
         let node = self.scene_get_node(root_id)?;
         Some(node.get().clone())
     }
-    pub fn pointer_move(&self, point: impl Into<Point>, root_id: NodeId) {
+    pub fn pointer_move(&self, point: impl Into<Point>, root_id: impl Into<NodeId>) {
         self.engine.pointer_move(point, root_id);
     }
 }
@@ -277,7 +300,7 @@ impl Engine {
         //     .num_threads(2)
         //     .build_global()
         //     .unwrap();
-        let mut layout_tree = Taffy::new();
+        let mut layout_tree = TaffyTree::new();
         let layout_root = RwLock::new(
             layout_tree
                 .new_leaf(Style {
@@ -302,6 +325,8 @@ impl Engine {
             scene_root,
             damage,
             pointer_handlers: FlatStorage::new(),
+            pointer_position: RwLock::new(Point::default()),
+            current_hover_node: RwLock::new(None),
         }
     }
     pub fn create(width: f32, height: f32) -> Arc<Self> {
@@ -396,7 +421,7 @@ impl Engine {
                             }
                         }
                     }
-
+                    // remove layout node
                     let mut layout_tree = self.layout_tree.write().unwrap();
                     layout_tree.remove(node.layout_node_id).unwrap();
                 }
@@ -538,16 +563,16 @@ impl Engine {
         needs_draw
     }
 
-    pub fn get_node_layout_style(&self, node: Node) -> Style {
+    pub fn get_node_layout_style(&self, node: taffy::NodeId) -> Style {
         let layout = self.layout_tree.read().unwrap();
         layout.style(node).unwrap().clone()
     }
-    pub fn set_node_layout_style(&self, node: Node, style: Style) {
+    pub fn set_node_layout_style(&self, node: taffy::NodeId, style: Style) {
         let mut layout = self.layout_tree.write().unwrap();
         layout.set_style(node, style).unwrap();
     }
 
-    pub fn set_node_layout_size(&self, node: Node, size: crate::types::Size) {
+    pub fn set_node_layout_size(&self, node: taffy::NodeId, size: crate::types::Size) {
         let mut layout = self.layout_tree.write().unwrap();
         let mut style = layout.style(node).unwrap().clone();
         style.size = taffy::geometry::Size {
@@ -622,9 +647,10 @@ impl Engine {
     }
 
     #[allow(clippy::unwrap_or_default)]
-    pub fn add_pointer_handler<F: Into<PointerHandlerFunction>>(
+    pub(crate) fn add_pointer_handler<F: Into<PointerHandlerFunction>>(
         &self,
         layer_node: NodeRef,
+        event_type: PointerEventType,
         handler: F,
     ) -> usize {
         let node_id = layer_node.0.into();
@@ -634,7 +660,23 @@ impl Engine {
             .unwrap_or_else(PointerCallback::new);
         let handler = handler.into();
         let handler_id = UNIQ_POINTER_HANDLER_ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        pointer_callback.on_move.insert(handler_id, handler);
+        match event_type {
+            PointerEventType::Move => {
+                pointer_callback.on_move.insert(handler_id, handler);
+            }
+            PointerEventType::In => {
+                pointer_callback.on_in.insert(handler_id, handler);
+            }
+            PointerEventType::Out => {
+                pointer_callback.on_out.insert(handler_id, handler);
+            }
+            PointerEventType::Down => {
+                pointer_callback.on_down.insert(handler_id, handler);
+            }
+            PointerEventType::Up => {
+                pointer_callback.on_up.insert(handler_id, handler);
+            }
+        }
 
         self.pointer_handlers
             .insert_with_id(pointer_callback, node_id);
@@ -646,6 +688,11 @@ impl Engine {
         let node_id = layer_node.0.into();
         if let Some(mut pointer_callback) = self.pointer_handlers.get(&node_id) {
             pointer_callback.on_move.remove(&handler_id);
+            pointer_callback.on_in.remove(&handler_id);
+            pointer_callback.on_out.remove(&handler_id);
+            pointer_callback.on_down.remove(&handler_id);
+            pointer_callback.on_up.remove(&handler_id);
+
             self.pointer_handlers
                 .insert_with_id(pointer_callback, node_id);
         }
@@ -655,27 +702,92 @@ impl Engine {
         let node_id = layer_node.0.into();
         if let Some(mut pointer_callback) = self.pointer_handlers.get(&node_id) {
             pointer_callback.on_move.clear();
+            pointer_callback.on_in.clear();
+            pointer_callback.on_out.clear();
+            pointer_callback.on_down.clear();
+            pointer_callback.on_up.clear();
+
+            self.pointer_handlers
+                .insert_with_id(pointer_callback, node_id);
         }
     }
+    // fn bubble_up_event(&self, node_id: NodeId, event_type: PointerEventType) {
 
-    pub fn pointer_move(&self, point: impl Into<Point>, root_id: NodeId) {
+    // }
+    pub fn pointer_move(&self, point: impl Into<Point>, root_id: impl Into<NodeId>) {
         let p = point.into();
-        let arena = self.scene.nodes.data();
-        let arena = arena.read().unwrap();
+        *self.pointer_position.write().unwrap() = p;
+        let root_id = root_id.into();
+        let (root_node, children) = self.scene.with_arena(|arena| {
+            let root_node = arena.get(root_id).unwrap().get().clone();
+            let children: Vec<NodeId> = root_id.reverse_children(arena).collect();
+            (root_node, children)
+        });
 
         // let root_node = arena.get(root_id).unwrap().get();
-
-        for node_id in root_id.reverse_children(&arena) {
-            let scene_node = arena.get(node_id).unwrap().get();
-            if scene_node.contains(p) {
-                self.pointer_move(p, node_id);
-            }
+        for node_id in children {
+            // if let Some(scene_node) = self.scene.get_node(node_id) {
+            // let scene_node = scene_node.get();
+            // if scene_node.contains(p) {
+            self.pointer_move(p, node_id);
+            // }
+            // }
         }
-        let root_node = arena.get(root_id).unwrap().get();
+        let pointer_hover_node = root_node
+            .pointer_hover
+            .load(std::sync::atomic::Ordering::SeqCst);
+
         if root_node.contains(p) {
+            root_node
+                .pointer_hover
+                .store(true, std::sync::atomic::Ordering::SeqCst);
+            self.current_hover_node.write().unwrap().replace(root_id);
+
+            if !pointer_hover_node {
+                if let Some(pointer_handler) = self.pointer_handlers.get(&root_id.into()) {
+                    for handler in pointer_handler.on_in.values() {
+                        handler.0(root_node.layer.clone(), p.x, p.y);
+                    }
+                }
+            }
             if let Some(pointer_handler) = self.pointer_handlers.get(&root_id.into()) {
                 for handler in pointer_handler.on_move.values() {
-                    handler.0(p.x, p.y);
+                    handler.0(root_node.layer.clone(), p.x, p.y);
+                }
+            }
+        } else if pointer_hover_node {
+            root_node
+                .pointer_hover
+                .store(false, std::sync::atomic::Ordering::SeqCst);
+            self.current_hover_node.write().unwrap().take();
+            if let Some(pointer_handler) = self.pointer_handlers.get(&root_id.into()) {
+                for handler in pointer_handler.on_out.values() {
+                    handler.0(root_node.layer.clone(), p.x, p.y);
+                }
+            }
+        }
+    }
+    pub fn pointer_button_down(&self) {
+        if let Some(node) = *self.current_hover_node.read().unwrap() {
+            if let Some(pointer_handler) = self.pointer_handlers.get(&node.into()) {
+                let pos = *self.pointer_position.read().unwrap();
+                if let Some(node) = self.scene.get_node(node) {
+                    let layer = node.get().layer.clone();
+                    // let parent = node.parent();
+                    for handler in pointer_handler.on_down.values() {
+                        handler.0(layer.clone(), pos.x, pos.y);
+                    }
+                }
+            }
+        }
+    }
+    pub fn pointer_button_up(&self) {
+        if let Some(node) = *self.current_hover_node.read().unwrap() {
+            if let Some(pointer_handler) = self.pointer_handlers.get(&node.into()) {
+                let pos = *self.pointer_position.read().unwrap();
+                let layer = self.scene.get_node(node).unwrap().get().layer.clone();
+                for handler in pointer_handler.on_up.values() {
+                    handler.0(layer.clone(), pos.x, pos.y);
                 }
             }
         }

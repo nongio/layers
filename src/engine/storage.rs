@@ -34,7 +34,8 @@ impl<V: Clone + Send + Sync> TreeStorage<V> {
         self.data.write().unwrap().new_node(value)
     }
 
-    pub fn get(&self, id: TreeStorageId) -> Option<TreeStorageNode<V>> {
+    pub fn get(&self, id: impl Into<TreeStorageId>) -> Option<TreeStorageNode<V>> {
+        let id = id.into();
         let data = self.data.read().unwrap();
         // this is equivalent to Some(obj.clone())
         data.get(id).cloned()

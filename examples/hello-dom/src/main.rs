@@ -4,7 +4,7 @@ use glutin::event::WindowEvent;
 use glutin::event_loop::{ControlFlow, EventLoop};
 use glutin::window::WindowBuilder;
 use glutin::GlProfile;
-use layers::types::Size;
+use layers::{drawing::scene::debug_scene, types::Size};
 use layers::{prelude::*, skia::ColorType};
 
 use crate::{
@@ -20,10 +20,11 @@ mod list;
 mod popup_menu;
 mod toggle;
 
-fn main() {
+#[tokio::main]
+async fn main() {
     type WindowedContext = glutin::ContextWrapper<glutin::PossiblyCurrent, glutin::window::Window>;
 
-    use winit::dpi::LogicalSize;
+    use glutin::dpi::LogicalSize;
     let window_width = 900;
     let window_height = 800;
 
@@ -56,11 +57,15 @@ fn main() {
     let pixel_format = windowed_context.get_pixel_format();
 
     let size = windowed_context.window().inner_size();
-    let sample_count: usize = pixel_format
-        .multisampling
-        .map(|s| s.try_into().unwrap())
-        .unwrap_or(0);
-    let pixel_format: usize = pixel_format.stencil_bits.try_into().unwrap();
+    let sample_count: usize = pixel_format.multisampling.map(|s| s.into()).unwrap_or(0);
+    let pixel_format: usize = pixel_format.stencil_bits.into();
+
+    struct Env {
+        pub windowed_context: WindowedContext,
+    }
+    let mut env = Env { windowed_context };
+
+    env.windowed_context = unsafe { env.windowed_context.make_current().unwrap() };
 
     let mut skia_renderer = layers::renderer::skia_fbo::SkiaFboRenderer::create(
         size.width as i32,
@@ -75,18 +80,14 @@ fn main() {
     let mut _mouse_x = 0.0;
     let mut _mouse_y = 0.0;
 
-    struct Env {
-        windowed_context: WindowedContext,
-    }
-    let env = Env { windowed_context };
     let window_width = window_width as f32;
     let window_height = window_height as f32;
     let engine = LayersEngine::new(window_width * 2.0, window_height * 2.0);
     let root = engine.new_layer();
     root.set_size(
         Size {
-            width: taffy::Dimension::Points(window_width * 2.0),
-            height: taffy::Dimension::Points(window_height * 2.0),
+            width: taffy::Dimension::Length(window_width * 2.0),
+            height: taffy::Dimension::Length(window_height * 2.0),
         },
         None,
     );
@@ -101,16 +102,29 @@ fn main() {
         position: taffy::Position::Absolute,
         display: taffy::Display::Flex,
         padding: taffy::Rect {
-            left: taffy::LengthPercentage::Points(0.0),
-            right: taffy::LengthPercentage::Points(0.0),
-            top: taffy::LengthPercentage::Points(0.0),
-            bottom: taffy::LengthPercentage::Points(0.0),
+            left: taffy::LengthPercentage::Length(0.0),
+            right: taffy::LengthPercentage::Length(0.0),
+            top: taffy::LengthPercentage::Length(0.0),
+            bottom: taffy::LengthPercentage::Length(0.0),
         },
         justify_content: Some(taffy::JustifyContent::Center),
         align_items: Some(taffy::AlignItems::Center),
         ..Default::default()
     });
     engine.scene_set_root(root.clone());
+    let data = std::fs::read("./assets/bg.jpg").unwrap();
+    let data = layers::skia::Data::new_copy(&data);
+    let image = layers::skia::Image::from_encoded(data).unwrap();
+    root.set_draw_content(Some(move |canvas: &layers::skia::Canvas, w, h| {
+        let mut paint =
+            layers::skia::Paint::new(layers::skia::Color4f::new(1.0, 1.0, 1.0, 1.0), None);
+        // paint.set_stroke(true);
+        // paint.set_stroke_width(10.0);
+        // let rect = layers::skia::Rect::new(0.0, 0.0, 100.0, 100.0);
+        // canvas.draw_rect(rect, &paint);
+        canvas.draw_image(&image, (0.0, 0.0), Some(&paint));
+        layers::skia::Rect::from_xywh(0.0, 0.0, w, h)
+    }));
     let layer = engine.new_layer();
     engine.scene_add_layer_to(layer.clone(), root.id());
 
@@ -127,12 +141,12 @@ fn main() {
 
     state.apps.push("App 1".to_string());
 
-    // for n in 0..3 {
-    //     state.items.push(format!("Item {}", n));
-    // }
-    let app_switcher =
-        layers::prelude::View::new(layer, state.clone(), Box::new(view_app_switcher));
-    // app_switcher.render(&state);
+    let mut app_switcher = View::new(
+        "app_switcher_view",
+        state.clone(),
+        Box::new(view_app_switcher),
+    );
+    app_switcher.mount_layer(layer);
 
     events_loop.run(move |event, _, control_flow| {
         let now = std::time::Instant::now();
@@ -141,7 +155,7 @@ fn main() {
         *control_flow = ControlFlow::WaitUntil(next);
 
         match event {
-            winit::event::Event::WindowEvent { event, .. } => match event {
+            glutin::event::Event::WindowEvent { event, .. } => match event {
                 WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
                 WindowEvent::Resized(physical_size) => {
                     env.windowed_context.resize(physical_size);
@@ -158,12 +172,15 @@ fn main() {
                     );
                     root.set_size(Size::points(size.width as f32, size.height as f32), None);
 
-                    app_switcher.render(&state);
                     env.windowed_context.window().request_redraw();
                 }
                 WindowEvent::CursorMoved { position, .. } => {
                     _mouse_x = position.x;
                     _mouse_y = position.y;
+                    engine.pointer_move(
+                        (_mouse_x as f32, _mouse_y as f32),
+                        engine.scene_root().unwrap(),
+                    );
                 }
 
                 WindowEvent::MouseInput {
@@ -180,7 +197,7 @@ fn main() {
                     #[allow(clippy::single_match)]
                     match input.virtual_keycode {
                         Some(keycode) => match keycode {
-                            winit::event::VirtualKeyCode::Space => {
+                            glutin::event::VirtualKeyCode::Space => {
                                 println!("update");
                                 let dt = 0.016;
                                 let needs_redraw = engine.update(dt);
@@ -189,41 +206,50 @@ fn main() {
                                     // draw_frame = -1;
                                 }
                                 println!("state {:?}", state);
-                                app_switcher.render(&state);
+                                app_switcher.update_state(&state);
+
+                                // if let Some(root) = engine.scene_root() {
+                                //     let skia_renderer = skia_renderer.get_mut();
+                                //     // let damage_rect = engine.damage();
+
+                                //     let mut surface = skia_renderer.surface();
+
+                                //     let canvas = surface.canvas();
+
+                                //     let save_point = canvas.save();
+                                //     skia_renderer.draw_scene(engine.scene(), root, None);
+
+                                //     canvas.restore_to_count(save_point);
+                                // }
                             }
-                            winit::event::VirtualKeyCode::Tab => {
-                                if input.state == winit::event::ElementState::Released {
+                            glutin::event::VirtualKeyCode::Tab => {
+                                if input.state == glutin::event::ElementState::Released {
                                     state.current_app = (state.current_app + 1) % state.apps.len();
 
-                                    app_switcher.render(&state);
+                                    app_switcher.update_state(&state);
                                 }
                             }
-                            winit::event::VirtualKeyCode::A => {
-                                if input.state == winit::event::ElementState::Released {
+                            glutin::event::VirtualKeyCode::A => {
+                                if input.state == glutin::event::ElementState::Released {
                                     // let mut rng = rand::thread_rng();
                                     // let index = rng.gen_range(0..12000);
                                     state.apps.pop();
-                                    app_switcher.render(&state);
+                                    app_switcher.update_state(&state);
 
                                     // state.apps.push(format!("{}", index));
                                     // app_switcher_view.render(&state);
                                 }
                             }
-                            winit::event::VirtualKeyCode::E => {
-                                if input.state == winit::event::ElementState::Released {
-                                    // let mut rng = rand::thread_rng();
-                                    // let index = rng.gen_range(0..12000);
-                                    state.apps[0] = format!("{}!", state.apps[0]);
-                                    app_switcher.render(&state);
-
-                                    // state.apps.push(format!("{}", index));
-                                    // app_switcher_view.render(&state);
+                            glutin::event::VirtualKeyCode::E => {
+                                if input.state == glutin::event::ElementState::Released {
+                                    let state = app_switcher.get_state();
+                                    println!("state {:?}", state);
                                 }
                             }
-                            winit::event::VirtualKeyCode::S => {
-                                if input.state == winit::event::ElementState::Released {
+                            glutin::event::VirtualKeyCode::S => {
+                                if input.state == glutin::event::ElementState::Released {
                                     state.apps.push("Item".to_string());
-                                    app_switcher.render(&state);
+                                    app_switcher.update_state(&state);
 
                                     // let mut rng = rand::thread_rng();
                                     // let index = rng.gen_range(0..state.apps.len());
@@ -231,8 +257,13 @@ fn main() {
                                     // app_switcher_view.render(&state);
                                 }
                             }
-                            winit::event::VirtualKeyCode::Escape => {
-                                if input.state == winit::event::ElementState::Released {
+                            glutin::event::VirtualKeyCode::D => {
+                                if input.state == glutin::event::ElementState::Released {
+                                    debug_scene(engine.scene(), engine.scene_root().unwrap());
+                                }
+                            }
+                            glutin::event::VirtualKeyCode::Escape => {
+                                if input.state == glutin::event::ElementState::Released {
                                     *control_flow = ControlFlow::Exit;
                                 }
                             }
@@ -243,7 +274,7 @@ fn main() {
                 }
                 _ => (),
             },
-            winit::event::Event::MainEventsCleared => {
+            glutin::event::Event::MainEventsCleared => {
                 let now = instant.elapsed().as_secs_f64();
                 let frame_number = (now / 0.016).floor() as i32;
                 if update_frame != frame_number {
@@ -255,11 +286,11 @@ fn main() {
                     }
                 }
             }
-            winit::event::Event::RedrawRequested(_) => {
+            glutin::event::Event::RedrawRequested(_) => {
                 if draw_frame != update_frame {
                     if let Some(root) = engine.scene_root() {
                         let skia_renderer = skia_renderer.get_mut();
-                        let damage_rect = engine.damage();
+                        // let damage_rect = engine.damage();
 
                         let mut surface = skia_renderer.surface();
 
@@ -269,16 +300,17 @@ fn main() {
                         skia_renderer.draw_scene(engine.scene(), root, None);
 
                         canvas.restore_to_count(save_point);
-                        let mut paint = layers::skia::Paint::new(
-                            layers::skia::Color4f::new(1.0, 0.0, 0.0, 1.0),
-                            None,
-                        );
-                        paint.set_stroke(true);
-                        paint.set_stroke_width(10.0);
-                        canvas.draw_rect(damage_rect, &paint);
 
-                        engine.clear_damage();
-                        skia_renderer.gr_context.flush_and_submit();
+                        // let mut paint = layers::skia::Paint::new(
+                        //     layers::skia::Color4f::new(1.0, 0.0, 0.0, 1.0),
+                        //     None,
+                        // );
+                        // paint.set_stroke(true);
+                        // paint.set_stroke_width(10.0);
+                        // canvas.draw_rect(damage_rect, &paint);
+
+                        // engine.clear_damage();
+                        skia_renderer.gr_context.flush_submit_and_sync_cpu();
                     }
                     // this will be blocking until the GPU is done with the frame
                     env.windowed_context.swap_buffers().unwrap();
