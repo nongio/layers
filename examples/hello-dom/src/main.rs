@@ -86,8 +86,8 @@ async fn main() {
     let root = engine.new_layer();
     root.set_size(
         Size {
-            width: taffy::Dimension::Points(window_width * 2.0),
-            height: taffy::Dimension::Points(window_height * 2.0),
+            width: taffy::Dimension::Length(window_width * 2.0),
+            height: taffy::Dimension::Length(window_height * 2.0),
         },
         None,
     );
@@ -102,16 +102,29 @@ async fn main() {
         position: taffy::Position::Absolute,
         display: taffy::Display::Flex,
         padding: taffy::Rect {
-            left: taffy::LengthPercentage::Points(0.0),
-            right: taffy::LengthPercentage::Points(0.0),
-            top: taffy::LengthPercentage::Points(0.0),
-            bottom: taffy::LengthPercentage::Points(0.0),
+            left: taffy::LengthPercentage::Length(0.0),
+            right: taffy::LengthPercentage::Length(0.0),
+            top: taffy::LengthPercentage::Length(0.0),
+            bottom: taffy::LengthPercentage::Length(0.0),
         },
         justify_content: Some(taffy::JustifyContent::Center),
         align_items: Some(taffy::AlignItems::Center),
         ..Default::default()
     });
     engine.scene_set_root(root.clone());
+    let data = std::fs::read("./assets/bg.jpg").unwrap();
+    let data = layers::skia::Data::new_copy(&data);
+    let image = layers::skia::Image::from_encoded(data).unwrap();
+    root.set_draw_content(Some(move |canvas: &layers::skia::Canvas, w, h| {
+        let mut paint =
+            layers::skia::Paint::new(layers::skia::Color4f::new(1.0, 1.0, 1.0, 1.0), None);
+        // paint.set_stroke(true);
+        // paint.set_stroke_width(10.0);
+        // let rect = layers::skia::Rect::new(0.0, 0.0, 100.0, 100.0);
+        // canvas.draw_rect(rect, &paint);
+        canvas.draw_image(&image, (0.0, 0.0), Some(&paint));
+        layers::skia::Rect::from_xywh(0.0, 0.0, w, h)
+    }));
     let layer = engine.new_layer();
     engine.scene_add_layer_to(layer.clone(), root.id());
 

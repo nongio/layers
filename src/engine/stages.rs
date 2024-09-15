@@ -2,7 +2,7 @@ use std::sync::{Arc, RwLock};
 
 use indextree::NodeId;
 use rayon::prelude::{IntoParallelRefIterator, IntoParallelRefMutIterator, ParallelIterator};
-use taffy::{prelude::Size, style_helpers::points, Taffy};
+use taffy::{prelude::Size, style_helpers::length, TaffyTree};
 
 use crate::layers::layer::render_layer::RenderLayer;
 
@@ -141,8 +141,8 @@ pub(crate) fn update_layout_tree(engine: &Engine) {
         .compute_layout(
             layout_root,
             Size {
-                width: points(scene_size.x),
-                height: points(scene_size.y),
+                width: length(scene_size.x),
+                height: length(scene_size.y),
             },
         )
         .unwrap();
@@ -152,7 +152,7 @@ pub(crate) fn update_layout_tree(engine: &Engine) {
 
 pub(crate) fn update_node(
     arena: &TreeStorageData<SceneNode>,
-    layout: &Taffy,
+    layout: &TaffyTree,
     node_id: NodeId,
     parent: Option<&RenderLayer>,
     damage: &mut skia_safe::Rect,

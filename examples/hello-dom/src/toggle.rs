@@ -2,7 +2,6 @@ use layers::{
     prelude::{timing::TimingFunction, *},
     types::Size,
 };
-use std::sync::Arc;
 
 pub struct ToggleState {
     pub value: bool,
@@ -26,8 +25,8 @@ pub fn view_toggle(state: ToggleState) -> LayerTree {
         .position((Point { x: 30.0, y: 30.0 }, None))
         .size((
             Size {
-                width: taffy::Dimension::Points(TOGGLE_SIZE),
-                height: taffy::Dimension::Points(SIZE + PADDING * 2.0),
+                width: taffy::Dimension::Length(TOGGLE_SIZE),
+                height: taffy::Dimension::Length(SIZE + PADDING * 2.0),
             },
             None,
         ))
@@ -64,8 +63,8 @@ pub fn view_toggle(state: ToggleState) -> LayerTree {
             ))
             .size((
                 Size {
-                    width: taffy::Dimension::Points(SIZE),
-                    height: taffy::Dimension::Points(SIZE),
+                    width: taffy::Dimension::Length(SIZE),
+                    height: taffy::Dimension::Length(SIZE),
                 },
                 None,
             ))

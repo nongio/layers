@@ -11,9 +11,8 @@ use state::LayerDataProps;
 use std::sync::{atomic::AtomicBool, RwLock};
 use std::{fmt, sync::Arc};
 use taffy::style::Style;
-use taffy::{prelude::Node, style::Display};
+use taffy::{prelude::NodeId, style::Display};
 
-use crate::engine::command::*;
 use crate::engine::node::RenderableFlags;
 use crate::engine::{animation::*, storage::TreeStorageId};
 use crate::engine::{Engine, NodeRef, TransactionRef};
@@ -26,7 +25,7 @@ pub struct Layer {
     pub(crate) id: Arc<RwLock<Option<NodeRef>>>,
     pub(crate) key: Arc<RwLock<String>>,
     pub(crate) hidden: Arc<AtomicBool>,
-    pub(crate) layout_node_id: Node,
+    pub(crate) layout_node_id: NodeId,
     pub(crate) model: Arc<ModelLayer>,
     pub(crate) image_cache: Arc<AtomicBool>,
     pub(crate) state: Arc<RwLock<LayerDataProps>>,

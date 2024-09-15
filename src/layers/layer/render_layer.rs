@@ -33,7 +33,7 @@ impl RenderLayer {
     pub(crate) fn update_with_model_and_layout(
         &mut self,
         model: &ModelLayer,
-        layout: &taffy::layout::Layout,
+        layout: &taffy::tree::Layout,
         matrix: Option<&M44>,
     ) {
         let layout_position = layout.location;
@@ -150,7 +150,7 @@ impl RenderLayer {
 
     pub(crate) fn from_model_and_layout(
         model: &ModelLayer,
-        layout: &taffy::layout::Layout,
+        layout: &taffy::tree::Layout,
         matrix: Option<&M44>,
     ) -> Self {
         let layout_position = layout.location;
