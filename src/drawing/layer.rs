@@ -99,6 +99,8 @@ pub(crate) fn draw_layer(canvas: &Canvas, layer: &RenderLayer) -> skia_safe::Rec
         content.playback(canvas);
         draw_damage.join(layer.content_damage);
     }
-
+    if layer.blend_mode == crate::types::BlendMode::BackgroundBlur {
+        draw_damage.outset((100.0, 100.0));
+    }
     draw_damage
 }
