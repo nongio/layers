@@ -13,7 +13,7 @@ mod stages;
 
 pub(crate) mod command;
 pub(crate) mod rendering;
-pub(crate) mod storage;
+pub mod storage;
 
 pub(crate) mod scene;
 
