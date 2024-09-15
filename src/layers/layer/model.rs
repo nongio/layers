@@ -38,6 +38,8 @@ impl PartialEq for ContentDrawFunction {
 }
 use std::fmt;
 
+use super::Layer;
+
 #[derive(Debug)]
 pub struct ContentDrawError {
     pub message: String,
@@ -53,9 +55,9 @@ impl Error for ContentDrawError {}
 
 #[allow(clippy::type_complexity)]
 #[derive(Clone)]
-pub struct PointerHandlerFunction(pub Arc<dyn 'static + Send + Sync + Fn(f32, f32)>);
+pub struct PointerHandlerFunction(pub Arc<dyn 'static + Send + Sync + Fn(Layer, f32, f32)>);
 
-impl<F: Fn(f32, f32) + Send + Sync + 'static> From<F> for PointerHandlerFunction {
+impl<F: Fn(Layer, f32, f32) + Send + Sync + 'static> From<F> for PointerHandlerFunction {
     fn from(f: F) -> Self {
         PointerHandlerFunction(Arc::new(f))
     }

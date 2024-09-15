@@ -1,12 +1,10 @@
-use std::{hash::Hash, time::Duration};
+use std::hash::Hash;
 
 use layers::{
     prelude::*,
     skia::{Color4f, Font, FontStyle, Typeface},
 };
 use layers::{skia, types::Size};
-
-use tokio::{task, time};
 
 #[derive(Clone, Hash, Debug)]
 pub struct AppSwitcherState {
@@ -35,12 +33,12 @@ impl Hash for AppIconState {
 pub fn view_app_icon(state: &AppIconState, view: &View<AppIconState>) -> LayerTree {
     const PADDING: f32 = 35.0;
     let icon_width = state.icon_width;
-    let name_color = state.name.len() as f32 / 10.0;
-    let test = state.test;
+    // let name_color = state.name.len() as f32 / 10.0;
+    // let test = state.test;
     let layer = view.layer.read().unwrap().clone().unwrap();
     // let internal_state = view.layer.sta;
     let index = state.index;
-    let val = layer.with_state(|state| *state.get::<i32>("notification").unwrap_or(&0));
+    let val = layer.with_state(|state| state.get::<i32>("notification").unwrap_or_default());
     let id: usize = layer.id().unwrap().0.into();
     let draw_picture = move |canvas: &layers::skia::Canvas, w: f32, h: f32| -> layers::skia::Rect {
         let paint = skia::Paint::new(Color4f::new(1.0, 1.0, 0.0, 1.0), None);
@@ -58,13 +56,14 @@ pub fn view_app_icon(state: &AppIconState, view: &View<AppIconState>) -> LayerTr
         skia::Rect::from_xywh(0.0, 0.0, width, width)
     };
     let index = state.index;
-    let view = view.clone();
+    let view1 = view.clone();
+    let view2 = view.clone();
     LayerTreeBuilder::default()
         .key(format!("app_icon_view_{}", state.index))
         .size((
             Size {
-                width: taffy::Dimension::Points(icon_width + PADDING * 2.0),
-                height: taffy::Dimension::Points(icon_width + PADDING * 2.0),
+                width: taffy::Dimension::Length(icon_width + PADDING * 2.0),
+                height: taffy::Dimension::Length(icon_width + PADDING * 2.0),
             },
             None,
         ))
@@ -76,11 +75,18 @@ pub fn view_app_icon(state: &AppIconState, view: &View<AppIconState>) -> LayerTr
         // ))
         // .border_corner_radius((BorderRadius::new_single(20.0), None))
         .content(Some(draw_picture))
-        .on_pointer_move(move |x, y| {
-            let val = layer.with_state(|state| *state.get::<i32>("notification").unwrap_or(&0));
+        .on_pointer_in(move |layer: Layer, x, _y| {
+            println!("pointer in");
+            let val = layer.with_state(|state| state.get::<i32>("notification").unwrap_or(0));
+            layer.with_mut_state(|state| state.insert("notification", x as i32));
+            view1.render(&layer);
+        })
+        .on_pointer_out(move |layer: Layer, x, _y| {
+            println!("pointer out");
+            let val = layer.with_state(|state| state.get::<i32>("notification").unwrap_or(0));
             layer.with_mut_state(|state| state.insert("notification", x as i32));
             // println!("({}) {}", index, val);
-            view.render(&layer);
+            view2.render(&layer);
         })
         .build()
         .unwrap()
@@ -155,11 +161,11 @@ pub fn view_app_switcher(state: &AppSwitcherState, _view: &View<AppSwitcherState
     let component_height = 500.0; //icon_size + ICON_PADDING * 2.0 + COMPONENT_PADDING_V * 2.0;
     let background_color = Color::new_rgba(1.0, 1.0, 0.5, 0.4);
     let current_app = state.current_app as f32;
-    let mut app_name = "".to_string();
-    if !state.apps.is_empty() {
-        app_name = state.apps[state.current_app].clone();
-    }
-    let draw_container = move |canvas: &mut skia::Canvas, _w: f32, h: f32| {
+    // let mut app_name = "".to_string();
+    // if !state.apps.is_empty() {
+    //     app_name = state.apps[state.current_app].clone();
+    // }
+    let _draw_container = move |canvas: &mut skia::Canvas, _w: f32, h: f32| {
         let color = skia::Color4f::new(0.0, 0.0, 0.0, 0.4);
         let paint = skia::Paint::new(color, None);
 
@@ -198,8 +204,8 @@ pub fn view_app_switcher(state: &AppSwitcherState, _view: &View<AppSwitcherState
         .key("apps_switcher")
         .size((
             Size {
-                width: taffy::Dimension::Points(component_width),
-                height: taffy::Dimension::Points(component_height),
+                width: taffy::Dimension::Length(component_width),
+                height: taffy::Dimension::Length(component_height),
             },
             Some(Transition {
                 duration: 1.0,
@@ -215,6 +221,9 @@ pub fn view_app_switcher(state: &AppSwitcherState, _view: &View<AppSwitcherState
             None,
         ))
         // .content(Some(draw_container))
+        .shadow_color(Color::new_rgba(0.0, 0.0, 0.0, 0.3))
+        .shadow_offset(((0.0, -10.0).into(), None))
+        .shadow_radius((20.0, None))
         .border_corner_radius((BorderRadius::new_single(50.0), None))
         .border_width((10.0, None))
         .layout_style(taffy::Style {
@@ -230,7 +239,7 @@ pub fn view_app_switcher(state: &AppSwitcherState, _view: &View<AppSwitcherState
             .size((
                 Size {
                     width: taffy::Dimension::Auto,
-                    height: taffy::Dimension::Points(component_height),
+                    height: taffy::Dimension::Length(component_height),
                 },
                 Some(Transition {
                     duration: 2.0,

@@ -118,6 +118,21 @@ impl<S: Hash + Clone> View<S> {
             self.render(&layer);
         }
     }
+    pub fn layer_by_id(&self, id: &str) -> Option<Layer> {
+        let viewlayer_node_map = self.viewlayer_node_map.read().unwrap();
+        viewlayer_node_map
+            .get(id)
+            .map(|v| v.front().unwrap())
+            .and_then(|node| {
+                if let Some(root) = &*self.layer.read().unwrap() {
+                    if let Some(node) = root.engine.scene_get_node(*node) {
+                        let scene_node = node.get();
+                        return Some(scene_node.layer.clone());
+                    }
+                }
+                None
+            })
+    }
 }
 
 pub trait ViewRenderFunction<S: Hash + Clone>:

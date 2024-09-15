@@ -127,6 +127,18 @@ impl BuildLayerTree for Layer {
         if let Some(on_pointer_move) = viewlayer_tree.on_pointer_move.clone() {
             scene_layer.add_on_pointer_move(on_pointer_move);
         }
+        if let Some(on_pointer_in) = viewlayer_tree.on_pointer_in.clone() {
+            scene_layer.add_on_pointer_in(on_pointer_in);
+        }
+        if let Some(on_pointer_out) = viewlayer_tree.on_pointer_out.clone() {
+            scene_layer.add_on_pointer_out(on_pointer_out);
+        }
+        if let Some(on_pointer_press) = viewlayer_tree.on_pointer_press.clone() {
+            scene_layer.add_on_pointer_press(on_pointer_press);
+        }
+        if let Some(on_pointer_release) = viewlayer_tree.on_pointer_release.clone() {
+            scene_layer.add_on_pointer_release(on_pointer_release);
+        }
 
         // Children
         let layer_id = scene_layer.id();
@@ -215,8 +227,8 @@ impl BuildLayerTree for Layer {
                 };
                 // let transition = scene_layer.layer.set_size(
                 //     Size {
-                //         width: taffy::Dimension::Points(0.0),
-                //         height: taffy::Dimension::Points(0.0),
+                //         width: taffy::Dimension::Length(0.0),
+                //         height: taffy::Dimension::Length(0.0),
                 //     },
                 //     Some(Transition {
                 //         duration: 0.5,

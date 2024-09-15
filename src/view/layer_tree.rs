@@ -77,7 +77,16 @@ pub struct LayerTree {
 
     #[builder(setter(custom))]
     pub on_pointer_move: Option<PointerHandlerFunction>,
-
+    #[builder(setter(custom))]
+    pub on_pointer_in: Option<PointerHandlerFunction>,
+    #[builder(setter(custom))]
+    pub on_pointer_out: Option<PointerHandlerFunction>,
+    #[builder(setter(custom))]
+    pub on_pointer_press: Option<PointerHandlerFunction>,
+    #[builder(setter(custom))]
+    pub on_pointer_release: Option<PointerHandlerFunction>,
+    
+    
     /// The children of the layer tree are elements that can render a layertree
     #[builder(setter(custom))]
     pub children: Option<Vec<Arc<dyn RenderLayerTree>>>,
@@ -115,6 +124,38 @@ impl LayerTreeBuilder {
     ) -> &mut Self {
         let on_pointer_move = Some(on_pointer_move.into());
         self.on_pointer_move = Some(on_pointer_move);
+        self
+    }
+    pub fn on_pointer_in<F: Into<PointerHandlerFunction>>(
+        &mut self,
+        on_pointer_in: F,
+    ) -> &mut Self {
+        let on_pointer_in = Some(on_pointer_in.into());
+        self.on_pointer_in = Some(on_pointer_in);
+        self
+    }
+    pub fn on_pointer_out<F: Into<PointerHandlerFunction>>(
+        &mut self,
+        on_pointer_out: F,
+    ) -> &mut Self {
+        let on_pointer_out = Some(on_pointer_out.into());
+        self.on_pointer_out = Some(on_pointer_out);
+        self
+    }
+    pub fn on_pointer_press<F: Into<PointerHandlerFunction>>(
+        &mut self,
+        on_pointer_press: F,
+    ) -> &mut Self {
+        let on_pointer_press = Some(on_pointer_press.into());
+        self.on_pointer_press = Some(on_pointer_press);
+        self
+    }
+    pub fn on_pointer_release<F: Into<PointerHandlerFunction>>(
+        &mut self,
+        on_pointer_release: F,
+    ) -> &mut Self {
+        let on_pointer_release = Some(on_pointer_release.into());
+        self.on_pointer_release = Some(on_pointer_release);
         self
     }
 }
