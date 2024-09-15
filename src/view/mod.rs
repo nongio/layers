@@ -13,7 +13,7 @@ use crate::prelude::*;
 pub use build_layer_tree::*;
 pub use layer_tree::*;
 
-/// A View<S> is a struct to support the creation of complex hierarchies of layers
+/// A View\<S\> is a struct to support the creation of complex hierarchies of layers
 /// that can be rendered by the engine. It is a wrapper around a state S that can be
 /// updated and a render function that generates a LayerTree from the state.
 /// The view keeps track of the last state and only updates the layertree if the state
