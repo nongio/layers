@@ -15,6 +15,7 @@ use taffy::{prelude::NodeId, style::Display};
 
 use crate::engine::node::RenderableFlags;
 use crate::engine::{animation::*, storage::TreeStorageId};
+use crate::engine::{command::*, PointerEventType};
 use crate::engine::{Engine, NodeRef, TransactionRef};
 
 use crate::types::*;
@@ -227,13 +228,88 @@ impl Layer {
         let handler = handler.into();
         let id = self.id();
         if let Some(id) = id {
-            let handler_id = self.engine.add_pointer_handler(id, handler);
+            let handler_id = self
+                .engine
+                .add_pointer_handler(id, PointerEventType::Move, handler);
             return Some(handler_id);
         }
         None
     }
-
     pub fn remove_on_pointer_move(&self, handler_id: Option<usize>) {
+        if let Some(id) = self.id() {
+            let handler_id = handler_id.unwrap();
+            self.engine.remove_pointer_handler(id, handler_id);
+        }
+    }
+    pub fn add_on_pointer_in<F: Into<PointerHandlerFunction>>(&self, handler: F) -> Option<usize> {
+        let handler = handler.into();
+        let id = self.id();
+        if let Some(id) = id {
+            let handler_id = self
+                .engine
+                .add_pointer_handler(id, PointerEventType::In, handler);
+            return Some(handler_id);
+        }
+        None
+    }
+    pub fn remove_on_pointer_in(&self, handler_id: Option<usize>) {
+        if let Some(id) = self.id() {
+            let handler_id = handler_id.unwrap();
+            self.engine.remove_pointer_handler(id, handler_id);
+        }
+    }
+    pub fn add_on_pointer_out<F: Into<PointerHandlerFunction>>(&self, handler: F) -> Option<usize> {
+        let handler = handler.into();
+        let id = self.id();
+        if let Some(id) = id {
+            let handler_id = self
+                .engine
+                .add_pointer_handler(id, PointerEventType::Out, handler);
+            return Some(handler_id);
+        }
+        None
+    }
+    pub fn remove_on_pointer_out(&self, handler_id: Option<usize>) {
+        if let Some(id) = self.id() {
+            let handler_id = handler_id.unwrap();
+            self.engine.remove_pointer_handler(id, handler_id);
+        }
+    }
+    pub fn add_on_pointer_press<F: Into<PointerHandlerFunction>>(
+        &self,
+        handler: F,
+    ) -> Option<usize> {
+        let handler = handler.into();
+        let id = self.id();
+        if let Some(id) = id {
+            let handler_id = self
+                .engine
+                .add_pointer_handler(id, PointerEventType::Down, handler);
+            return Some(handler_id);
+        }
+        None
+    }
+    pub fn remove_on_pointer_press(&self, handler_id: Option<usize>) {
+        if let Some(id) = self.id() {
+            let handler_id = handler_id.unwrap();
+            self.engine.remove_pointer_handler(id, handler_id);
+        }
+    }
+    pub fn add_on_pointer_release<F: Into<PointerHandlerFunction>>(
+        &self,
+        handler: F,
+    ) -> Option<usize> {
+        let handler = handler.into();
+        let id = self.id();
+        if let Some(id) = id {
+            let handler_id = self
+                .engine
+                .add_pointer_handler(id, PointerEventType::Up, handler);
+            return Some(handler_id);
+        }
+        None
+    }
+    pub fn remove_on_pointer_release(&self, handler_id: Option<usize>) {
         if let Some(id) = self.id() {
             let handler_id = handler_id.unwrap();
             self.engine.remove_pointer_handler(id, handler_id);
