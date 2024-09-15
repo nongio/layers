@@ -4,9 +4,9 @@
 //! The scene is a tree of renderable nodes (implementing the `Renderable` trait).
 //! The tree is stored in a memory arena using IndexTree, which allow fast read/write and thread safe parallel iterations.
 
-use std::sync::{Arc, RwLock};
 use indextree::Arena;
-use taffy::prelude::Node;
+use std::sync::{Arc, RwLock};
+use taffy::prelude::NodeId as TaffyNode;
 
 use crate::prelude::{Layer, Point};
 
@@ -71,7 +71,7 @@ impl Scene {
         self.nodes.get(id)
     }
 
-    pub fn add<R: Into<Layer>>(&self, renderable: R, layout: Node) -> NodeRef {
+    pub fn add<R: Into<Layer>>(&self, renderable: R, layout: TaffyNode) -> NodeRef {
         let renderable: Layer = renderable.into();
         let node = SceneNode::with_renderable_and_layout(renderable, layout);
         self.insert_node(&node, None)
@@ -80,7 +80,7 @@ impl Scene {
         &self,
         parent: Option<NodeRef>,
         renderable: R,
-        layout: Node,
+        layout: TaffyNode,
     ) -> NodeRef {
         let renderable: Layer = renderable.into();
         let node = SceneNode::with_renderable_and_layout(renderable, layout);
@@ -91,14 +91,14 @@ impl Scene {
         self.nodes.remove_at(&id);
     }
 
-    pub(crate) fn with_arena<T>(&self, f: impl FnOnce(&Arena<SceneNode>) -> T) -> T{
+    pub(crate) fn with_arena<T>(&self, f: impl FnOnce(&Arena<SceneNode>) -> T) -> T {
         let arena_guard = self.nodes.data();
         let arena_guard = arena_guard.read();
         let arena = &*arena_guard.unwrap();
         f(arena)
     }
 
-    pub(crate) fn with_arena_mut<T>(&self, f: impl FnOnce(&mut Arena<SceneNode>) -> T) -> T{
+    pub(crate) fn with_arena_mut<T>(&self, f: impl FnOnce(&mut Arena<SceneNode>) -> T) -> T {
         let arena_guard = self.nodes.data();
         let arena_guard = arena_guard.write();
         let arena = &mut *arena_guard.unwrap();

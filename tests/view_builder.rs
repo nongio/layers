@@ -1,8 +1,6 @@
 use std::collections::HashMap;
 
-use layers::{
-    api::layer, drawing::scene::debug_scene, layer_trees, layer_trees_opt, prelude::*, types::Size,
-};
+use layers::{drawing::scene::debug_scene, layer_trees, layer_trees_opt, prelude::*, types::Size};
 
 pub fn render_one_child_view(state: &bool, view: &View<bool>) -> LayerTree {
     LayerTreeBuilder::default()
@@ -10,8 +8,8 @@ pub fn render_one_child_view(state: &bool, view: &View<bool>) -> LayerTree {
         .position((Point { x: 0.0, y: 0.0 }, None))
         .size((
             Size {
-                width: taffy::Dimension::Points(50.0),
-                height: taffy::Dimension::Points(50.0),
+                width: taffy::Dimension::Length(50.0),
+                height: taffy::Dimension::Length(50.0),
             },
             None,
         ))
@@ -21,8 +19,8 @@ pub fn render_one_child_view(state: &bool, view: &View<bool>) -> LayerTree {
                     .position((Point { x: 0.0, y: 0.0 }, None))
                     .size((
                         Size {
-                            width: taffy::Dimension::Points(50.0),
-                            height: taffy::Dimension::Points(50.0),
+                            width: taffy::Dimension::Length(50.0),
+                            height: taffy::Dimension::Length(50.0),
                         },
                         None,
                     ))
@@ -53,8 +51,8 @@ pub fn render_main_view(state: &bool, view: &View<bool>) -> LayerTree {
         ))
         .size((
             Size {
-                width: taffy::Dimension::Points(50.0),
-                height: taffy::Dimension::Points(50.0),
+                width: taffy::Dimension::Length(50.0),
+                height: taffy::Dimension::Length(50.0),
             },
             None,
         ))
@@ -68,8 +66,8 @@ pub fn render_main_view(state: &bool, view: &View<bool>) -> LayerTree {
                 .position((Point { x: 0.0, y: 0.0 }, None))
                 .size((
                     Size {
-                        width: taffy::Dimension::Points(50.0),
-                        height: taffy::Dimension::Points(50.0),
+                        width: taffy::Dimension::Length(50.0),
+                        height: taffy::Dimension::Length(50.0),
                     },
                     None,
                 ))

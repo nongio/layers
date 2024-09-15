@@ -4,7 +4,6 @@ pub use layers::taffy;
 use layers::{
     prelude::{LayerTree, LayerTreeBuilder},
     skia::{self, BlurStyle, ClipOp, MaskFilter},
-    taffy::geometry::Point,
 };
 
 #[derive(Default, Debug, Hash)]
@@ -81,7 +80,7 @@ pub fn popup_menu_item_view(state: &String, selected: bool) -> LayerTree {
 
         let text_y = h / 2.0 - paragraph.height() / 2.0;
         let text_x = text_padding_left;
-        let bounding_box =
+        let _bounding_box =
             skia::Rect::from_xywh(text_x, text_y, paragraph.max_width(), paragraph.height());
         let mut paint =
             layers::skia::Paint::new(layers::skia::Color4f::new(0.0, 0.0, 0.0, 1.0), None);
@@ -94,8 +93,8 @@ pub fn popup_menu_item_view(state: &String, selected: bool) -> LayerTree {
     LayerTreeBuilder::default()
         .key(format!("popup_menu_item_{}", state))
         .size(layers::types::Size {
-            width: taffy::style::Dimension::Points(350.0),
-            height: taffy::style::Dimension::Points(height),
+            width: taffy::style::Dimension::Length(350.0),
+            height: taffy::style::Dimension::Length(height),
         })
         .background_color(layers::prelude::PaintColor::Solid { color: bg_color })
         .border_corner_radius(layers::types::BorderRadius::new_single(10.0))
@@ -125,10 +124,10 @@ pub fn popup_menu_view(state: &PopupMenuState) -> LayerTree {
             align_items: Some(taffy::style::AlignItems::Center),
             flex_direction: taffy::style::FlexDirection::Column,
             padding: taffy::geometry::Rect {
-                left: taffy::style::LengthPercentage::Points(10.0),
-                right: taffy::style::LengthPercentage::Points(10.0),
-                top: taffy::style::LengthPercentage::Points(10.0),
-                bottom: taffy::style::LengthPercentage::Points(10.0),
+                left: taffy::style::LengthPercentage::Length(10.0),
+                right: taffy::style::LengthPercentage::Length(10.0),
+                top: taffy::style::LengthPercentage::Length(10.0),
+                bottom: taffy::style::LengthPercentage::Length(10.0),
             },
             ..Default::default()
         })

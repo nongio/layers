@@ -287,16 +287,16 @@ impl Interpolate for Dimension {
         match (self, other) {
             (Dimension::Auto, Dimension::Auto) => Dimension::Auto,
             (Dimension::Auto, Dimension::Percent(p)) => Dimension::Percent(*p),
-            (Dimension::Auto, Dimension::Points(p)) => Dimension::Points(*p),
+            (Dimension::Auto, Dimension::Length(p)) => Dimension::Length(*p),
             (Dimension::Percent(_p1), Dimension::Auto) => Dimension::Auto,
             (Dimension::Percent(p1), Dimension::Percent(p2)) => {
                 Dimension::Percent(p1.interpolate(p2, f))
             }
-            (Dimension::Percent(_p1), Dimension::Points(p2)) => Dimension::Points(*p2),
-            (Dimension::Points(_p1), Dimension::Auto) => Dimension::Auto,
-            (Dimension::Points(_p1), Dimension::Percent(p2)) => Dimension::Percent(*p2),
-            (Dimension::Points(p1), Dimension::Points(p2)) => {
-                Dimension::Points(p1.interpolate(p2, f))
+            (Dimension::Percent(_p1), Dimension::Length(p2)) => Dimension::Length(*p2),
+            (Dimension::Length(_p1), Dimension::Auto) => Dimension::Auto,
+            (Dimension::Length(_p1), Dimension::Percent(p2)) => Dimension::Percent(*p2),
+            (Dimension::Length(p1), Dimension::Length(p2)) => {
+                Dimension::Length(p1.interpolate(p2, f))
             }
         }
     }
