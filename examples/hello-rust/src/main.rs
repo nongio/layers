@@ -144,11 +144,11 @@ fn main() {
         justify_content: Some(taffy::JustifyContent::Center),
         align_items: Some(taffy::AlignItems::FlexStart),
         align_content: Some(taffy::AlignContent::FlexStart),
-        gap: taffy::points(2.0),
+        gap: taffy::length(2.0),
 
         size: layers::taffy::prelude::Size {
-            width: taffy::points(600.0),
-            height: taffy::points(500.0),
+            width: taffy::length(600.0),
+            height: taffy::length(500.0),
         },
         ..Default::default()
     });
@@ -179,8 +179,8 @@ fn main() {
         layer.set_layout_style(taffy::Style {
             // flex_grow: 0.0,
             size: taffy::Size {
-                width: taffy::points(50.0),
-                height: taffy::points(50.0),
+                width: taffy::length(50.0),
+                height: taffy::length(50.0),
             },
 
             ..Default::default()
