@@ -8,15 +8,17 @@
 //! - The *render* step uses the displaylist to generate a texture of the node
 //! - The *compose* step generates the final image using the textures
 
-pub mod animation;
-pub mod command;
 mod draw_to_picture;
-pub mod node;
-pub mod pointer;
-pub mod rendering;
-pub mod scene;
 mod stages;
-pub mod storage;
+
+pub(crate) mod command;
+pub(crate) mod rendering;
+pub(crate) mod storage;
+
+pub(crate) mod scene;
+
+pub mod animation;
+pub mod node;
 
 use indextree::NodeId;
 use node::ContainsPoint;
@@ -59,18 +61,14 @@ pub trait Command {
 }
 
 pub trait SyncCommand: Command + Sync + Send + std::fmt::Debug {}
-/// A trait for objects that contain a transition.
-pub trait WithTransition {
-    // fn transition(&self) -> Option<Transition<Easing>>;
-}
 
 /// A group trait for commands that may contain an animation.
-pub trait CommandWithAnimation: SyncCommand {
+trait CommandWithAnimation: SyncCommand {
     fn animation(&self) -> Option<Animation>;
 }
 
 #[derive(Clone, Debug)]
-pub struct AnimatedNodeChange {
+struct AnimatedNodeChange {
     pub change: Arc<dyn SyncCommand>,
     animation_id: Option<AnimationRef>,
     node_id: NodeRef,
@@ -82,7 +80,7 @@ pub struct AnimatedNodeChange {
 /// the progres can not be used to determine if the animation is finished
 /// because the animation could be reversed or looped
 #[derive(Clone)]
-pub struct AnimationState {
+struct AnimationState {
     pub(crate) animation: Animation,
     pub(crate) progress: f32,
     pub(crate) is_running: bool,
@@ -97,7 +95,7 @@ pub enum TransactionEventType {
     Finish,
 }
 #[derive(Clone)]
-pub struct TransitionCallbacks {
+struct TransitionCallbacks {
     pub on_start: Vec<FnTransactionCallback>,
     pub on_finish: Vec<FnTransactionCallback>,
     pub on_update: Vec<FnTransactionCallback>,

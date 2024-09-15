@@ -4,7 +4,7 @@ use crate::prelude::BorderRadius;
 use skia_safe::{Canvas, Matrix};
 
 /// A trait for objects that can be drawn to a canvas.
-pub trait Drawable {
+pub(crate) trait Drawable {
     /// Draws the entity on the canvas.
     fn draw(&self, canvas: &Canvas) -> skia_safe::Rect;
     /// Returns the area that this drawable occupies.

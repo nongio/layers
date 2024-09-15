@@ -25,6 +25,7 @@ pub fn draw_scene(canvas: &Canvas, scene: &Scene, root_id: NodeRef) {
         render_node_tree(root_id, &arena, canvas, 1.0);
     }
 }
+
 pub fn node_tree_list(
     node_ref: NodeRef,
     arena: &Arena<SceneNode>,
@@ -76,6 +77,7 @@ pub fn node_tree_list_visible<'a>(
     }
     visible_nodes
 }
+
 pub fn render_node_tree(
     node_ref: NodeRef,
     arena: &Arena<SceneNode>,
@@ -199,7 +201,7 @@ pub fn debug_scene(scene: &Scene, root_id: NodeRef) {
     }
 }
 
-pub fn debug_node_tree(
+fn debug_node_tree(
     node_ref: NodeRef,
     arena: &Arena<SceneNode>,
     context_opacity: f32,
