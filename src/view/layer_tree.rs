@@ -85,8 +85,7 @@ pub struct LayerTree {
     pub on_pointer_press: Option<PointerHandlerFunction>,
     #[builder(setter(custom))]
     pub on_pointer_release: Option<PointerHandlerFunction>,
-    
-    
+
     /// The children of the layer tree are elements that can render a layertree
     #[builder(setter(custom))]
     pub children: Option<Vec<Arc<dyn RenderLayerTree>>>,
