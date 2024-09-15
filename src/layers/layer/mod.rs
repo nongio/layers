@@ -22,7 +22,7 @@ use crate::types::*;
 
 #[derive(Clone)]
 pub struct Layer {
-    pub engine: Arc<Engine>,
+    pub(crate) engine: Arc<Engine>,
     pub(crate) id: Arc<RwLock<Option<NodeRef>>>,
     pub(crate) key: Arc<RwLock<String>>,
     pub(crate) hidden: Arc<AtomicBool>,
@@ -33,7 +33,7 @@ pub struct Layer {
 }
 
 impl Layer {
-    pub fn with_engine(engine: Arc<Engine>) -> Self {
+    pub(crate) fn with_engine(engine: Arc<Engine>) -> Self {
         let id = Arc::new(RwLock::new(None));
         let key = Arc::new(RwLock::new(String::new()));
         let model = Arc::new(ModelLayer::default());

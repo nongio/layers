@@ -151,16 +151,16 @@ pub(crate) enum PointerEventType {
     Up,
 }
 
-pub struct Engine {
-    pub scene: Arc<Scene>,
+pub(crate) struct Engine {
+    pub(crate) scene: Arc<Scene>,
     scene_root: RwLock<Option<NodeRef>>,
     transactions: FlatStorage<AnimatedNodeChange>,
     animations: FlatStorage<AnimationState>,
-    pub timestamp: RwLock<Timestamp>,
+    pub(crate) timestamp: RwLock<Timestamp>,
     transaction_handlers: FlatStorage<TransitionCallbacks>,
-    pub layout_tree: RwLock<TaffyTree>,
+    pub(crate) layout_tree: RwLock<TaffyTree>,
     layout_root: RwLock<taffy::prelude::NodeId>,
-    pub damage: RwLock<skia_safe::Rect>,
+    pub(crate) damage: RwLock<skia_safe::Rect>,
     // pointer handlers
     pointer_position: RwLock<Point>,
     current_hover_node: RwLock<Option<NodeId>>,
@@ -191,6 +191,41 @@ impl From<NodeRef> for TreeStorageId {
     }
 }
 
+/// Main struct to interact with the engine
+/// ## Usage: Setup a basic scene with a root layer
+/// ```rust
+/// use layers::prelude::*;
+///
+/// let engine = LayersEngine::new(800.0, 600.0);
+/// let layer = engine.new_layer();
+/// let engine = LayersEngine::new(1024.0, 768.0);
+/// let root_layer = engine.new_layer();
+/// root_layer.set_position(Point { x: 0.0, y: 0.0 });
+
+/// root_layer.set_background_color(
+///     PaintColor::Solid {
+///         color: Color::new_rgba255(180, 180, 180, 255),
+///     }
+/// );
+/// root_layer.set_border_corner_radius(10.0, None);
+/// root_layer.set_layout_style(taffy::Style {
+///     position: taffy::Position::Absolute,
+///     display: taffy::Display::Flex,
+///     flex_direction: taffy::FlexDirection::Column,
+///     justify_content: Some(taffy::JustifyContent::Center),
+///     align_items: Some(taffy::AlignItems::Center),
+///     ..Default::default()
+/// });
+/// engine.scene_add_layer(root_layer.clone());
+/// ```
+/// ## Usage: Update the engine
+/// ```rust
+/// use layers::prelude::*;
+///
+/// let engine = LayersEngine::new(800.0, 600.0);
+/// // setup the scene...
+/// engine.update(0.016);
+/// ```
 #[derive(Clone)]
 pub struct LayersEngine {
     pub(crate) engine: Arc<Engine>,
@@ -281,8 +316,14 @@ impl LayersEngine {
         let node = self.scene_get_node(root_id)?;
         Some(node.get().clone())
     }
-    pub fn pointer_move(&self, point: impl Into<Point>, root_id: impl Into<NodeId>) {
+    pub fn pointer_move(&self, point: impl Into<Point>, root_id: impl Into<Option<NodeId>>) {
         self.engine.pointer_move(point, root_id);
+    }
+    pub fn pointer_button_down(&self) {
+        self.engine.pointer_button_down();
+    }
+    pub fn pointer_button_up(&self) {
+        self.engine.pointer_button_up();
     }
 }
 
@@ -714,10 +755,15 @@ impl Engine {
     // fn bubble_up_event(&self, node_id: NodeId, event_type: PointerEventType) {
 
     // }
-    pub fn pointer_move(&self, point: impl Into<Point>, root_id: impl Into<NodeId>) {
+    pub fn pointer_move(&self, point: impl Into<Point>, root_id: impl Into<Option<NodeId>>) {
         let p = point.into();
         *self.pointer_position.write().unwrap() = p;
-        let root_id = root_id.into();
+        let mut root_id = root_id.into();
+        if root_id.is_none() {
+            let root = *self.scene_root.read().unwrap().unwrap();
+            root_id = Some(root);
+        }
+        let root_id = root_id.unwrap();
         let (root_node, children) = self.scene.with_arena(|arena| {
             let root_node = arena.get(root_id).unwrap().get().clone();
             let children: Vec<NodeId> = root_id.reverse_children(arena).collect();

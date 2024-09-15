@@ -1,4 +1,7 @@
 ## !! WIP in progress project !!
+
+(documentation)[https://nongio.github.io/layers/layers/]
+
 ## Layers
 Layers is a rendering engine for animated user interfaces. It uses a scene graph to render the nodes in retained mode, optmising the most common UI interpolations (opacity, 2d transformations, blending).
 Nodes of the scene graph are graphical layers like text or simple shapes like rectangles but can also be external textures. Nodes have animatable properties that accepts changes and schedule them in the engine to be executed. Using this Command pattern, changes to the nodes have a consistent api between immediate changes and animated changes.
@@ -43,3 +46,39 @@ and then run ninja:
 ninja -c build
 ```
 the executable will be in the `build/` folder.
+
+## Usage
+
+## Usage: Setup a basic scene with a root layer
+```rust
+use layers::prelude::*;
+let engine = LayersEngine::new(800.0, 600.0);
+let layer = engine.new_layer();
+let engine = LayersEngine::new(1024.0, 768.0);
+let root_layer = engine.new_layer();
+root_layer.set_position(Point { x: 0.0, y: 0.0 });
+root_layer.set_background_color(
+    PaintColor::Solid {
+        color: Color::new_rgba255(180, 180, 180, 255),
+    }
+);
+root_layer.set_border_corner_radius(10.0, None);
+root_layer.set_layout_style(taffy::Style {
+    position: taffy::Position::Absolute,
+    display: taffy::Display::Flex,
+    flex_direction: taffy::FlexDirection::Column,
+    justify_content: Some(taffy::JustifyContent::Center),
+    align_items: Some(taffy::AlignItems::Center),
+    ..Default::default()
+});
+engine.scene_add_layer(root_layer.clone());
+```
+
+## Usage: Update the engine
+
+```rust
+use layers::prelude::*;
+let engine = LayersEngine::new(800.0, 600.0);
+// setup the scene...
+engine.update(0.016);
+```
