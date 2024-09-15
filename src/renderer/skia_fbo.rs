@@ -11,18 +11,15 @@ use skia_safe::{
 };
 use std::cell::Cell;
 
+use crate::engine::{
+    node::{DrawCacheManagement, SceneNode},
+    scene::Scene,
+    NodeRef,
+};
 use crate::{
     drawing::scene::{render_node, DrawScene},
     layers::layer::render_layer,
     prelude::render_node_tree,
-};
-use crate::{
-    engine::{
-        node::{DrawCacheManagement, SceneNode},
-        scene::Scene,
-        NodeRef,
-    },
-    prelude::Drawable,
 };
 
 #[derive(Clone)]
