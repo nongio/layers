@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["FlatStorage","TreeStorage"],"type":["FlatStorageData","FlatStorageId","TreeStorageData","TreeStorageId","TreeStorageNode"]};
