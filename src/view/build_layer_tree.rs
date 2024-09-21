@@ -68,7 +68,7 @@ impl BuildLayerTree for Layer {
     ) {
         let scene_layer = self.clone();
 
-        if viewlayer_tree.key.len() > 0 {
+        if !viewlayer_tree.key.is_empty() {
             scene_layer.set_key(viewlayer_tree.key.clone());
         }
 

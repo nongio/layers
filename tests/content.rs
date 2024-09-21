@@ -1,7 +1,6 @@
-use layers::engine::LayersEngine;
 use layers::prelude::Layer;
 // use layers::types::Point;
-use layers::{drawing::scene::DrawScene, types::Size};
+use layers::types::Size;
 
 pub fn setup_layer(layer: &Layer) {
     layer.set_size(Size::points(100.0, 100.0), None);

@@ -105,7 +105,7 @@ pub fn build_a_view() {
     engine.scene_add_layer(layer.clone());
 
     let initial = false;
-    let mut view = View::new("test_view", initial, render_one_child_view);
+    let view = View::new("test_view", initial, render_one_child_view);
     view.mount_layer(layer);
 
     engine.update(0.016);
@@ -160,7 +160,7 @@ pub fn nested_views() {
     engine.scene_add_layer(layer.clone());
 
     let initial = false;
-    let mut view = View::new("parent_view", initial, render_main_view);
+    let view = View::new("parent_view", initial, render_main_view);
     view.mount_layer(layer);
 
     engine.update(0.016);
