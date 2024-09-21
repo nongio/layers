@@ -26,6 +26,7 @@ pub struct Layer {
     pub(crate) id: Arc<RwLock<Option<NodeRef>>>,
     pub(crate) key: Arc<RwLock<String>>,
     pub(crate) hidden: Arc<AtomicBool>,
+    pub(crate) pointer_events: Arc<AtomicBool>,
     pub(crate) layout_node_id: NodeId,
     pub(crate) model: Arc<ModelLayer>,
     pub(crate) image_cache: Arc<AtomicBool>,
@@ -53,6 +54,7 @@ impl Layer {
             model,
             layout_node_id: layout,
             hidden: Arc::new(AtomicBool::new(false)),
+            pointer_events: Arc::new(AtomicBool::new(true)),
             image_cache: Arc::new(AtomicBool::new(false)),
             state: Arc::new(RwLock::new(LayerDataProps::new())),
         }
@@ -64,8 +66,10 @@ impl Layer {
         let id = *self.id.read().unwrap();
         id
     }
-    pub fn set_key(&self, key: String) {
-        *self.key.write().unwrap() = key;
+    pub fn set_key(&self, key: impl Into<String>) {
+        let key = key.into();
+        *self.key.write().unwrap() = key.clone();
+        *self.model.key.write().unwrap() = key;
     }
     pub fn key(&self) -> String {
         let key = self.key.read().unwrap();
@@ -111,6 +115,15 @@ impl Layer {
     pub fn hidden(&self) -> bool {
         self.hidden.load(std::sync::atomic::Ordering::Relaxed)
     }
+    pub fn set_pointer_events(&self, pointer_events: bool) {
+        self.pointer_events
+            .store(pointer_events, std::sync::atomic::Ordering::Relaxed);
+    }
+    pub fn pointer_events(&self) -> bool {
+        self.pointer_events
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
     change_model!(position, Point, RenderableFlags::NEEDS_LAYOUT);
     change_model!(scale, Point, RenderableFlags::NEEDS_LAYOUT);
     change_model!(rotation, Point3d, RenderableFlags::NEEDS_LAYOUT);

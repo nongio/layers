@@ -68,7 +68,9 @@ impl BuildLayerTree for Layer {
     ) {
         let scene_layer = self.clone();
 
-        scene_layer.set_key(viewlayer_tree.key.clone());
+        if viewlayer_tree.key.len() > 0 {
+            scene_layer.set_key(viewlayer_tree.key.clone());
+        }
 
         if let Some((position, transition)) = viewlayer_tree.position {
             scene_layer.set_position(position, transition);
@@ -119,6 +121,9 @@ impl BuildLayerTree for Layer {
 
         if let Some(image_cache) = viewlayer_tree.image_cache {
             scene_layer.set_image_cache(image_cache);
+        }
+        if let Some(pointer_events) = viewlayer_tree.pointer_events {
+            scene_layer.set_pointer_events(pointer_events);
         }
 
         // Handlers
