@@ -1,0 +1,641 @@
+body {
+  margin: 0;
+  font-family: 'Inter', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1 {
+  font-size: 14px;
+  margin-left: 10px;
+}
+
+.cols {
+  display: flex;
+  flex-direction: row;
+}
+
+.col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.col.sticky {
+  position: fixed;
+  top: 0;
+  right: 0px;
+  width: 50%;
+  /* Adjust this value as needed */
+}
+
+.layer {
+  border: 1px solid #000000;
+  padding: 6px 8px;
+  border-radius: 10px;
+  background-color: #fff;
+  margin: 4px 6px;
+  cursor: pointer;
+}
+
+
+.layer .expand {
+  display: inline-block;
+  margin-right: 5px;
+  cursor: pointer;
+}
+
+.layer .name {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 400;
+  user-select: none;
+  margin-bottom: 5px;
+  margin-right: 10px;
+  letter-spacing: 0.1px;
+  ;
+}
+
+.layer.highlight>.name {
+  font-weight: 700;
+}
+
+.layer .highlight {
+  cursor: pointer;
+}
+
+.layer .attrs {
+  margin-left: 10px;
+  padding-left: 10px;
+  border-left: 1px solid #e5e5e5;
+}
+
+
+.layer .children {
+  /* padding: 5px 10px; */
+  /* background: rgba(0.5, 0.5, 0.5, 0.1); */
+  /* margin-left: 2px; */
+  /* border: 1px solid #777; */
+  /* border-radius: 10px; */
+  /* background-color: rgba(0, 0, 0, 0.1); */
+}
+
+.layer-details {
+  font-weight: 400;
+  border: 1px solid #000000;
+  margin-top: 15px;
+  margin-right: 10px;
+  border-radius: 10px;
+  padding: 20px 10px;
+  background-color: #e0e0e0;
+}
+
+.layer-details .name {
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.preview {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  width: 300px;
+  height: 300px;
+  border: 1px solid #000000;
+  background-color: #ffffff;
+}
+
+.layer-preview {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 200px;
+  height: 200px;
+}
+
+.attrs {
+  padding: 0px 0px;
+  height: 200px;
+  overflow-y: scroll;
+  margin: 10px 0px;
+  border: 1px solid #333;
+}
+
+.attr-field {
+  border: 1px solid #848484;
+  padding: 5px 10px;
+  background-color: #fff;
+  font-size: 12px;
+}
+
+:root {
+  --color-1: #ffffff;
+  --color-2: #BAE1FF;
+  --color-3: #FFDFBA;
+  --color-4: #BAFFC9;
+  --color-5: #D4A5A5;
+  --color-6: #FFFFBA;
+  --color-7: #D4D4A5;
+  --color-8: #A5D4A5;
+  --color-9: #D4A5D4;
+  --color-10: #D4C5A5;
+  --color-11: #A5D4D4;
+  --color-12: #A5A5D4;
+  --color-13: #D4A5B3;
+  --color-14: #FFDFBA;
+  --color-15: #FFFFBA;
+  --color-16: #FFB3BA;
+  --color-17: #BAFFC9;
+  --color-18: #BAE1FF;
+  --color-19: #D4A5A5;
+  --color-20: #D4C5A5;
+  --color-21: #D4D4A5;
+  --color-22: #A5D4A5;
+  --color-23: #A5D4D4;
+  --color-24: #A5A5D4;
+  --color-25: #D4A5D4;
+  --color-26: #D4A5B3;
+  --color-27: #FFB3BA;
+  --color-28: #FFDFBA;
+  --color-29: #FFFFBA;
+  --color-30: #BAFFC9;
+  --color-31: #BAE1FF;
+  --color-32: #D4A5A5;
+  --color-33: #D4C5A5;
+  --color-34: #D4D4A5;
+  --color-35: #A5D4A5;
+  --color-36: #A5D4D4;
+  --color-37: #A5A5D4;
+  --color-38: #D4A5D4;
+  --color-39: #D4A5B3;
+  --color-40: #FFB3BA;
+  --color-41: #FFDFBA;
+  --color-42: #FFFFBA;
+  --color-43: #BAFFC9;
+  --color-44: #BAE1FF;
+  --color-45: #D4A5A5;
+  --color-46: #D4C5A5;
+  --color-47: #D4D4A5;
+  --color-48: #A5D4A5;
+  --color-49: #A5D4D4;
+  --color-50: #A5A5D4;
+  --color-51: #D4A5D4;
+  --color-52: #D4A5B3;
+  --color-53: #FFB3BA;
+  --color-54: #FFDFBA;
+  --color-55: #FFFFBA;
+  --color-56: #BAFFC9;
+  --color-57: #BAE1FF;
+  --color-58: #D4A5A5;
+  --color-59: #D4C5A5;
+  --color-60: #D4D4A5;
+  --color-61: #A5D4A5;
+  --color-62: #A5D4D4;
+  --color-63: #A5A5D4;
+  --color-64: #D4A5D4;
+  --color-65: #D4A5B3;
+  --color-66: #FFB3BA;
+  --color-67: #FFDFBA;
+  --color-68: #FFFFBA;
+  --color-69: #BAFFC9;
+  --color-70: #BAE1FF;
+  --color-71: #D4A5A5;
+  --color-72: #D4C5A5;
+  --color-73: #D4D4A5;
+  --color-74: #A5D4A5;
+  --color-75: #A5D4D4;
+  --color-76: #A5A5D4;
+  --color-77: #D4A5D4;
+  --color-78: #D4A5B3;
+  --color-79: #FFB3BA;
+  --color-80: #FFDFBA;
+  --color-81: #FFFFBA;
+  --color-82: #BAFFC9;
+  --color-83: #BAE1FF;
+  --color-84: #D4A5A5;
+  --color-85: #D4C5A5;
+  --color-86: #D4D4A5;
+  --color-87: #A5D4A5;
+  --color-88: #A5D4D4;
+  --color-89: #A5A5D4;
+  --color-90: #D4A5D4;
+  --color-91: #D4A5B3;
+  --color-92: #FFB3BA;
+  --color-93: #FFDFBA;
+  --color-94: #FFFFBA;
+  --color-95: #BAFFC9;
+  --color-96: #BAE1FF;
+  --color-97: #D4A5A5;
+  --color-98: #D4C5A5;
+  --color-99: #D4D4A5;
+  --color-100: #A5D4A5;
+}
+
+/* Darken the background color on hover */
+.layer:not(:has(.layer:hover)):hover {
+  filter: brightness(90%);
+}
+
+.layer-1 {
+  background-color: var(--color-1);
+}
+
+.layer-2 {
+  background-color: var(--color-2);
+}
+
+.layer-3 {
+  background-color: var(--color-3);
+}
+
+.layer-4 {
+  background-color: var(--color-4);
+}
+
+.layer-5 {
+  background-color: var(--color-5);
+}
+
+.layer-6 {
+  background-color: var(--color-6);
+}
+
+.layer-7 {
+  background-color: var(--color-7);
+}
+
+.layer-8 {
+  background-color: var(--color-8);
+}
+
+.layer-9 {
+  background-color: var(--color-9);
+}
+
+.layer-10 {
+  background-color: var(--color-10);
+}
+
+.layer-11 {
+  background-color: var(--color-11);
+}
+
+.layer-12 {
+  background-color: var(--color-12);
+}
+
+.layer-13 {
+  background-color: var(--color-13);
+}
+
+.layer-14 {
+  background-color: var(--color-14);
+}
+
+.layer-15 {
+  background-color: var(--color-15);
+}
+
+.layer-16 {
+  background-color: var(--color-16);
+}
+
+.layer-17 {
+  background-color: var(--color-17);
+}
+
+.layer-18 {
+  background-color: var(--color-18);
+}
+
+.layer-19 {
+  background-color: var(--color-19);
+}
+
+.layer-20 {
+  background-color: var(--color-20);
+}
+
+.layer-21 {
+  background-color: var(--color-21);
+}
+
+.layer-22 {
+  background-color: var(--color-22);
+}
+
+.layer-23 {
+  background-color: var(--color-23);
+}
+
+.layer-24 {
+  background-color: var(--color-24);
+}
+
+.layer-25 {
+  background-color: var(--color-25);
+}
+
+.layer-26 {
+  background-color: var(--color-26);
+}
+
+.layer-27 {
+  background-color: var(--color-27);
+}
+
+.layer-28 {
+  background-color: var(--color-28);
+}
+
+.layer-29 {
+  background-color: var(--color-29);
+}
+
+.layer-30 {
+  background-color: var(--color-30);
+}
+
+.layer-31 {
+  background-color: var(--color-31);
+}
+
+.layer-32 {
+  background-color: var(--color-32);
+}
+
+.layer-33 {
+  background-color: var(--color-33);
+}
+
+.layer-34 {
+  background-color: var(--color-34);
+}
+
+.layer-35 {
+  background-color: var(--color-35);
+}
+
+.layer-36 {
+  background-color: var(--color-36);
+}
+
+.layer-37 {
+  background-color: var(--color-37);
+}
+
+.layer-38 {
+  background-color: var(--color-38);
+}
+
+.layer-39 {
+  background-color: var(--color-39);
+}
+
+.layer-40 {
+  background-color: var(--color-40);
+}
+
+.layer-41 {
+  background-color: var(--color-41);
+}
+
+.layer-42 {
+  background-color: var(--color-42);
+}
+
+.layer-43 {
+  background-color: var(--color-43);
+}
+
+.layer-44 {
+  background-color: var(--color-44);
+}
+
+.layer-45 {
+  background-color: var(--color-45);
+}
+
+.layer-46 {
+  background-color: var(--color-46);
+}
+
+.layer-47 {
+  background-color: var(--color-47);
+}
+
+.layer-48 {
+  background-color: var(--color-48);
+}
+
+.layer-49 {
+  background-color: var(--color-49);
+}
+
+.layer-50 {
+  background-color: var(--color-50);
+}
+
+.layer-51 {
+  background-color: var(--color-51);
+}
+
+.layer-52 {
+  background-color: var(--color-52);
+}
+
+.layer-53 {
+  background-color: var(--color-53);
+}
+
+.layer-54 {
+  background-color: var(--color-54);
+}
+
+.layer-55 {
+  background-color: var(--color-55);
+}
+
+.layer-56 {
+  background-color: var(--color-56);
+}
+
+.layer-57 {
+  background-color: var(--color-57);
+}
+
+.layer-58 {
+  background-color: var(--color-58);
+}
+
+.layer-59 {
+  background-color: var(--color-59);
+}
+
+.layer-60 {
+  background-color: var(--color-60);
+}
+
+.layer-61 {
+  background-color: var(--color-61);
+}
+
+.layer-62 {
+  background-color: var(--color-62);
+}
+
+.layer-63 {
+  background-color: var(--color-63);
+}
+
+.layer-64 {
+  background-color: var(--color-64);
+}
+
+.layer-65 {
+  background-color: var(--color-65);
+}
+
+.layer-66 {
+  background-color: var(--color-66);
+}
+
+.layer-67 {
+  background-color: var(--color-67);
+}
+
+.layer-68 {
+  background-color: var(--color-68);
+}
+
+.layer-69 {
+  background-color: var(--color-69);
+}
+
+.layer-70 {
+  background-color: var(--color-70);
+}
+
+.layer-71 {
+  background-color: var(--color-71);
+}
+
+.layer-72 {
+  background-color: var(--color-72);
+}
+
+.layer-73 {
+  background-color: var(--color-73);
+}
+
+.layer-74 {
+  background-color: var(--color-74);
+}
+
+.layer-75 {
+  background-color: var(--color-75);
+}
+
+.layer-76 {
+  background-color: var(--color-76);
+}
+
+.layer-77 {
+  background-color: var(--color-77);
+}
+
+.layer-78 {
+  background-color: var(--color-78);
+}
+
+.layer-79 {
+  background-color: var(--color-79);
+}
+
+.layer-80 {
+  background-color: var(--color-80);
+}
+
+.layer-81 {
+  background-color: var(--color-81);
+}
+
+.layer-82 {
+  background-color: var(--color-82);
+}
+
+.layer-83 {
+  background-color: var(--color-83);
+}
+
+.layer-84 {
+  background-color: var(--color-84);
+}
+
+.layer-85 {
+  background-color: var(--color-85);
+}
+
+.layer-86 {
+  background-color: var(--color-86);
+}
+
+.layer-87 {
+  background-color: var(--color-87);
+}
+
+.layer-88 {
+  background-color: var(--color-88);
+}
+
+.layer-89 {
+  background-color: var(--color-89);
+}
+
+.layer-90 {
+  background-color: var(--color-90);
+}
+
+.layer-91 {
+  background-color: var(--color-91);
+}
+
+.layer-92 {
+  background-color: var(--color-92);
+}
+
+.layer-93 {
+  background-color: var(--color-93);
+}
+
+.layer-94 {
+  background-color: var(--color-94);
+}
+
+.layer-95 {
+  background-color: var(--color-95);
+}
+
+.layer-96 {
+  background-color: var(--color-96);
+}
+
+.layer-97 {
+  background-color: var(--color-97);
+}
+
+.layer-98 {
+  background-color: var(--color-98);
+}
+
+.layer-99 {
+  background-color: var(--color-99);
+}
+
+.layer-100 {
+  background-color: var(--color-100);
+}
