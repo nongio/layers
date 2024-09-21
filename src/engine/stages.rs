@@ -4,6 +4,9 @@ use indextree::NodeId;
 use rayon::prelude::{IntoParallelRefIterator, IntoParallelRefMutIterator, ParallelIterator};
 use taffy::{prelude::Size, style_helpers::length, TaffyTree};
 
+#[cfg(feature = "debugger")]
+use layers_debug_server::send_debugger_message;
+
 use crate::layers::layer::render_layer::RenderLayer;
 
 use super::{
@@ -285,4 +288,35 @@ pub(crate) fn cleanup_nodes(engine: &Engine) -> skia_safe::Rect {
         engine.scene_remove_layer(id);
     }
     damage
+}
+
+#[cfg(feature = "debugger")]
+pub fn send_debugger(scene: Arc<crate::engine::scene::Scene>, scene_root: NodeRef) {
+    let s = scene.clone();
+    s.with_arena(|arena| {
+        let render_layers: std::collections::HashMap<
+            usize,
+            (usize, RenderLayer, Vec<usize>, NodeId),
+        > = arena
+            .iter()
+            .filter_map(|node| {
+                if node.is_removed() {
+                    return None;
+                }
+                let scene_node = node.get();
+                let node_id = arena.get_node_id(node).unwrap();
+                let children = node_id
+                    .children(arena)
+                    .map(|child| child.into())
+                    .collect::<Vec<usize>>();
+                let render_layer = scene_node.render_layer.read().unwrap().clone();
+                let id: usize = node_id.into();
+                Some((id, (id, render_layer, children, node_id)))
+            })
+            .collect();
+        let root: usize = scene_root.0.into();
+
+        let data = (root, render_layers);
+        send_debugger_message(serde_json::to_string(&data).unwrap());
+    });
 }

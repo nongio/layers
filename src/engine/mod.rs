@@ -20,11 +20,22 @@ pub(crate) mod scene;
 pub mod animation;
 pub mod node;
 
+use crate::{
+    layers::layer::{model::PointerHandlerFunction, state::LayerDataProps, Layer, ModelLayer},
+    types::Point,
+};
+use core::fmt;
 use indextree::NodeId;
 use node::ContainsPoint;
+
+#[cfg(feature = "debugger")]
+use stages::send_debugger;
+
 use taffy::prelude::*;
 
-use core::fmt;
+#[cfg(feature = "debugger")]
+use layers_debug_server::DebugServerError;
+
 use std::{
     collections::HashMap,
     hash::Hash,
@@ -33,11 +44,6 @@ use std::{
         atomic::{AtomicBool, AtomicUsize},
         Arc, RwLock,
     },
-};
-
-use crate::{
-    layers::layer::{model::PointerHandlerFunction, state::LayerDataProps, Layer, ModelLayer},
-    types::Point,
 };
 
 use self::{
@@ -135,13 +141,25 @@ impl PointerCallback {
             on_up: HashMap::new(),
         }
     }
+    pub fn handlers(
+        &self,
+        event_type: &PointerEventType,
+    ) -> std::collections::hash_map::Values<'_, usize, PointerHandlerFunction> {
+        match event_type {
+            PointerEventType::Down => self.on_down.values(),
+            PointerEventType::Up => self.on_up.values(),
+            PointerEventType::In => self.on_in.values(),
+            PointerEventType::Out => self.on_out.values(),
+            PointerEventType::Move => self.on_move.values(),
+        }
+    }
 }
 impl Default for PointerCallback {
     fn default() -> Self {
         Self::new()
     }
 }
-pub(crate) enum PointerEventType {
+pub enum PointerEventType {
     Move,
     In,
     Out,
@@ -235,6 +253,11 @@ impl LayersEngine {
             engine: Engine::create(width, height),
         }
     }
+    #[cfg(feature = "debugger")]
+    pub fn start_debugger(&self) {
+        layers_debug_server::start_debugger_server(self.engine.clone());
+    }
+
     pub fn set_scene_size(&self, width: f32, height: f32) {
         self.engine.scene.set_size(width, height);
     }
@@ -257,6 +280,7 @@ impl LayersEngine {
             key: Arc::new(RwLock::new(String::new())),
             layout_node_id: layout,
             hidden: Arc::new(AtomicBool::new(false)),
+            pointer_events: Arc::new(AtomicBool::new(true)),
             image_cache: Arc::new(AtomicBool::new(false)),
             state: Arc::new(RwLock::new(LayerDataProps::default())),
         }
@@ -372,7 +396,6 @@ impl Engine {
         let new_engine = Self::new(width, height);
         Arc::new(new_engine)
     }
-
     pub fn scene_set_root(&self, layer: impl Into<Layer>) -> NodeRef {
         let layer: Layer = layer.into();
         let layout = layer.layout_node_id;
@@ -599,6 +622,13 @@ impl Engine {
         let removed_damage = cleanup_nodes(self);
         damage.join(removed_damage);
         *self.damage.write().unwrap() = damage;
+
+        #[cfg(feature = "debugger")]
+        {
+            let scene_root = self.scene_root.read().unwrap().unwrap();
+            send_debugger(self.scene.clone(), scene_root);
+        }
+
         needs_draw
     }
 
@@ -750,14 +780,36 @@ impl Engine {
                 .insert_with_id(pointer_callback, node_id);
         }
     }
-    // fn bubble_up_event(&self, node_id: NodeId, event_type: PointerEventType) {
+    fn bubble_up_event(&self, node_id: NodeId, event_type: &PointerEventType) {
+        if let Some(node) = self.scene.get_node(node_id) {
+            let layer = node.get().layer.clone();
 
-    // }
-    pub fn pointer_move(&self, point: impl Into<Point>, root_id: impl Into<Option<NodeId>>) {
+            if let Some(pointer_handler) = self.pointer_handlers.get(&node_id.into()) {
+                let pos = *self.pointer_position.read().unwrap();
+                // trigger node's own handlers
+                for handler in pointer_handler.handlers(event_type) {
+                    handler.0(layer.clone(), pos.x, pos.y);
+                }
+            }
+            if let Some(parent_id) = node.parent() {
+                self.bubble_up_event(parent_id, event_type);
+            }
+        }
+    }
+    /// Sends pointer move event to the engine
+    pub fn pointer_move(
+        &self,
+        point: impl Into<Point>,
+        root_id: impl Into<Option<NodeId>>,
+    ) -> bool {
         let p = point.into();
-        *self.pointer_position.write().unwrap() = p;
         let mut root_id = root_id.into();
+
         if root_id.is_none() {
+            // update engine pointer position
+            *self.pointer_position.write().unwrap() = p;
+
+            // get scene root node
             let root = *self.scene_root.read().unwrap().unwrap();
             root_id = Some(root);
         }
@@ -768,26 +820,21 @@ impl Engine {
             (root_node, children)
         });
 
-        // let root_node = arena.get(root_id).unwrap().get();
-        for node_id in children {
-            // if let Some(scene_node) = self.scene.get_node(node_id) {
-            // let scene_node = scene_node.get();
-            // if scene_node.contains(p) {
-            self.pointer_move(p, node_id);
-            // }
-            // }
-        }
-        let pointer_hover_node = root_node
+        let root_node_hover = root_node
             .pointer_hover
             .load(std::sync::atomic::Ordering::SeqCst);
 
-        if root_node.contains(p) {
+        let mut hover_self = false;
+        let hidden = root_node.layer.hidden();
+        let pointer_events = root_node.layer.pointer_events();
+        if !hidden && pointer_events && root_node.contains(p) {
+            hover_self = true;
             root_node
                 .pointer_hover
                 .store(true, std::sync::atomic::Ordering::SeqCst);
             self.current_hover_node.write().unwrap().replace(root_id);
 
-            if !pointer_hover_node {
+            if !root_node_hover {
                 if let Some(pointer_handler) = self.pointer_handlers.get(&root_id.into()) {
                     for handler in pointer_handler.on_in.values() {
                         handler.0(root_node.layer.clone(), p.x, p.y);
@@ -799,7 +846,7 @@ impl Engine {
                     handler.0(root_node.layer.clone(), p.x, p.y);
                 }
             }
-        } else if pointer_hover_node {
+        } else if root_node_hover {
             root_node
                 .pointer_hover
                 .store(false, std::sync::atomic::Ordering::SeqCst);
@@ -810,30 +857,35 @@ impl Engine {
                 }
             }
         }
-    }
-    pub fn pointer_button_down(&self) {
-        if let Some(node) = *self.current_hover_node.read().unwrap() {
-            if let Some(pointer_handler) = self.pointer_handlers.get(&node.into()) {
-                let pos = *self.pointer_position.read().unwrap();
-                if let Some(node) = self.scene.get_node(node) {
-                    let layer = node.get().layer.clone();
-                    // let parent = node.parent();
-                    for handler in pointer_handler.on_down.values() {
-                        handler.0(layer.clone(), pos.x, pos.y);
+        let mut hover_children = false;
+        if !hidden {
+            for node_id in children {
+                if !hover_children {
+                    if self.pointer_move(p, node_id) {
+                        hover_children = true;
+                    }
+                } else {
+                    let node = self.scene.get_node(node_id).unwrap().get().clone();
+                    if node.change_hover(false) {
+                        if let Some(pointer_handler) = self.pointer_handlers.get(&node_id.into()) {
+                            for handler in pointer_handler.on_out.values() {
+                                handler.0(root_node.layer.clone(), p.x, p.y);
+                            }
+                        }
                     }
                 }
             }
         }
+        hover_self || hover_children
+    }
+    pub fn pointer_button_down(&self) {
+        if let Some(node) = *self.current_hover_node.read().unwrap() {
+            self.bubble_up_event(node, &PointerEventType::Down);
+        }
     }
     pub fn pointer_button_up(&self) {
         if let Some(node) = *self.current_hover_node.read().unwrap() {
-            if let Some(pointer_handler) = self.pointer_handlers.get(&node.into()) {
-                let pos = *self.pointer_position.read().unwrap();
-                let layer = self.scene.get_node(node).unwrap().get().layer.clone();
-                for handler in pointer_handler.on_up.values() {
-                    handler.0(layer.clone(), pos.x, pos.y);
-                }
-            }
+            self.bubble_up_event(node, &PointerEventType::Up);
         }
     }
 }
@@ -843,5 +895,42 @@ impl Deref for NodeRef {
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+#[cfg(feature = "debugger")]
+impl layers_debug_server::DebugServer for Engine {
+    fn handle_message(&self, result: std::result::Result<String, DebugServerError>) {
+        match result {
+            Ok(msg) => {
+                if let Ok((command, node_id)) =
+                    serde_json::from_str::<(String, NodeId)>(msg.as_str())
+                {
+                    match command.as_str() {
+                        "highlight" => {
+                            self.scene.with_arena(|arena| {
+                                let node = arena.get(node_id).unwrap();
+                                let scene_node: &crate::engine::node::SceneNode = node.get();
+                                scene_node.set_debug_info(true);
+                            });
+                        }
+                        "unhighlight" => {
+                            self.scene.with_arena(|arena| {
+                                let node = arena.get(node_id).unwrap();
+                                let scene_node: &crate::engine::node::SceneNode = node.get();
+                                scene_node.set_debug_info(false);
+                            });
+                        }
+
+                        _ => {
+                            println!("Unknown command: {}", command);
+                        }
+                    }
+                }
+            }
+            Err(_) => {
+                eprintln!("error receiving websocket msg");
+            }
+        }
     }
 }

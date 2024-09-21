@@ -13,7 +13,7 @@ use crate::types::Size;
 pub trait RenderLayerTree {
     fn key(&self) -> String;
     fn mount_layer(&self, layer: Layer);
-    fn set_path(&mut self, path: String);
+
     fn render_layertree(&self) -> LayerTree;
 }
 /// A layertree renders itself into a layertree
@@ -22,9 +22,7 @@ impl RenderLayerTree for LayerTree {
         self.key.clone()
     }
     fn mount_layer(&self, _layer: Layer) {}
-    fn set_path(&mut self, path: String) {
-        self.path = path;
-    }
+
     fn render_layertree(&self) -> LayerTree {
         self.clone()
     }
@@ -37,7 +35,6 @@ impl RenderLayerTree for LayerTree {
 #[derive(Clone, Builder, Default)]
 #[builder(public, default)]
 pub struct LayerTree {
-    path: String,
     #[builder(setter(into, strip_option))]
     pub key: String,
     #[builder(setter(into, strip_option), default)]
@@ -74,7 +71,8 @@ pub struct LayerTree {
     pub opacity: Option<(f32, Option<Transition>)>,
     #[builder(setter(into, strip_option), default)]
     pub image_cache: Option<bool>,
-
+    #[builder(setter(into, strip_option), default)]
+    pub pointer_events: Option<bool>,
     #[builder(setter(custom))]
     pub on_pointer_move: Option<PointerHandlerFunction>,
     #[builder(setter(custom))]
@@ -251,9 +249,6 @@ impl Into<Vec<LayerTree>> for LayerTree {
 impl RenderLayerTree for Arc<dyn RenderLayerTree> {
     fn key(&self) -> String {
         self.as_ref().key()
-    }
-    fn set_path(&mut self, _path: String) {
-        // self.as_ref().set_path(path);
     }
     fn mount_layer(&self, layer: Layer) {
         self.as_ref().mount_layer(layer);

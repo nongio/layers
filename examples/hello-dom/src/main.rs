@@ -148,6 +148,8 @@ async fn main() {
     );
     app_switcher.mount_layer(layer);
 
+    engine.start_debugger();
+
     events_loop.run(move |event, _, control_flow| {
         let now = std::time::Instant::now();
         let _dt = (now - last_instant).as_secs_f32();
@@ -197,27 +199,12 @@ async fn main() {
                             glutin::event::VirtualKeyCode::Space => {
                                 println!("update");
                                 let dt = 0.016;
-                                let needs_redraw = engine.update(dt);
-                                if needs_redraw {
-                                    env.windowed_context.window().request_redraw();
-                                    // draw_frame = -1;
-                                }
+                                engine.update(dt);
+
+                                env.windowed_context.window().request_redraw();
+
                                 println!("state {:?}", state);
                                 app_switcher.update_state(&state);
-
-                                // if let Some(root) = engine.scene_root() {
-                                //     let skia_renderer = skia_renderer.get_mut();
-                                //     // let damage_rect = engine.damage();
-
-                                //     let mut surface = skia_renderer.surface();
-
-                                //     let canvas = surface.canvas();
-
-                                //     let save_point = canvas.save();
-                                //     skia_renderer.draw_scene(engine.scene(), root, None);
-
-                                //     canvas.restore_to_count(save_point);
-                                // }
                             }
                             glutin::event::VirtualKeyCode::Tab => {
                                 if input.state == glutin::event::ElementState::Released {

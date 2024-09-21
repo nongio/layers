@@ -1,11 +1,12 @@
 //! Types used in the library to describe Layers properties
 use oklab::{oklab_to_srgb, srgb_to_oklab, Oklab, RGB};
+use serde::Serialize;
 use skia_safe::Color4f;
 use skia_safe::Vector;
 
 pub use skia_safe::{Image, Matrix, Picture, M44, V3};
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Serialize, Debug)]
 #[repr(C)]
 pub struct Color {
     pub l: f32,
@@ -14,20 +15,27 @@ pub struct Color {
     pub alpha: f32,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Serialize, Debug)]
 #[repr(C)]
 pub struct Point {
     pub x: f32,
     pub y: f32,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Serialize, Debug)]
 #[repr(C)]
 pub struct Size {
     pub width: taffy::style::Dimension,
     pub height: taffy::style::Dimension,
 }
-
+impl From<skia_safe::Size> for Size {
+    fn from(size: skia_safe::Size) -> Self {
+        Size {
+            width: taffy::style::Dimension::Length(size.width),
+            height: taffy::style::Dimension::Length(size.height),
+        }
+    }
+}
 impl Size {
     pub fn points(width: f32, height: f32) -> Self {
         Size {
@@ -76,7 +84,7 @@ pub struct Point3d {
     pub y: f32,
     pub z: f32,
 }
-#[derive(Clone, Copy, Default, Debug)]
+#[derive(Clone, Copy, Default, Serialize, Debug)]
 #[repr(C)]
 pub struct Rectangle {
     pub x: f32,
@@ -85,12 +93,23 @@ pub struct Rectangle {
     pub height: f32,
 }
 
-#[derive(Clone, Debug)]
+impl From<skia_safe::Rect> for Rectangle {
+    fn from(rect: skia_safe::Rect) -> Self {
+        Rectangle {
+            x: rect.left,
+            y: rect.top,
+            width: rect.width(),
+            height: rect.height(),
+        }
+    }
+}
+
+#[derive(Clone, Serialize, Debug)]
 pub struct GradientLinear {
     pub colors: Vec<Color>,
     pub points: Vec<f32>,
 }
-#[derive(Clone, Debug)]
+#[derive(Clone, Serialize, Debug)]
 pub struct GradientRadial {
     pub center: Point,
     pub radius: f32,
@@ -99,7 +118,7 @@ pub struct GradientRadial {
 }
 
 #[allow(dead_code)]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 #[repr(C)]
 pub enum PaintColor {
     Solid { color: Color },
@@ -114,7 +133,7 @@ impl Default for PaintColor {
     }
 }
 #[allow(dead_code)]
-#[derive(Clone, Copy, Default, Debug)]
+#[derive(Clone, Copy, Default, Serialize, Debug)]
 #[repr(u32)]
 pub enum BorderStyle {
     #[default]
@@ -123,7 +142,7 @@ pub enum BorderStyle {
     Dashed,
 }
 
-#[derive(Clone, Copy, Debug, diff::Diff)]
+#[derive(Clone, Copy, Debug, diff::Diff, Serialize)]
 #[repr(C)]
 pub struct BorderRadius {
     pub top_left: f32,
@@ -224,7 +243,7 @@ impl Default for Point {
     }
 }
 
-#[derive(Clone, Copy, Default, Debug)]
+#[derive(Clone, Copy, Default, Serialize, Debug)]
 #[repr(u32)]
 pub enum BlendMode {
     #[default]

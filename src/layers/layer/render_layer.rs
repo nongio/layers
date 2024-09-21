@@ -1,10 +1,11 @@
-use crate::types::{BlendMode, Color, Point, *};
-
 use super::model::{ContentDrawFunction, ModelLayer};
+use crate::types::{BlendMode, Color, Point, *};
+use serde::{ser::SerializeStruct, Serialize};
 
 #[derive(Clone, Debug)]
 #[repr(C)]
 pub struct RenderLayer {
+    pub key: String,
     pub bounds: skia_safe::Rect,
     pub rbounds: skia_safe::RRect,
     pub transformed_bounds: skia_safe::Rect,
@@ -36,6 +37,7 @@ impl RenderLayer {
         layout: &taffy::tree::Layout,
         matrix: Option<&M44>,
     ) {
+        let key = model.key.read().unwrap().clone();
         let layout_position = layout.location;
         let model_position = model.position.value();
         let position = Point {
@@ -127,6 +129,7 @@ impl RenderLayer {
                 self.content_draw_func = Some(draw_func.clone());
             }
         }
+        self.key = key;
         self.size = size;
         self.background_color = background_color;
         self.border_color = border_color;
@@ -153,6 +156,7 @@ impl RenderLayer {
         layout: &taffy::tree::Layout,
         matrix: Option<&M44>,
     ) -> Self {
+        let key = model.key.read().unwrap().clone();
         let layout_position = layout.location;
         let model_position = model.position.value();
         let position = Point {
@@ -243,6 +247,7 @@ impl RenderLayer {
         let blend_mode = model.blend_mode.value();
         let content_damage = skia_safe::Rect::default();
         Self {
+            key,
             size,
             background_color,
             border_color,
@@ -271,6 +276,7 @@ impl RenderLayer {
 impl Default for RenderLayer {
     fn default() -> Self {
         Self {
+            key: "".to_string(),
             background_color: PaintColor::Solid {
                 color: Color::new_rgba(0.0, 0.0, 0.0, 0.0),
             },
@@ -297,5 +303,42 @@ impl Default for RenderLayer {
             rbounds: skia_safe::RRect::default(),
             transformed_rbounds: skia_safe::RRect::default(),
         }
+    }
+}
+
+impl Serialize for RenderLayer {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut seq = serializer.serialize_struct("RenderLayer", 15)?;
+        // let mut seq = serializer.serialize_seq(Some(15))?;
+        // seq.serialize_element(&Rectangle::from(self.rbounds))?;
+        // seq.serialize_element(&self.transformed_rbounds.into())?;
+        seq.serialize_field("key", &self.key)?;
+        seq.serialize_field("bounds", &Rectangle::from(self.bounds))?;
+        seq.serialize_field(
+            "transformed_bounds",
+            &Rectangle::from(self.transformed_bounds),
+        )?;
+        seq.serialize_field(
+            "bounds_with_children",
+            &Rectangle::from(self.bounds_with_children),
+        )?;
+        seq.serialize_field("background_color", &self.background_color)?;
+        seq.serialize_field("border_color", &self.border_color)?;
+        seq.serialize_field("border_width", &self.border_width)?;
+        seq.serialize_field("border_style", &self.border_style)?;
+        seq.serialize_field("border_corner_radius", &self.border_corner_radius)?;
+        seq.serialize_field("size", &crate::types::Size::from(self.size))?;
+        seq.serialize_field("shadow_offset", &self.shadow_offset)?;
+        seq.serialize_field("shadow_radius", &self.shadow_radius)?;
+        seq.serialize_field("shadow_color", &self.shadow_color)?;
+        seq.serialize_field("shadow_spread", &self.shadow_spread)?;
+        // seq.serialize_element(&self.transform)?;
+        seq.serialize_field("blend_mode", &self.blend_mode)?;
+        seq.serialize_field("opacity", &self.opacity)?;
+        // seq.serialize_element(&self.content)?;
+        seq.end()
     }
 }

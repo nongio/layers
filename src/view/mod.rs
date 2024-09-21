@@ -23,7 +23,6 @@ pub use layer_tree::*;
 #[derive(Clone)]
 pub struct View<S: Hash + Clone> {
     key: String,
-    path: String,
     viewlayer_node_map: Arc<RwLock<HashMap<String, VecDeque<NodeRef>>>>,
     render_function: Arc<dyn ViewRenderFunction<S>>,
     last_state: Arc<RwLock<Option<u64>>>,
@@ -36,7 +35,6 @@ impl<S: Hash + Clone> View<S> {
         let render_function: Arc<dyn ViewRenderFunction<S>> = Arc::new(render_function);
         Self {
             key: key.to_string(),
-            path: "".to_string(),
             layer: Arc::new(RwLock::new(None)),
             render_function,
             last_state: Arc::new(RwLock::new(None)),
@@ -158,9 +156,6 @@ impl<S: Hash + Clone> std::fmt::Debug for View<S> {
 impl<S: Hash + Clone> RenderLayerTree for View<S> {
     fn key(&self) -> String {
         self.key.clone()
-    }
-    fn set_path(&mut self, path: String) {
-        self.path = path;
     }
     fn mount_layer(&self, layer: Layer) {
         self.set_layer(layer);

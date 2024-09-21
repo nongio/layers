@@ -179,7 +179,7 @@ pub fn pointer_remove() {
 
 /// it should not call the pointer move handler
 #[test]
-pub fn pointer_in_nested_parent() {
+pub fn pointer_in_out_nested_parent() {
     let engine = LayersEngine::new(1000.0, 1000.0);
     let layer = engine.new_layer();
     layer.set_size(Size::points(200.0, 200.0), None);
@@ -203,18 +203,22 @@ pub fn pointer_in_nested_parent() {
         *c += 1;
         println!("pointer in!!");
     });
+
     let c = called.clone();
     layer.add_on_pointer_out(move |_, _, _| {
         let mut c = c.write().unwrap();
         *c += 1;
         println!("pointer out!!");
     });
+
     let c = called.clone();
+
     engine.pointer_move((210.0, 210.0), root_id.0);
     {
         let called = called.read().unwrap();
         assert_eq!(*called, 1);
     }
+
     engine.pointer_move((400.0, 400.0), root_id.0);
     {
         let called = called.read().unwrap();

@@ -64,6 +64,7 @@ impl<F: Fn(Layer, f32, f32) + Send + Sync + 'static> From<F> for PointerHandlerF
 }
 
 pub(crate) struct ModelLayer {
+    pub key: RwLock<String>,
     pub display: Attribute<Display>,
     pub anchor_point: Attribute<Point>,
     pub position: Attribute<Point>,
@@ -114,6 +115,7 @@ impl Default for ModelLayer {
         let opacity = Attribute::new(1.0);
         let display = Attribute::new(Display::None);
         Self {
+            key: RwLock::new(String::new()),
             display,
             anchor_point,
             position,
