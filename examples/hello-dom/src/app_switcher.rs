@@ -131,9 +131,6 @@ impl layers::prelude::RenderLayerTree for AppIconView {
     fn key(&self) -> String {
         self.view.key()
     }
-    fn set_path(&mut self, path: String) {
-        self.view.set_path(path);
-    }
     fn mount_layer(&self, layer: Layer) {
         self.view.set_layer(layer);
     }

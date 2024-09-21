@@ -12,7 +12,7 @@ use crate::{
     types::*,
 };
 
-use super::NodeRef;
+use super::{draw_to_picture::DrawDebugInfo, NodeRef};
 use crate::engine::draw_to_picture::DrawToPicture;
 
 pub(crate) mod contains_point;
@@ -179,6 +179,7 @@ pub struct SceneNode {
     pub layout_node_id: TaffyNodeId,
     pub deleted: Arc<AtomicBool>,
     pub(crate) pointer_hover: Arc<AtomicBool>,
+    pub debug_info: Arc<RwLock<Option<DrawDebugInfo>>>,
 }
 
 impl SceneNode {
@@ -199,6 +200,7 @@ impl SceneNode {
             render_layer: Arc::new(RwLock::new(render_layer)),
             deleted: Arc::new(AtomicBool::new(false)),
             pointer_hover: Arc::new(AtomicBool::new(false)),
+            debug_info: Arc::new(RwLock::new(None)),
         }
     }
     pub fn insert_flags(&self, flags: RenderableFlags) {
@@ -238,6 +240,30 @@ impl SceneNode {
     pub fn is_deleted(&self) -> bool {
         self.deleted.load(std::sync::atomic::Ordering::Relaxed)
     }
+    pub(crate) fn change_hover(&self, value: bool) -> bool {
+        let hover = self
+            .pointer_hover
+            .load(std::sync::atomic::Ordering::Relaxed);
+        if hover != value {
+            self.pointer_hover
+                .store(value, std::sync::atomic::Ordering::SeqCst);
+            return true;
+        }
+        false
+    }
+    pub fn set_debug_info(&self, debug_info: bool) {
+        let mut dbg_info = self.debug_info.write().unwrap();
+        if debug_info {
+            let id: usize = self.layer.id().unwrap().0.into();
+            *dbg_info = Some(DrawDebugInfo {
+                info: format!("{}", id),
+            });
+        } else {
+            *dbg_info = None;
+        }
+        self.layer.set_opacity(self.layer.opacity(), None);
+        self.set_need_repaint(true);
+    }
 }
 
 impl DrawCacheManagement for SceneNode {
@@ -266,7 +292,8 @@ impl DrawCacheManagement for SceneNode {
             needs_repaint = true;
         }
         if needs_repaint {
-            let (picture, layer_damage) = render_layer.draw_to_picture();
+            let dbg_info = self.debug_info.read().unwrap().clone();
+            let (picture, layer_damage) = render_layer.draw_to_picture(dbg_info);
             let (layer_damage, _) = render_layer.transform.to_m33().map_rect(layer_damage);
             // println!(
             //     "layer dmg {} {} {} {}",

@@ -18,3 +18,5 @@ Cargo.lock
 examples/hello-rust/assets/
 .vscode/launch.json
 .vscode/settings.json
+
+node_modules/
