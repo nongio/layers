@@ -57,7 +57,8 @@ impl SkiaFboRenderer {
         let mut gr_context: skia_safe::gpu::DirectContext = if let Some(context) = context {
             context.clone()
         } else {
-            skia_safe::gpu::DirectContext::new_gl(None, None).unwrap()
+            let interface = skia_safe::gpu::gl::Interface::new_native().unwrap();
+            skia_safe::gpu::direct_contexts::make_gl(interface, None).unwrap()
         };
         gr_context.reset(None);
         let surface = Surface::from_backend_render_target(
