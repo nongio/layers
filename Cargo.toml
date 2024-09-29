@@ -85,4 +85,5 @@ members = [
     "examples/hello-rust",
     "examples/hello-dom",
     "examples/hello-content",
+    "examples/hello-filters",
 ]

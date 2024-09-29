@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use std::hash::Hash;
 
 use layers::{
@@ -47,8 +48,8 @@ pub fn view_app_icon(state: &AppIconState, view: &View<AppIconState>) -> LayerTr
             skia::Rect::from_xywh(PADDING, PADDING, width, width),
             &paint,
         );
-        let typeface = Typeface::new("HelveticaNeue", FontStyle::normal()).unwrap();
-        let font = Font::new(typeface, 24.0);
+        // let typeface = Typeface::("HelveticaNeue", FontStyle::normal()).unwrap();
+        let font = Font::default();
         let paint = skia::Paint::new(Color4f::new(0.0, 0.0, 0.0, 1.0), None);
 
         let text = format!("i:{} l:{} v:{}", index, id, val);
