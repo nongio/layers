@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use layers::prelude::*;
 use layers::{prelude::timing::TimingFunction, types::Size};
 use std::string::String;
