@@ -98,7 +98,7 @@ impl RenderLayer {
         // let transform = M44::concat(&transform, &rotate_x);
         // let transform = M44::concat(&transform, &rotate_y);
         // let transform = M44::concat(&transform, &rotate_z);
-        // let transform = M44::concat(&transform, &anchor_translate);
+        let transform = M44::concat(&transform, &anchor_translate);
 
         // let matrix = transform.to_m33();
         let (transformed_bounds, _) = transform.to_m33().map_rect(bounds);
