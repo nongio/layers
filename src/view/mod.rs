@@ -55,7 +55,7 @@ impl<S: Hash + Clone> View<S> {
         let view = (self.render_function)(&state, self);
         // view.set_path(format!("{}.{}", self.path.clone(), self.key.clone()));
         let mut viewlayer_node_map = self.viewlayer_node_map.write().unwrap();
-        layer.build_layer_tree(&view, &mut viewlayer_node_map);
+        layer.build_layer_tree_internal(&view, &mut viewlayer_node_map);
     }
     /// Get the state of the view
     pub fn get_state(&self) -> S {

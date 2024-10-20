@@ -53,15 +53,18 @@ fn cache_remove_id(id: &NodeRef, cache_viewlayer: &mut HashMap<String, VecDeque<
 /// it generates and updates the properties of a hierarchy of layers
 /// described by the layertree
 pub trait BuildLayerTree {
-    fn build_layer_tree(
+    fn build_layer_tree_internal(
         &self,
-        tree: &LayerTree,
+        viewlayer_tree: &LayerTree,
         cache_viewlayer: &mut HashMap<String, VecDeque<NodeRef>>,
     );
+    fn build_layer_tree(&self, viewlayer_tree: &LayerTree) {
+        self.build_layer_tree_internal(viewlayer_tree, &mut HashMap::new());
+    }
 }
 
 impl BuildLayerTree for Layer {
-    fn build_layer_tree(
+    fn build_layer_tree_internal(
         &self,
         viewlayer_tree: &LayerTree,
         cache_viewlayer: &mut HashMap<String, VecDeque<NodeRef>>,
@@ -116,7 +119,7 @@ impl BuildLayerTree for Layer {
         }
 
         if let Some(content) = viewlayer_tree.content.clone() {
-            scene_layer.set_draw_content(Some(content));
+            scene_layer.set_draw_content(content);
         }
 
         if let Some(image_cache) = viewlayer_tree.image_cache {
@@ -184,7 +187,7 @@ impl BuildLayerTree for Layer {
                             if child_scene_layer.is_deleted() {
                                 return None;
                             }
-
+                            // we should not need to add the layer back to the parent
                             engine.scene_add_layer(child_scene_layer.layer.clone(), Some(layer_id));
                             Some((child_layer_id, child_scene_layer))
                         })
@@ -206,7 +209,7 @@ impl BuildLayerTree for Layer {
                     let child = child.render_layertree();
                     child_scene_layer
                         .layer
-                        .build_layer_tree(&child, cache_viewlayer);
+                        .build_layer_tree_internal(&child, cache_viewlayer);
                     {
                         // add child to cache
                         let mut nodes =

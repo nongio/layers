@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use layers::{drawing::scene::debug_scene, layer_trees, layer_trees_opt, prelude::*, types::Size};
 
 pub fn render_one_child_view(state: &bool, view: &View<bool>) -> LayerTree {
@@ -56,7 +54,7 @@ pub fn render_main_view(state: &bool, view: &View<bool>) -> LayerTree {
             },
             None,
         ))
-        .on_pointer_move(move |_, arg1, arg2| {
+        .on_pointer_move(move |_, _, _| {
             println!("pointer move!!!!");
             view.update_state(&true);
         })
@@ -87,12 +85,11 @@ pub fn simple_build() {
 
     engine.scene_add_layer(layer.clone());
 
-    let mut cache = HashMap::new();
     let lt = LayerTreeBuilder::default()
         .children(vec![LayerTreeBuilder::default().build().unwrap()])
         .build()
         .unwrap();
-    layer.build_layer_tree(&lt, &mut cache);
+    layer.build_layer_tree(&lt);
 
     debug_scene(engine.scene(), engine.scene_root().unwrap());
 }
@@ -168,7 +165,7 @@ pub fn nested_views() {
 
     debug_scene(engine.scene(), engine.scene_root().unwrap());
     let num_children = layer.children().len();
-    assert!(num_children == 2);
+    assert!(num_children == 3);
 
     println!("--");
     view.update_state(&true);
@@ -186,28 +183,28 @@ pub fn nested_views() {
     debug_scene(engine.scene(), engine.scene_root().unwrap());
 
     let num_children = layer.children().len();
-    assert!(num_children == 2);
+    assert!(num_children == 3);
 }
+
 // #[test]
-// pub fn pointer_move() {
-//     let engine = LayersEngine::new(1000.0, 1000.0);
-//     let layer = engine.new_layer();
+// pub fn layer_tree_from_css() {
+//     // let engine = LayersEngine::new(1000.0, 1000.0);
+//     // let layer = engine.new_layer();
 
-//     engine.scene_add_layer(layer.clone());
+//     // engine.scene_add_layer(layer.clone());
 
-//     let initial = false;
-//     let mut view = View::new("test_view", initial, render_view);
-//     view.mount_layer(layer);
+//     let layer_tree = LayerTreeBuilder::default()
+//         .key("test_layer")
+//         .size(Size::points(0.0, 0.0))
+//         // .scale((2.0, 2.0))
+//         .position(Point::new(200.0, 200.0))
+//         .background_color(Color::new_rgba255(255, 0, 0, 255))
+//         .border_color(Color::new_rgba255(0, 0, 0, 255))
+//         .border_corner_radius(BorderRadius::new_single(50.0))
+//         .border_width((5.0, None))
+//         .image_cache(true)
+//         .build()
+//         .unwrap();
 
-//     engine.update(0.016);
-
-//     // let root_id = engine.scene_root().unwrap();
-//     // engine.pointer_move((0.0, 0.0), root_id.0);
-
-//     engine.update(0.016);
-
-//     debug_scene(engine.scene(), engine.scene_root().unwrap());
-
-//     assert!(view.get_state());
-//     assert_eq!(view.layer.unwrap().render_position().x, 100.0);
+//     println!("{:?}", layer_tree);
 // }
