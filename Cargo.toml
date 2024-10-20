@@ -12,24 +12,25 @@ features = ["default"]
 rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
+taffy = { version = "0.5", features = ["serde"] }
 gl-rs = { package = "gl", version = "0.14.0" }
-foreign-types-shared = "0.1.1"
 indexmap = { version = "1.9.1", features = ["rayon"] }
-indextree = { version = "=4.5.0", features = ["par_iter", "deser"] }
-rayon = "1.5.3"
+indextree = { version = "4.7.2", features = ["par_iter", "deser"] }
+foreign-types-shared = "0.1.1"
+rayon = "1.7.0"
 libm = "0.2.2"
 bitflags = "1.3"
 paste = "1.0"
 enum_dispatch = "0"
 oklab = "=1.0.0"
-taffy = { version = "0.5", features = ["serde"] }
 diff-struct = "0.5.1"
 derive_builder = "0.12.0"
-puffin_http = { version = "0.13", optional = true }
-profiling = { version = "1.0" }
 rand = "0.8.5"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0" }
+puffin_http = { version = "0.13", optional = true }
+profiling = { version = "1.0" }
+bezier_easing = "0.1.1"
 
 [dependencies.skia-safe]
 version = "=0.70"
@@ -56,6 +57,10 @@ features = ["binary-cache", "gl", "metal", "svg", "textlayout", "webp"]
 [dev-dependencies]
 criterion = "0.3"
 paste = "1.0"
+glutin = "0.29"
+winit = "0.28"
+image-compare = "0.4.1"
+image = { version = "0.25", default-features = false, features = ["png"] }
 
 [dependencies.layers_debug]
 path = "packages/debugger_browser"
@@ -71,7 +76,7 @@ export-taffy = []
 profile-with-puffin = ["profiling/profile-with-puffin", "puffin_http"]
 default = ["export-skia", "export-taffy"]
 debugger = ["layers-debug-server"]
-
+debug_cmd = ["layers_debug"]
 
 [[bench]]
 name = "my_benchmark"
