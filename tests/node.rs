@@ -1,9 +1,8 @@
 use layers::{
-    drawing::scene::debug_scene,
     engine::{node::RenderableFlags, LayersEngine},
     skia,
     types::{Point, Size},
-    view::{BuildLayerTree, LayerTreeBuilder, RenderLayerTree},
+    view::{BuildLayerTree, LayerTreeBuilder},
 };
 
 #[test]
@@ -41,7 +40,7 @@ pub fn bounds_with_children() {
     engine.scene_add_layer(wrap.clone());
     engine.scene_add_layer_to(layer.clone(), wrap.clone());
 
-    let draw_shadow = move |canvas: &layers::skia::Canvas, w: f32, h: f32| {
+    let draw_shadow = move |_canvas: &layers::skia::Canvas, w: f32, h: f32| {
         layers::skia::Rect::from_xywh(0.0, 0.0, w, h)
     };
     let tree = LayerTreeBuilder::default()

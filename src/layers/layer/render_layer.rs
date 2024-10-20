@@ -106,7 +106,7 @@ impl RenderLayer {
         // let transform = M44::concat(&transform, &rotate_z);
         local_transform = M44::concat(&local_transform, &anchor_translate);
 
-        let global_transform = M44::concat(&matrix, &local_transform);
+        let global_transform = M44::concat(matrix, &local_transform);
         let (transformed_bounds, _) = global_transform.to_m33().map_rect(bounds);
         let (local_transformed_bounds, _) = local_transform.to_m33().map_rect(bounds);
         let background_color = model.background_color.value();
@@ -230,7 +230,7 @@ impl RenderLayer {
         // let transform = M44::concat(&transform, &anchor_translate);
 
         // let matrix = transform.to_m33();
-        let transform = M44::concat(&matrix, &local_transform);
+        let transform = M44::concat(matrix, &local_transform);
         let (transformed_bounds, _) = transform.to_m33().map_rect(bounds);
         let (local_transformed_bounds, _) = local_transform.to_m33().map_rect(bounds);
         let transformed_rbounds =

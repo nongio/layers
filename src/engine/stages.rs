@@ -44,12 +44,12 @@ pub(crate) fn update_animations(
                     return;
                 }
                 let (animation_progress, time_progress) = animation.value_at(timestamp.0);
-                if *is_started == false {
+                if !(*is_started) {
                     *is_started = true;
                     started_animations.write().unwrap().push(*id);
                 }
                 *progress = animation_progress;
-                *time = time_progress.min(1.0).max(0.0);
+                *time = time_progress.clamp(0.0, 1.0);
                 if time_progress >= 1.0 {
                     *is_running = false;
                     *is_finished = true;
@@ -70,7 +70,7 @@ pub(crate) fn execute_transactions(engine: &Engine) -> (Vec<NodeRef>, Vec<FlatSt
     let transactions_finished = Arc::new(RwLock::new(Vec::<FlatStorageId>::new()));
 
     let needs_redraw = engine.transactions.with_data_mut(|transactions| {
-        let needs_redraw = transactions.len() > 0;
+        let needs_redraw = !transactions.is_empty();
         if needs_redraw {
             let animations = &engine.animations;
 
@@ -81,8 +81,7 @@ pub(crate) fn execute_transactions(engine: &Engine) -> (Vec<NodeRef>, Vec<FlatSt
                     let animation_state = command
                         .animation_id
                         .as_ref()
-                        .map(|id| animations.get(&id.0))
-                        .flatten()
+                        .and_then(|id| animations.get(&id.0))
                         .unwrap_or(AnimationState {
                             animation: Default::default(),
                             progress: 1.0,
@@ -223,9 +222,9 @@ pub(crate) fn update_node(
     if pos_changed && !transformed_bounds.is_empty() && render_layer.premultiplied_opacity > 0.0 {
         let mut last_damage = node.repaint_damage.write().unwrap();
 
-        let ld = last_damage.clone();
+        let ld = *last_damage;
         node_damage.join(ld);
-        node_damage.join(&new_transformed_bounds);
+        node_damage.join(new_transformed_bounds);
 
         *last_damage = new_transformed_bounds;
     }
@@ -309,7 +308,7 @@ pub(crate) fn update_node(
 }
 
 #[profiling::function]
-pub(crate) fn trigger_callbacks(engine: &Engine, started_animations: &Vec<FlatStorageId>) {
+pub(crate) fn trigger_callbacks(engine: &Engine, started_animations: &[FlatStorageId]) {
     let transactions = engine.transactions.data();
     let transactions = transactions.read().unwrap().clone();
     let animations = engine.animations.data();
@@ -322,8 +321,7 @@ pub(crate) fn trigger_callbacks(engine: &Engine, started_animations: &Vec<FlatSt
             let animation_state = command
                 .animation_id
                 .as_ref()
-                .map(|id| animations.get(&id.0).cloned())
-                .flatten()
+                .and_then(|id| animations.get(&id.0).cloned())
                 .unwrap_or(AnimationState {
                     animation: Default::default(),
                     progress: 1.0,
@@ -338,7 +336,7 @@ pub(crate) fn trigger_callbacks(engine: &Engine, started_animations: &Vec<FlatSt
                 .animation_id
                 .map(|a| started_animations.contains(&a.0))
                 .unwrap_or(false);
-            let to_remove = transaction_callbacks(&animation_state, &ch, &node.layer, started);
+            let to_remove = transaction_callbacks(&animation_state, ch, &node.layer, started);
             {
                 engine
                     .transaction_handlers
@@ -380,25 +378,23 @@ fn transaction_callbacks(
                 to_remove.push(tr_callback.clone());
             }
         });
-    } else {
-        if animation_state.is_finished {
-            let callbacks = &handler.on_update;
-            callbacks.iter().for_each(|tr_callback| {
-                let callback = &tr_callback.callback;
-                callback(layer, 1.0);
-                if tr_callback.once {
-                    to_remove.push(tr_callback.clone());
-                }
-            });
-            let callbacks = &handler.on_finish;
-            callbacks.iter().for_each(|tr_callback| {
-                let callback = &tr_callback.callback;
-                if tr_callback.once {
-                    to_remove.push(tr_callback.clone());
-                }
-                callback(layer, 1.0);
-            });
-        }
+    } else if animation_state.is_finished {
+        let callbacks = &handler.on_update;
+        callbacks.iter().for_each(|tr_callback| {
+            let callback = &tr_callback.callback;
+            callback(layer, 1.0);
+            if tr_callback.once {
+                to_remove.push(tr_callback.clone());
+            }
+        });
+        let callbacks = &handler.on_finish;
+        callbacks.iter().for_each(|tr_callback| {
+            let callback = &tr_callback.callback;
+            if tr_callback.once {
+                to_remove.push(tr_callback.clone());
+            }
+            callback(layer, 1.0);
+        });
     }
     to_remove
 }
