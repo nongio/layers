@@ -165,7 +165,7 @@ impl fmt::Debug for LayerTree {
                 .map(|child| child.as_ref().render_layertree())
                 .collect::<Vec<LayerTree>>()
         });
-        f.debug_struct("ViewLayer")
+        f.debug_struct("LayerTree")
             .field("key", &self.key)
             .field("background_color", &self.background_color)
             .field("border_color", &self.border_color)
@@ -206,7 +206,11 @@ impl From<PaintColor> for (PaintColor, Option<Transition>) {
         (val, None)
     }
 }
-
+impl From<Color> for (PaintColor, Option<Transition>) {
+    fn from(val: Color) -> Self {
+        (PaintColor::from(val), None)
+    }
+}
 impl From<Color> for (Color, Option<Transition>) {
     fn from(val: Color) -> Self {
         (val, None)
