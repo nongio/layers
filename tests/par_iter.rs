@@ -2,11 +2,8 @@
 mod tests {
 
     use glutin::{
-        dpi::LogicalSize,
-        event_loop::EventLoop,
-        platform::{run_return::EventLoopExtRunReturn, unix::EventLoopBuilderExtUnix},
-        window::WindowBuilder,
-        GlProfile,
+        dpi::LogicalSize, event_loop::EventLoop, platform::unix::EventLoopBuilderExtUnix,
+        window::WindowBuilder, GlProfile,
     };
     use layers::{
         engine::LayersEngine,
@@ -23,7 +20,7 @@ mod tests {
         let size: LogicalSize<i32> = LogicalSize::new(window_width, window_height);
 
         // let events_loop = EventLoop::;
-        let mut events_loop = glutin::event_loop::EventLoopBuilder::new()
+        let events_loop = glutin::event_loop::EventLoopBuilder::new()
             .with_any_thread(true)
             .build();
 
@@ -88,7 +85,7 @@ mod tests {
 
     #[test]
     pub fn draw_multiple_children() {
-        let (windowed_context, mut events_loop) = initialize_opengl();
+        let (windowed_context, _events_loop) = initialize_opengl();
         let pixel_format = windowed_context.get_pixel_format();
         let size = windowed_context.window().inner_size();
         let sample_count: usize = pixel_format.multisampling.map(|s| s.into()).unwrap_or(0);

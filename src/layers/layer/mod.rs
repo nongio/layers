@@ -510,8 +510,8 @@ impl Hash for Layer {
         self.id().hash(state);
     }
 }
-impl Into<Option<NodeRef>> for Layer {
-    fn into(self) -> Option<NodeRef> {
-        self.id()
+impl From<Layer> for Option<NodeRef> {
+    fn from(val: Layer) -> Self {
+        val.id()
     }
 }

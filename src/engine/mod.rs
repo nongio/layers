@@ -101,9 +101,12 @@ static TRANSACTION_CALLBACK_ID: AtomicUsize = AtomicUsize::new(0);
 fn transaction_callack_id() -> usize {
     TRANSACTION_CALLBACK_ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
 }
+
+type DynCallback = Arc<dyn 'static + Send + Sync + Fn(&Layer, f32)>;
+
 #[derive(Clone)]
 pub struct TransactionCallback {
-    callback: Arc<dyn 'static + Send + Sync + Fn(&Layer, f32)>,
+    callback: DynCallback,
     pub(crate) once: bool,
     pub(crate) id: usize,
 }
@@ -768,7 +771,6 @@ impl Engine {
         // 1.1 Update animations to the current timestamp
         let (started_animations, finished_animations) = update_animations(self, &timestamp);
 
-        drop(timestamp);
         // 1.2 Execute transactions using the updated animations
         let (updated_nodes, finished_transitions, _needs_redraw) = execute_transactions(self);
 
@@ -909,7 +911,6 @@ impl Engine {
         handler: F,
         once: bool,
     ) {
-        let transaction = transaction.into();
         let mut handler = handler.into();
         handler.once = once;
         self.add_transaction_handler(transaction, TransactionEventType::Update, handler);

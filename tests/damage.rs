@@ -25,7 +25,7 @@ mod tests {
         let renderer = SkiaImageRenderer::new(1000, 1000, "damage.png");
         let mut surface = renderer.surface();
         let canvas = surface.canvas();
-        let damage = draw_layer(&canvas, &render_layer);
+        let damage = draw_layer(canvas, &render_layer);
 
         // test empty layer
         assert_eq!(damage, skia_safe::Rect::from_xywh(0.0, 0.0, 0.0, 0.0));
@@ -34,7 +34,7 @@ mod tests {
         layer.set_background_color(Color::new_hex("#ff0000ff"), None);
         engine.update(0.016);
         let render_layer = scene_node.render_layer();
-        let damage = draw_layer(&canvas, &render_layer);
+        let damage = draw_layer(canvas, &render_layer);
 
         assert_eq!(damage, skia_safe::Rect::from_xywh(0.0, 0.0, 100.0, 100.0));
 
@@ -43,7 +43,7 @@ mod tests {
         layer.set_border_width(10.0, None);
         engine.update(0.016);
         let render_layer = scene_node.render_layer();
-        let damage = draw_layer(&canvas, &render_layer);
+        let damage = draw_layer(canvas, &render_layer);
 
         assert_eq!(damage, skia_safe::Rect::from_xywh(-5.0, -5.0, 110.0, 110.0));
 
@@ -54,7 +54,7 @@ mod tests {
         layer.set_shadow_spread(20.0, None);
         engine.update(0.016);
         let render_layer = scene_node.render_layer();
-        let damage = draw_layer(&canvas, &render_layer);
+        let damage = draw_layer(canvas, &render_layer);
 
         assert_eq!(
             damage,
@@ -66,7 +66,7 @@ mod tests {
 
         engine.update(0.016);
         let render_layer = scene_node.render_layer();
-        let damage = draw_layer(&canvas, &render_layer);
+        let damage = draw_layer(canvas, &render_layer);
 
         assert_eq!(
             damage,
@@ -156,7 +156,7 @@ mod tests {
         );
         engine.clear_damage();
 
-        layer2.set_draw_content(draw_func.clone());
+        layer2.set_draw_content(draw_func);
         engine.update(0.016);
         let scene_damage = engine.damage();
 

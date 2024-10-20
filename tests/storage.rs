@@ -29,7 +29,7 @@ pub fn test_tree_storage() {
     assert_eq!(*tree.get(id).unwrap().get(), 1);
 
     let children = tree.with_data(|arena| {
-        id.children(&arena)
+        id.children(arena)
             .map(|child| *arena.get(child).unwrap().get())
             .collect::<Vec<_>>()
     });

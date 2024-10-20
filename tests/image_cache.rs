@@ -2,7 +2,7 @@ use layers::{
     engine::LayersEngine,
     prelude::DrawScene,
     renderer::skia_image::SkiaImageRenderer,
-    types::{BorderRadius, Color, PaintColor, Point, Size},
+    types::{BorderRadius, Color, Size},
 };
 
 #[test]
@@ -40,7 +40,7 @@ pub fn image_cache() {
     // save the image
     {
         let mut renderer = SkiaImageRenderer::new(1000, 1000, "tests/image_cache/render.png");
-        renderer.draw_scene(&engine.scene(), engine.scene_root().unwrap(), None);
+        renderer.draw_scene(engine.scene(), engine.scene_root().unwrap(), None);
         renderer.save();
     }
     let image_base = image::open("tests/image_cache/base.png")
@@ -59,7 +59,7 @@ pub fn image_cache() {
     engine.update(0.01);
     {
         let mut renderer = SkiaImageRenderer::new(1000, 1000, "tests/image_cache/render_image.png");
-        renderer.draw_scene(&engine.scene(), engine.scene_root().unwrap(), None);
+        renderer.draw_scene(engine.scene(), engine.scene_root().unwrap(), None);
         renderer.save();
     }
 
@@ -77,7 +77,7 @@ pub fn image_cache() {
     {
         let mut renderer =
             SkiaImageRenderer::new(1000, 1000, "tests/image_cache/render_image_child.png");
-        renderer.draw_scene(&engine.scene(), engine.scene_root().unwrap(), None);
+        renderer.draw_scene(engine.scene(), engine.scene_root().unwrap(), None);
         renderer.save();
     }
 

@@ -14,6 +14,7 @@ use layers::{
     prelude::{timing::TimingFunction, DrawScene, Layer, Transition},
     types::*,
 };
+#[allow(dead_code)]
 fn criterion_benchmark_update(c: &mut Criterion) {
     let mut group = c.benchmark_group("update_children");
     group.measurement_time(Duration::from_secs(10));
@@ -88,7 +89,7 @@ fn with_gl_context(f: impl FnOnce(&WindowedContext, &EventLoop<()>)) {
 
             let windowed_context = cb.build_windowed(window, &events_loop).unwrap();
 
-            let windowed_context = unsafe { windowed_context.make_current().unwrap() };
+            let windowed_context = windowed_context.make_current().unwrap();
             let pixel_format = windowed_context.get_pixel_format();
 
             println!(
@@ -105,7 +106,7 @@ fn with_gl_context(f: impl FnOnce(&WindowedContext, &EventLoop<()>)) {
         f(win, el);
     }
 }
-
+#[allow(dead_code)]
 fn criterion_benchmark_draw(c: &mut Criterion) {
     let mut group = c.benchmark_group("update_and_draw_children");
     group.measurement_time(Duration::from_secs(20));
@@ -138,7 +139,7 @@ fn criterion_benchmark_draw(c: &mut Criterion) {
 
                 engine.scene_set_root(root.clone());
                 let mut layers = Vec::<Layer>::new();
-                for i in 0..count {
+                for _i in 0..count {
                     let layer = engine.new_layer();
                     layer.set_layout_style(layers::taffy::Style {
                         position: taffy::Position::Absolute,
@@ -228,7 +229,7 @@ fn criterion_benchmark_draw_shadow(c: &mut Criterion) {
 
                 engine.scene_set_root(root.clone());
                 let mut layers = Vec::<Layer>::new();
-                for i in 0..count {
+                for _i in 0..count {
                     let layer = engine.new_layer();
                     layer.set_layout_style(layers::taffy::Style {
                         position: taffy::Position::Absolute,
@@ -244,7 +245,7 @@ fn criterion_benchmark_draw_shadow(c: &mut Criterion) {
                     layer.set_shadow_spread(5.0, None);
                     layer.set_shadow_offset((0.0, 0.0), None);
                     layer.set_image_cache(true);
-                    let i = i as f32;
+                    // let i = i as f32;
                     layer.set_position((0.0, 0.0), None);
                     engine.scene_add_layer(layer.clone());
                     layers.push(layer);

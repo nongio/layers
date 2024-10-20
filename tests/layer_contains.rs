@@ -1,6 +1,4 @@
-use std::f64::consts::PI;
-
-use layers::types::{Point, Point3d};
+use layers::types::Point;
 use layers::{engine::LayersEngine, types::Size};
 
 #[test]

@@ -211,7 +211,7 @@ pub fn pointer_in_out_nested_parent() {
         println!("pointer out!!");
     });
 
-    let c = called.clone();
+    let _c = called.clone();
 
     engine.pointer_move((210.0, 210.0), root_id.0);
     {

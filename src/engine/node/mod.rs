@@ -43,7 +43,7 @@ pub struct DrawCache {
     context_id: Arc<RwLock<Option<DirectContextId>>>,
 }
 thread_local! {
-    static ID_COUNTER: AtomicUsize = AtomicUsize::new(0);
+    static ID_COUNTER: AtomicUsize = const { AtomicUsize::new(0) };
     static SURFACES: RefCell<HashMap<usize, skia_safe::Surface>> = RefCell::new(HashMap::new());
 }
 
@@ -226,7 +226,7 @@ impl DrawCacheManagement for SceneNode {
 
         if self.layer.hidden() || render_layer.premultiplied_opacity == 0.0 {
             let mut last_damage = self.repaint_damage.write().unwrap();
-            let ld = last_damage.clone();
+            let ld = *last_damage;
             *last_damage = damage;
             return ld;
         }
@@ -276,7 +276,7 @@ impl DrawCacheManagement for SceneNode {
                     *draw_cache = Some(new_cache);
                 }
                 let mut repaint_damage = self.repaint_damage.write().unwrap();
-                let previous_damage = repaint_damage.clone();
+                let previous_damage = *repaint_damage;
                 *repaint_damage = damage;
                 damage.join(previous_damage);
                 self.set_need_repaint(false);
@@ -343,7 +343,7 @@ impl DrawCacheManagement for SceneNode {
                 needs_repaint = true;
             }
         }
-        return needs_repaint;
+        needs_repaint
     }
     fn needs_layout(&self) -> bool {
         self.flags

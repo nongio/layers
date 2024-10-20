@@ -35,7 +35,7 @@ pub fn call_finish_transaction() {
                 }),
             );
             // check we are not in a dead lock
-            assert!(true);
+            // assert!(true);
         },
         true,
     );

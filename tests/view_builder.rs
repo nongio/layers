@@ -1,6 +1,6 @@
 use layers::{drawing::scene::debug_scene, layer_trees, layer_trees_opt, prelude::*, types::Size};
 
-pub fn render_one_child_view(state: &bool, view: &View<bool>) -> LayerTree {
+pub fn render_one_child_view(state: &bool, _view: &View<bool>) -> LayerTree {
     LayerTreeBuilder::default()
         .key("one_child_view")
         .position((Point { x: 0.0, y: 0.0 }, None))
