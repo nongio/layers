@@ -24,9 +24,61 @@ impl Default for Transition {
         }
     }
 }
+
+impl Transition {
+    pub fn linear(duration: f32) -> Self {
+        Transition {
+            duration,
+            delay: 0.0,
+            timing: TimingFunction::linear(),
+        }
+    }
+    pub fn ease_in(duration: f32) -> Self {
+        Transition {
+            duration,
+            delay: 0.0,
+            timing: TimingFunction::ease_in(),
+        }
+    }
+    pub fn ease_out(duration: f32) -> Self {
+        Transition {
+            duration,
+            delay: 0.0,
+            timing: TimingFunction::ease_out(),
+        }
+    }
+    pub fn ease_in_out(duration: f32) -> Self {
+        Transition {
+            duration,
+            delay: 0.0,
+            timing: TimingFunction::ease_in_out(),
+        }
+    }
+    pub fn ease_out_quad(duration: f32) -> Self {
+        Transition {
+            duration,
+            delay: 0.0,
+            timing: TimingFunction::ease_out_quad(),
+        }
+    }
+    pub fn ease_in_quad(duration: f32) -> Self {
+        Transition {
+            duration,
+            delay: 0.0,
+            timing: TimingFunction::ease_in_quad(),
+        }
+    }
+    pub fn ease_in_out_quad(duration: f32) -> Self {
+        Transition {
+            duration,
+            delay: 0.0,
+            timing: TimingFunction::ease_in_out_quad(),
+        }
+    }
+}
 /// Animation is a data structure that contains the information needed to
 /// animate a property.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct Animation {
     pub start: f32,
     pub duration: f32,
@@ -35,15 +87,15 @@ pub struct Animation {
 
 // getter for Animation value
 impl Animation {
-    pub fn value_at(&self, t: f32) -> (f32, f32) {
+    pub fn value_at(&self, time: f32) -> (f32, f32) {
         let Animation {
             start,
             duration,
             timing,
         } = self;
-
-        let mut t = (t - start) / duration;
+        let mut t = (time - start) / duration;
         t = t.clamp(0.0, 1.0);
+        // println!("[{} / {}] ({}, {})", time, duration, t, timing.value_at(t));
         (timing.value_at(t), t)
     }
 }

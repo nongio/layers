@@ -343,7 +343,7 @@ fn find_root(p1: f64, p2: f64, target: f64) -> f64 {
     // numerical difficulties
     f64::NAN
 }
-
+#[allow(dead_code)]
 pub fn bezier_easing_function(x1: f64, y1: f64, x2: f64, y2: f64, f: f64) -> f64 {
     assert!((0.0..=1.0).contains(&x1));
     assert!((0.0..=1.0).contains(&x1));
