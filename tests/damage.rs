@@ -112,7 +112,7 @@ mod tests {
         let draw_func = |_c: &skia_safe::Canvas, _w: f32, _h: f32| -> skia_safe::Rect {
             skia_safe::Rect::from_xywh(0.0, 0.0, 10.0, 10.0)
         };
-        layer.set_draw_content(Some(draw_func));
+        layer.set_draw_content(draw_func);
         engine.update(0.016);
         let scene_damage = engine.damage();
 
@@ -145,7 +145,7 @@ mod tests {
         let draw_func = |_c: &skia_safe::Canvas, _w: f32, _h: f32| -> skia_safe::Rect {
             skia_safe::Rect::from_xywh(0.0, 0.0, 10.0, 10.0)
         };
-        layer2.set_draw_content(Some(draw_func));
+        layer2.set_draw_content(draw_func);
         engine.update(0.016);
         let scene_damage = engine.damage();
 
@@ -156,7 +156,7 @@ mod tests {
         );
         engine.clear_damage();
 
-        layer2.set_draw_content(Some(draw_func.clone()));
+        layer2.set_draw_content(draw_func.clone());
         engine.update(0.016);
         let scene_damage = engine.damage();
 
@@ -197,7 +197,7 @@ mod tests {
         let draw_func = |_c: &skia_safe::Canvas, _w: f32, _h: f32| -> skia_safe::Rect {
             skia_safe::Rect::from_xywh(0.0, 0.0, 10.0, 10.0)
         };
-        layer.set_draw_content(Some(draw_func));
+        layer.set_draw_content(draw_func);
         engine.update(0.016);
         let scene_damage = engine.damage();
         // if the layer has a background the damage is the union of the background and the content
