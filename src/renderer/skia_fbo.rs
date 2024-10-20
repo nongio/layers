@@ -9,18 +9,14 @@ use skia_safe::{
     Rect,
     Surface,
 };
-use std::cell::Cell;
+use std::{cell::Cell, io::Write};
 
 use crate::engine::{
     node::{DrawCacheManagement, SceneNode},
     scene::Scene,
     NodeRef,
 };
-use crate::{
-    drawing::scene::{render_node, DrawScene},
-    layers::layer::render_layer,
-    prelude::render_node_tree,
-};
+use crate::{drawing::scene::DrawScene, layers::layer::render_layer, prelude::render_node_tree};
 
 #[derive(Clone)]
 pub struct SkiaFboRenderer {
@@ -123,6 +119,23 @@ impl DrawScene for SkiaFboRenderer {
         }
         canvas.restore_to_count(save_point);
         // surface.flush_and_submit();
+
+        // Save the scene to a Skia debug file
+        //  let mut recorder =  skia::PictureRecorder::new();
+        // let recording_canvas = recorder.begin_recording(
+        //     Rect::from_wh(surface.width() as f32, surface.height() as f32),
+        //     None,
+        // );
+        // if let Some(damage) = damage {
+        //     recording_canvas.clip_rect(damage, None, None);
+        // }
+        // if let Some(_root) = scene.get_node(root_id) {
+        //     render_node_tree(root_id, arena, recording_canvas, 1.0);
+        // }
+        // let picture = recorder.finish_recording_as_picture(None).unwrap();
+        // let data = picture.serialize();
+        // let mut file = std::fs::File::create("debug_scene.skp").unwrap();
+        // file.write_all(data.as_bytes()).unwrap();
     }
 }
 
