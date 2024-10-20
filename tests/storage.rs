@@ -21,17 +21,18 @@ pub fn test_tree_storage() {
     let id = tree.insert(1);
     let id2 = tree.insert(2);
     let id3 = tree.insert(3);
-    let data = tree.data();
-    let mut arena = data.write().unwrap();
-    id.append(id2, &mut arena);
-    id.append(id3, &mut arena);
+    tree.with_data_mut(|arena| {
+        id.append(id2, arena);
+        id.append(id3, arena);
+    });
 
     assert_eq!(*tree.get(id).unwrap().get(), 1);
 
-    let children = id
-        .children(&arena)
-        .map(|child| *arena.get(child).unwrap().get())
-        .collect::<Vec<_>>();
+    let children = tree.with_data(|arena| {
+        id.children(&arena)
+            .map(|child| *arena.get(child).unwrap().get())
+            .collect::<Vec<_>>()
+    });
 
     assert_eq!(children, [2, 3]);
 }
