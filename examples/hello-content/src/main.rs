@@ -160,12 +160,12 @@ fn main() {
 
     engine.scene_add_layer(content_layer.clone());
     engine.scene_add_layer_to(inner_content_layer.clone(), content_layer.id());
-    inner_content_layer.set_draw_content(Some(
+    inner_content_layer.set_draw_content(
         |canvas: &layers::skia::Canvas, width, height| -> layers::skia::Rect {
             draw(canvas, width, height);
             layers::skia::Rect::from_wh(width, height)
         },
-    ));
+    );
 
     let instant = std::time::Instant::now();
     let mut update_frame = 0;
@@ -265,12 +265,12 @@ fn main() {
                                         ..Default::default()
                                     }),
                                 );
-                                inner_content_layer.set_draw_content(Some(
+                                inner_content_layer.set_draw_content(
                                     move |canvas: &layers::skia::Canvas, width, height| -> layers::skia::Rect {
                                         draw(canvas, width, height);
                                         layers::skia::Rect::from_wh(w, h)
                                     },
-                                ));
+                                );
                             }
                             winit::event::VirtualKeyCode::Escape => {
                                 *control_flow = ControlFlow::Exit;
