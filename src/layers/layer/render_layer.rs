@@ -8,9 +8,11 @@ pub struct RenderLayer {
     pub key: String,
     pub bounds: skia_safe::Rect,
     pub rbounds: skia_safe::RRect,
-    pub transformed_bounds: skia_safe::Rect,
-    pub transformed_rbounds: skia_safe::RRect,
+    pub local_transformed_bounds: skia_safe::Rect,
     pub bounds_with_children: skia_safe::Rect,
+    pub global_transformed_bounds: skia_safe::Rect,
+    pub global_transformed_rbounds: skia_safe::RRect,
+    pub global_transformed_bounds_with_children: skia_safe::Rect,
     pub background_color: PaintColor,
     pub border_color: PaintColor,
     pub border_width: f32,
@@ -22,8 +24,10 @@ pub struct RenderLayer {
     pub shadow_color: Color,
     pub shadow_spread: f32,
     pub transform: M44,
+    pub local_transform: M44,
     pub blend_mode: BlendMode,
     pub opacity: f32,
+    pub premultiplied_opacity: f32,
     content_draw_func: Option<ContentDrawFunction>,
     pub content_damage: skia_safe::Rect,
     pub content: Option<Picture>,
@@ -36,6 +40,7 @@ impl RenderLayer {
         model: &ModelLayer,
         layout: &taffy::tree::Layout,
         matrix: Option<&M44>,
+        context_opacity: f32,
     ) {
         let key = model.key.read().unwrap().clone();
         let layout_position = layout.location;
@@ -93,16 +98,17 @@ impl RenderLayer {
         );
 
         // merge all transforms keeping into account the anchor point
-        let transform = M44::concat(matrix, &translate);
-        let transform = M44::concat(&transform, &scale);
+        let mut local_transform = M44::new_identity();
+        local_transform = M44::concat(&local_transform, &translate);
+        local_transform = M44::concat(&local_transform, &scale);
         // let transform = M44::concat(&transform, &rotate_x);
         // let transform = M44::concat(&transform, &rotate_y);
         // let transform = M44::concat(&transform, &rotate_z);
-        let transform = M44::concat(&transform, &anchor_translate);
+        local_transform = M44::concat(&local_transform, &anchor_translate);
 
-        // let matrix = transform.to_m33();
-        let (transformed_bounds, _) = transform.to_m33().map_rect(bounds);
-        let bounds_with_children = transformed_bounds;
+        let global_transform = M44::concat(&matrix, &local_transform);
+        let (transformed_bounds, _) = global_transform.to_m33().map_rect(bounds);
+        let (local_transformed_bounds, _) = local_transform.to_m33().map_rect(bounds);
         let background_color = model.background_color.value();
         let border_color = model.border_color.value();
 
@@ -140,14 +146,18 @@ impl RenderLayer {
         self.shadow_radius = shadow_radius;
         self.shadow_color = shadow_color;
         self.shadow_spread = shadow_spread;
-        self.transform = transform;
+        self.transform = global_transform;
+        self.local_transform = local_transform;
         self.blend_mode = blend_mode;
         self.opacity = opacity;
+        self.premultiplied_opacity = opacity * context_opacity;
         self.bounds = bounds;
-        self.transformed_bounds = transformed_bounds;
-        self.bounds_with_children = bounds_with_children;
+        self.bounds_with_children = bounds;
+        self.local_transformed_bounds = local_transformed_bounds;
+        self.global_transformed_bounds = transformed_bounds;
+        self.global_transformed_bounds_with_children = transformed_bounds;
         self.rbounds = skia_safe::RRect::new_rect_radii(bounds, &border_corner_radius.into());
-        self.transformed_rbounds =
+        self.global_transformed_rbounds =
             skia_safe::RRect::new_rect_radii(transformed_bounds, &border_corner_radius.into());
     }
 
@@ -155,6 +165,7 @@ impl RenderLayer {
         model: &ModelLayer,
         layout: &taffy::tree::Layout,
         matrix: Option<&M44>,
+        context_opacity: f32,
     ) -> Self {
         let key = model.key.read().unwrap().clone();
         let layout_position = layout.location;
@@ -211,18 +222,19 @@ impl RenderLayer {
         );
 
         // merge all transforms keeping into account the anchor point
-        let transform = M44::concat(&translate, matrix);
-        let transform = M44::concat(&transform, &scale);
+        let mut local_transform = translate;
+        local_transform = M44::concat(&local_transform, &scale);
         // let transform = M44::concat(&transform, &rotate_x);
         // let transform = M44::concat(&transform, &rotate_y);
         // let transform = M44::concat(&transform, &rotate_z);
         // let transform = M44::concat(&transform, &anchor_translate);
 
         // let matrix = transform.to_m33();
+        let transform = M44::concat(&matrix, &local_transform);
         let (transformed_bounds, _) = transform.to_m33().map_rect(bounds);
+        let (local_transformed_bounds, _) = local_transform.to_m33().map_rect(bounds);
         let transformed_rbounds =
             skia_safe::RRect::new_rect_radii(transformed_bounds, &border_corner_radius.into());
-        let bounds_with_children = transformed_bounds;
         let background_color = model.background_color.value();
         let border_color = model.border_color.value();
 
@@ -244,6 +256,7 @@ impl RenderLayer {
         }
 
         let opacity = model.opacity.value();
+        let premultiplied_opacity = opacity * context_opacity;
         let blend_mode = model.blend_mode.value();
         let content_damage = skia_safe::Rect::default();
         Self {
@@ -258,17 +271,21 @@ impl RenderLayer {
             shadow_radius,
             shadow_color,
             shadow_spread,
+            local_transform,
             transform,
             content,
             blend_mode,
             opacity,
+            premultiplied_opacity,
             bounds,
-            transformed_bounds,
-            bounds_with_children,
+            bounds_with_children: bounds,
+            local_transformed_bounds,
+            global_transformed_bounds: transformed_bounds,
+            global_transformed_bounds_with_children: transformed_bounds,
             content_draw_func,
             content_damage,
             rbounds,
-            transformed_rbounds,
+            global_transformed_rbounds: transformed_rbounds,
         }
     }
 }
@@ -292,16 +309,20 @@ impl Default for RenderLayer {
             shadow_color: Color::new_rgba(0.0, 0.0, 0.0, 0.0),
             shadow_spread: 0.0,
             transform: M44::new_identity(),
+            local_transform: M44::new_identity(),
             content: None,
             blend_mode: BlendMode::Normal,
             opacity: 1.0,
+            premultiplied_opacity: 1.0,
             bounds: skia_safe::Rect::default(),
-            transformed_bounds: skia_safe::Rect::default(),
+            rbounds: skia_safe::RRect::default(),
+            local_transformed_bounds: skia_safe::Rect::default(),
             bounds_with_children: skia_safe::Rect::default(),
+            global_transformed_bounds: skia_safe::Rect::default(),
+            global_transformed_bounds_with_children: skia_safe::Rect::default(),
+            global_transformed_rbounds: skia_safe::RRect::default(),
             content_draw_func: None,
             content_damage: skia_safe::Rect::default(),
-            rbounds: skia_safe::RRect::default(),
-            transformed_rbounds: skia_safe::RRect::default(),
         }
     }
 }
@@ -319,11 +340,11 @@ impl Serialize for RenderLayer {
         seq.serialize_field("bounds", &Rectangle::from(self.bounds))?;
         seq.serialize_field(
             "transformed_bounds",
-            &Rectangle::from(self.transformed_bounds),
+            &Rectangle::from(self.global_transformed_bounds),
         )?;
         seq.serialize_field(
             "bounds_with_children",
-            &Rectangle::from(self.bounds_with_children),
+            &Rectangle::from(self.global_transformed_bounds_with_children),
         )?;
         seq.serialize_field("background_color", &self.background_color)?;
         seq.serialize_field("border_color", &self.border_color)?;

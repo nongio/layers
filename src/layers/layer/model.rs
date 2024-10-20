@@ -3,6 +3,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
+use skia::ImageFilter;
 use taffy::style::Display;
 
 use crate::{
@@ -82,6 +83,9 @@ pub(crate) struct ModelLayer {
     pub draw_content: Arc<RwLock<Option<ContentDrawFunction>>>,
     pub blend_mode: Attribute<BlendMode>,
     pub opacity: Attribute<f32>,
+    pub filter: Arc<RwLock<Option<ImageFilter>>>,
+    pub filter_bounds: Arc<RwLock<Option<skia::Rect>>>,
+    pub filter_progress: Attribute<f32>,
 }
 
 impl Default for ModelLayer {
@@ -114,6 +118,9 @@ impl Default for ModelLayer {
         let blend_mode = Attribute::new(BlendMode::Normal);
         let opacity = Attribute::new(1.0);
         let display = Attribute::new(Display::None);
+        let filter = Arc::new(RwLock::new(None));
+        let filter_progress = Attribute::new(0.0);
+        let filter_bounds = Arc::new(RwLock::new(None));
         Self {
             key: RwLock::new(String::new()),
             display,
@@ -133,6 +140,9 @@ impl Default for ModelLayer {
             draw_content: content,
             blend_mode,
             opacity,
+            filter,
+            filter_progress,
+            filter_bounds,
         }
     }
 }

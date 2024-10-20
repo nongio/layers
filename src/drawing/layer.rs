@@ -1,10 +1,18 @@
 use skia_safe::*;
 
-use crate::layers::layer::render_layer::RenderLayer;
 use crate::types::PaintColor;
+use crate::{engine::draw_to_picture::DrawDebugInfo, layers::layer::render_layer::RenderLayer};
 
-pub(crate) fn draw_layer(canvas: &Canvas, layer: &RenderLayer) -> skia_safe::Rect {
+use super::scene::BACKGROUND_BLUR_SIGMA;
+
+pub fn draw_layer(canvas: &Canvas, layer: &RenderLayer) -> skia_safe::Rect {
     let mut draw_damage = skia_safe::Rect::default();
+
+    // if the layer is completely transparent, we don't need to draw anything
+    if layer.premultiplied_opacity <= 0.0 {
+        return draw_damage;
+    }
+
     let bounds = Rect::from_xywh(0.0, 0.0, layer.size.width, layer.size.height);
     let rrbounds = RRect::new_rect_radii(
         bounds,
@@ -76,7 +84,18 @@ pub(crate) fn draw_layer(canvas: &Canvas, layer: &RenderLayer) -> skia_safe::Rec
         shadow_paint.set_alpha_f(layer.opacity * layer.shadow_color.alpha);
         canvas.draw_rrect(shadow_rrect, &shadow_paint);
         canvas.restore_to_count(save_count);
-        draw_damage.join(bounds);
+        let damage_rect = shadow_rect.with_outset((layer.shadow_radius, layer.shadow_radius));
+
+        draw_damage.join(damage_rect);
+    }
+
+    // Draw content if any
+    if let Some(content) = &layer.content {
+        let save_count = canvas.save();
+        canvas.clip_rrect(rrbounds, Some(ClipOp::Intersect), Some(true));
+        content.playback(canvas);
+        draw_damage.join(layer.content_damage);
+        canvas.restore_to_count(save_count);
     }
 
     // Draw border
@@ -93,14 +112,61 @@ pub(crate) fn draw_layer(canvas: &Canvas, layer: &RenderLayer) -> skia_safe::Rec
         draw_damage.join(bounds.with_outset((layer.border_width / 2.0, layer.border_width / 2.0)));
     }
 
-    // Draw content if any
-    if let Some(content) = &layer.content {
-        canvas.clip_rrect(rrbounds, Some(ClipOp::Intersect), Some(true));
-        content.playback(canvas);
-        draw_damage.join(layer.content_damage);
-    }
     if layer.blend_mode == crate::types::BlendMode::BackgroundBlur {
-        draw_damage.outset((100.0, 100.0));
+        draw_damage.outset((BACKGROUND_BLUR_SIGMA, BACKGROUND_BLUR_SIGMA));
     }
+
     draw_damage
+}
+
+pub fn draw_debug(
+    canvas: &skia_safe::Canvas,
+    dbg_info: &DrawDebugInfo,
+    render_layer: &RenderLayer,
+) {
+    let font_mgr = skia_safe::FontMgr::new();
+    let typeface = font_mgr
+        .match_family_style("Inter", skia_safe::FontStyle::default())
+        .unwrap();
+    let font = skia_safe::Font::from_typeface_with_params(typeface, 22.0, 1.0, 0.0);
+
+    let mut paint = skia_safe::Paint::default();
+    paint.set_color4f(crate::types::Color::new_hex("#8ABFFF70").c4f(), None);
+    canvas.draw_rect(render_layer.bounds_with_children, &paint);
+
+    paint.set_stroke(true);
+    paint.set_stroke_width(2.0);
+    paint.set_color4f(crate::types::Color::new_hex("#00000070").c4f(), None);
+    canvas.draw_rect(render_layer.bounds_with_children, &paint);
+    // println!("bounds_with_children: {:?}", bounds_with_children);
+    let mut paint = skia_safe::Paint::default();
+    paint.set_color4f(crate::types::Color::new_hex("#D1FF8790").c4f(), None);
+    canvas.draw_rect(render_layer.bounds, &paint);
+    paint.set_stroke(true);
+    paint.set_stroke_width(2.0);
+    paint.set_color4f(crate::types::Color::new_hex("#00000070").c4f(), None);
+    canvas.draw_rect(render_layer.bounds, &paint);
+
+    // paint.set_stroke(false);
+    // paint.set_color4f(skia_safe::Color4f::new(0.0, 0.0, 0.0, 0.2), None);
+    // canvas.draw_rect(bounds, &paint);
+
+    // paint.set_color4f(skia_safe::Color4f::new(1.0, 1.0, 1.0, 1.0), None);
+    let balloon =
+        skia::RRect::new_rect_xy(skia::Rect::from_xywh(0.0, 0.0, 100.0, 30.0), 10.0, 10.0);
+    paint.set_color4f(crate::types::Color::new_hex("#ffffffff").c4f(), None);
+    paint.set_stroke(false);
+    canvas.draw_rrect(balloon, &paint);
+    paint.set_color4f(crate::types::Color::new_hex("#000000ff").c4f(), None);
+    paint.set_stroke(true);
+    paint.set_stroke_width(2.0);
+    canvas.draw_rrect(balloon, &paint);
+    paint.set_stroke(false);
+    canvas.draw_str(
+        format!("{} | {}", &dbg_info.info, dbg_info.frame),
+        (20.0, 20.0),
+        &font,
+        &paint,
+    );
+    // canvas.draw_str(format!("{}", dbg.frame), (0.0, 25.0), &font, &paint);
 }

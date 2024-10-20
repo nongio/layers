@@ -8,7 +8,7 @@
 //! - The *render* step uses the displaylist to generate a texture of the node
 //! - The *compose* step generates the final image using the textures
 
-mod draw_to_picture;
+pub(crate) mod draw_to_picture;
 mod stages;
 
 pub(crate) mod command;
@@ -31,6 +31,7 @@ use node::ContainsPoint;
 #[cfg(feature = "debugger")]
 use stages::send_debugger;
 
+use stages::{nodes_for_layout, trigger_callbacks, update_node};
 use taffy::prelude::*;
 
 #[cfg(feature = "debugger")]
@@ -42,7 +43,7 @@ use std::{
     ops::Deref,
     sync::{
         atomic::{AtomicBool, AtomicUsize},
-        Arc, RwLock,
+        Arc, Once, RwLock,
     },
 };
 
@@ -53,7 +54,7 @@ use self::{
     scene::Scene,
     stages::{
         cleanup_animations, cleanup_nodes, cleanup_transactions, execute_transactions,
-        trigger_callbacks, update_animations, update_layout_tree, update_nodes,
+        update_animations, update_layout_tree,
     },
     storage::{FlatStorage, FlatStorageId, TreeStorageId, TreeStorageNode},
 };
@@ -85,16 +86,42 @@ struct AnimatedNodeChange {
 /// The bool is a flag that indicates if the animation is finished.
 /// the progres can not be used to determine if the animation is finished
 /// because the animation could be reversed or looped
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct AnimationState {
     pub(crate) animation: Animation,
     pub(crate) progress: f32,
+    pub(crate) time: f32,
+    pub(crate) is_started: bool,
     pub(crate) is_running: bool,
     pub(crate) is_finished: bool,
 }
 
-type FnTransactionCallback = Arc<dyn 'static + Fn(f32) + Send + Sync>;
+static TRANSACTION_CALLBACK_ID: AtomicUsize = AtomicUsize::new(0);
 
+fn transaction_callack_id() -> usize {
+    TRANSACTION_CALLBACK_ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+}
+#[derive(Clone)]
+pub struct TransactionCallback {
+    callback: Arc<dyn 'static + Send + Sync + Fn(&Layer, f32)>,
+    pub(crate) once: bool,
+    pub(crate) id: usize,
+}
+
+impl<F: Fn(&Layer, f32) + Send + Sync + 'static> From<F> for TransactionCallback {
+    fn from(f: F) -> Self {
+        TransactionCallback {
+            callback: Arc::new(f),
+            once: true,
+            id: transaction_callack_id(),
+        }
+    }
+}
+impl PartialEq for TransactionCallback {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
 pub enum TransactionEventType {
     Start,
     Update,
@@ -102,9 +129,9 @@ pub enum TransactionEventType {
 }
 #[derive(Clone)]
 struct TransitionCallbacks {
-    pub on_start: Vec<FnTransactionCallback>,
-    pub on_finish: Vec<FnTransactionCallback>,
-    pub on_update: Vec<FnTransactionCallback>,
+    pub on_start: Vec<TransactionCallback>,
+    pub on_finish: Vec<TransactionCallback>,
+    pub on_update: Vec<TransactionCallback>,
 }
 
 impl TransitionCallbacks {
@@ -114,6 +141,12 @@ impl TransitionCallbacks {
             on_finish: Vec::new(),
             on_update: Vec::new(),
         }
+    }
+
+    pub fn remove(&mut self, tr: &TransactionCallback) {
+        self.on_start.retain(|h| h != tr);
+        self.on_finish.retain(|h| h != tr);
+        self.on_update.retain(|h| h != tr);
     }
 }
 impl Default for TransitionCallbacks {
@@ -167,7 +200,17 @@ pub enum PointerEventType {
     Up,
 }
 
+static INIT: Once = Once::new();
+static ENGINE_ID: AtomicUsize = AtomicUsize::new(0);
+static mut ENGINES: Option<RwLock<HashMap<usize, Arc<Engine>>>> = None;
+
+fn initialize_engines() {
+    unsafe {
+        ENGINES = Some(RwLock::new(HashMap::new()));
+    }
+}
 pub(crate) struct Engine {
+    pub id: usize,
     pub(crate) scene: Arc<Scene>,
     scene_root: RwLock<Option<NodeRef>>,
     transactions: FlatStorage<AnimatedNodeChange>,
@@ -176,14 +219,45 @@ pub(crate) struct Engine {
     transaction_handlers: FlatStorage<TransitionCallbacks>,
     pub(crate) layout_tree: RwLock<TaffyTree>,
     layout_root: RwLock<taffy::prelude::NodeId>,
-    pub(crate) damage: RwLock<skia_safe::Rect>,
+    pub(crate) damage: Arc<RwLock<skia_safe::Rect>>,
     // pointer handlers
     pointer_position: RwLock<Point>,
-    current_hover_node: RwLock<Option<NodeId>>,
+    current_hover_node: RwLock<Option<NodeRef>>,
     pointer_handlers: FlatStorage<PointerCallback>,
 }
 #[derive(Clone, Copy, Debug)]
-pub struct TransactionRef(pub FlatStorageId);
+pub struct TransactionRef {
+    pub id: FlatStorageId,
+    pub(crate) engine_id: usize,
+}
+
+impl TransactionRef {
+    pub(crate) fn engine(&self) -> Arc<Engine> {
+        let engines = unsafe {
+            INIT.call_once(initialize_engines);
+            ENGINES.as_ref().unwrap()
+        };
+        let engines = engines.read().unwrap();
+        engines.get(&self.engine_id).unwrap().clone()
+    }
+
+    pub fn on_finish<F: Into<TransactionCallback>>(&self, handler: F, once: bool) -> &Self {
+        self.engine().on_finish(*self, handler, once);
+        self
+    }
+    pub fn on_update<F: Into<TransactionCallback>>(&self, handler: F, once: bool) -> &Self {
+        self.engine().on_update(*self, handler, once);
+        self
+    }
+    pub fn on_start<F: Into<TransactionCallback>>(&self, handler: F, once: bool) -> &Self {
+        self.engine().on_start(*self, handler, once);
+        self
+    }
+    pub fn then<F: Into<TransactionCallback>>(&self, handler: F) -> &Self {
+        self.engine().on_finish(*self, handler, true);
+        self
+    }
+}
 
 #[derive(Clone, Copy, Debug)]
 pub struct AnimationRef(FlatStorageId);
@@ -206,7 +280,11 @@ impl From<NodeRef> for TreeStorageId {
         node_ref.0
     }
 }
-
+impl From<NodeRef> for usize {
+    fn from(node_ref: NodeRef) -> Self {
+        node_ref.0.into()
+    }
+}
 /// Main struct to interact with the engine
 /// ## Usage: Setup a basic scene with a root layer
 /// ```rust
@@ -216,12 +294,13 @@ impl From<NodeRef> for TreeStorageId {
 /// let layer = engine.new_layer();
 /// let engine = LayersEngine::new(1024.0, 768.0);
 /// let root_layer = engine.new_layer();
-/// root_layer.set_position(Point { x: 0.0, y: 0.0 });
+/// root_layer.set_position(Point { x: 0.0, y: 0.0 }, None);
 
 /// root_layer.set_background_color(
 ///     PaintColor::Solid {
 ///         color: Color::new_rgba255(180, 180, 180, 255),
-///     }
+///     },
+///    None,
 /// );
 /// root_layer.set_border_corner_radius(10.0, None);
 /// root_layer.set_layout_style(taffy::Style {
@@ -249,9 +328,14 @@ pub struct LayersEngine {
 
 impl LayersEngine {
     pub fn new(width: f32, height: f32) -> Self {
-        Self {
-            engine: Engine::create(width, height),
-        }
+        let engines = unsafe {
+            INIT.call_once(initialize_engines);
+            ENGINES.as_ref().unwrap()
+        };
+        let id = ENGINE_ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let new_engine = Engine::create(id, width, height);
+        engines.write().unwrap().insert(id, new_engine.clone());
+        Self { engine: new_engine }
     }
     #[cfg(feature = "debugger")]
     pub fn start_debugger(&self) {
@@ -266,12 +350,7 @@ impl LayersEngine {
 
         let mut lt = self.engine.layout_tree.write().unwrap();
 
-        let layout = lt
-            .new_leaf(Style {
-                position: Position::Absolute,
-                ..Default::default()
-            })
-            .unwrap();
+        let layout = lt.new_leaf(Style::default()).unwrap();
 
         Layer {
             engine: self.engine.clone(),
@@ -283,6 +362,7 @@ impl LayersEngine {
             pointer_events: Arc::new(AtomicBool::new(true)),
             image_cache: Arc::new(AtomicBool::new(false)),
             state: Arc::new(RwLock::new(LayerDataProps::default())),
+            effect: Arc::new(RwLock::new(None)),
         }
     }
     pub fn new_animation(&self, transition: Transition) -> AnimationRef {
@@ -294,15 +374,33 @@ impl LayersEngine {
     pub fn update(&self, dt: f32) -> bool {
         self.engine.update(dt)
     }
+    pub fn update_nodes(&self) -> skia_safe::Rect {
+        self.engine.update_nodes()
+    }
     pub fn scene_add_layer(&self, layer: impl Into<Layer>) -> NodeRef {
         self.engine.scene_add_layer(layer, None)
     }
-    pub fn scene_add_layer_to(&self, layer: impl Into<Layer>, parent: Option<NodeRef>) -> NodeRef {
+    pub fn scene_add_layer_to(
+        &self,
+        layer: impl Into<Layer>,
+        parent: impl Into<Option<NodeRef>>,
+    ) -> NodeRef {
+        let parent = parent.into();
         self.engine.scene_add_layer(layer, parent)
     }
 
-    pub fn scene_remove_layer(&self, layer: impl Into<Option<NodeRef>>) {
-        self.engine.scene_remove_layer(layer)
+    pub fn scene_add_layer_to_positioned(
+        &self,
+        layer: impl Into<Layer>,
+        parent: impl Into<Option<NodeRef>>,
+    ) -> NodeRef {
+        let parent = parent.into();
+        self.engine.scene_add_layer_to_positioned(layer, parent)
+    }
+    pub fn scene_remove_layer(&self, node: impl Into<Option<NodeRef>>) {
+        if let Some(node) = node.into() {
+            self.engine.mark_for_delete(node);
+        }
     }
 
     pub fn scene_set_root(&self, layer: impl Into<Layer>) -> NodeRef {
@@ -347,6 +445,34 @@ impl LayersEngine {
     pub fn pointer_button_up(&self) {
         self.engine.pointer_button_up();
     }
+    pub fn current_hover(&self) -> Option<NodeRef> {
+        self.engine.current_hover()
+    }
+
+    pub fn on_finish<F: Into<TransactionCallback>>(
+        &self,
+        transaction: TransactionRef,
+        handler: F,
+        once: bool,
+    ) {
+        self.engine.on_finish(transaction, handler, once);
+    }
+    pub fn on_update<F: Into<TransactionCallback>>(
+        &self,
+        transaction: TransactionRef,
+        handler: F,
+        once: bool,
+    ) {
+        self.engine.on_update(transaction, handler, once);
+    }
+    pub fn on_start<F: Into<TransactionCallback>>(
+        &self,
+        transaction: TransactionRef,
+        handler: F,
+        once: bool,
+    ) {
+        self.engine.on_start(transaction, handler, once);
+    }
 }
 
 impl std::fmt::Debug for LayersEngine {
@@ -358,7 +484,7 @@ impl std::fmt::Debug for LayersEngine {
 static UNIQ_POINTER_HANDLER_ID: AtomicUsize = AtomicUsize::new(0);
 
 impl Engine {
-    fn new(width: f32, height: f32) -> Self {
+    fn new(id: usize, width: f32, height: f32) -> Self {
         // rayon::ThreadPoolBuilder::new()
         //     .num_threads(2)
         //     .build_global()
@@ -376,8 +502,9 @@ impl Engine {
 
         let scene = Scene::create(width, height);
         let scene_root = RwLock::new(None);
-        let damage = RwLock::new(skia_safe::Rect::default());
+        let damage = Arc::new(RwLock::new(skia_safe::Rect::default()));
         Engine {
+            id,
             scene,
             transactions: FlatStorage::new(),
             animations: FlatStorage::new(),
@@ -392,8 +519,8 @@ impl Engine {
             current_hover_node: RwLock::new(None),
         }
     }
-    pub fn create(width: f32, height: f32) -> Arc<Self> {
-        let new_engine = Self::new(width, height);
+    pub fn create(id: usize, width: f32, height: f32) -> Arc<Self> {
+        let new_engine = Self::new(id, width, height);
         Arc::new(new_engine)
     }
     pub fn scene_set_root(&self, layer: impl Into<Layer>) -> NodeRef {
@@ -432,10 +559,13 @@ impl Engine {
             let scene_root = *self.scene_root.read().unwrap();
             scene_root
         });
-        let mut layout_tree = self.layout_tree.write().unwrap();
-        if layer.id().is_some() {
-            if let Some(layout_parent) = layout_tree.parent(layout) {
-                layout_tree.remove_child(layout_parent, layout).unwrap();
+
+        {
+            let mut layout_tree = self.layout_tree.write().unwrap();
+            if layer.id().is_some() {
+                if let Some(layout_parent) = layout_tree.parent(layout) {
+                    layout_tree.remove_child(layout_parent, layout).unwrap();
+                }
             }
         }
         let layer_id = if new_parent.is_none() {
@@ -455,16 +585,65 @@ impl Engine {
 
             let parent_layout = new_parent_node.layout_node_id;
             self.scene.append_node_to(id, new_parent);
-            layout_tree.add_child(parent_layout, layout).unwrap();
-            let res = layout_tree.mark_dirty(parent_layout);
-            if let Some(err) = res.err() {
-                println!("layout err {}", err);
+            {
+                let mut layout_tree = self.layout_tree.write().unwrap();
+                layout_tree.add_child(parent_layout, layout).unwrap();
+                let res = layout_tree.mark_dirty(parent_layout);
+                if let Some(err) = res.err() {
+                    println!("layout err {}", err);
+                }
             }
             id
         };
         layer_id
     }
-    pub fn scene_remove_layer(&self, layer: impl Into<Option<NodeRef>>) {
+    pub fn scene_add_layer_to_positioned(
+        &self,
+        layer: impl Into<Layer>,
+        parent: Option<NodeRef>,
+    ) -> NodeRef {
+        // FIXME ensure that newly added layers are layouted
+        // update...
+        {
+            execute_transactions(self);
+            nodes_for_layout(self);
+            update_layout_tree(self);
+            self.update_nodes();
+        }
+
+        let layer: Layer = layer.into();
+        let position = layer.render_position();
+        let parent_position = parent
+            .and_then(|parent| {
+                self.scene_get_node(parent).map(|parent| {
+                    let b = parent.get().transformed_bounds();
+                    Point { x: b.x(), y: b.y() }
+                })
+            })
+            .unwrap_or_default();
+        let new_position = Point {
+            x: position.x - parent_position.x,
+            y: position.y - parent_position.y,
+        };
+        // println!("current position {:?}", position);
+        // println!("parent position {:?}", parent_position);
+        // println!("new position {:?}", new_position);
+        layer.set_position(new_position, None);
+        let node = self.scene_add_layer(layer.clone(), parent);
+        {
+            execute_transactions(self);
+            nodes_for_layout(self);
+            update_layout_tree(self);
+            self.update_nodes();
+        }
+        node
+    }
+    pub fn mark_for_delete(&self, layer: NodeRef) {
+        let node = self.scene.get_node(layer).unwrap();
+        let node = node.get();
+        node.delete();
+    }
+    pub(crate) fn scene_remove_layer(&self, layer: impl Into<Option<NodeRef>>) {
         let layer_id: Option<NodeRef> = layer.into();
         if let Some(layer_id) = layer_id {
             {
@@ -476,6 +655,7 @@ impl Engine {
                         if let Some(parent) = self.scene.get_node(parent) {
                             let parent = parent.get();
                             parent.set_need_layout(true);
+
                             let mut layout = self.layout_tree.write().unwrap();
                             let res = layout.mark_dirty(parent.layout_node_id);
                             if let Some(err) = res.err() {
@@ -519,8 +699,10 @@ impl Engine {
         AnimationRef(self.animations.insert(AnimationState {
             animation,
             progress: 0.0,
+            time: 0.0,
             is_running: autostart,
             is_finished: false,
+            is_started: false,
         }))
     }
     pub fn start_animation(&self, animation: AnimationRef, delay: Option<f32>) {
@@ -549,19 +731,24 @@ impl Engine {
                 animation_id,
                 node_id: target_id,
             };
-            TransactionRef(
-                self.transactions
+            TransactionRef {
+                id: self
+                    .transactions
                     .insert_with_id(node_change, transaction_id),
-            )
+                engine_id: self.id,
+            }
         } else {
-            TransactionRef(0)
+            TransactionRef {
+                id: FlatStorageId::default(),
+                engine_id: self.id,
+            }
         }
     }
 
     pub fn attach_animation(&self, transaction: TransactionRef, animation: AnimationRef) {
         let transactions = self.transactions.data();
         let mut transactions = transactions.write().unwrap();
-        if let Some(transaction) = transactions.get_mut(&transaction.0) {
+        if let Some(transaction) = transactions.get_mut(&transaction.id) {
             transaction.animation_id = Some(animation);
         }
     }
@@ -571,47 +758,34 @@ impl Engine {
     }
     #[profiling::function]
     pub fn update(&self, dt: f32) -> bool {
-        let mut timestamp = self.timestamp.write().unwrap();
-        let t = Timestamp(timestamp.0 + dt);
+        let timestamp = {
+            let mut timestamp = self.timestamp.write().unwrap();
+            let t = Timestamp(timestamp.0 + dt);
+            *timestamp = t.clone();
+            t
+        };
 
         // 1.1 Update animations to the current timestamp
-        let finished_animations = update_animations(self, &t);
-        *timestamp = t;
+        let (started_animations, finished_animations) = update_animations(self, &timestamp);
+
+        drop(timestamp);
         // 1.2 Execute transactions using the updated animations
-        let (mut updated_nodes, finished_transitions, _needs_redraw) = execute_transactions(self);
+        let (updated_nodes, finished_transitions, _needs_redraw) = execute_transactions(self);
+
         let needs_draw = !updated_nodes.is_empty();
 
         // merge the updated nodes with the nodes that are part of the layout calculation
-        {
-            #[cfg(feature = "profile-with-puffin")]
-            profiling::puffin::profile_scope!("needs_layout");
-            let arena = self.scene.nodes.data();
-            let arena = arena.read().unwrap();
-            updated_nodes = arena
-                .iter()
-                .filter_map(|node| {
-                    if node.is_removed() {
-                        return None;
-                    }
-                    let scene_node = node.get();
-                    // let layout = self.get_node_layout_style(scene_node.layout_node_id);
-                    // if
-                    // if layout.position != Position::Absolute {
-                    scene_node.insert_flags(RenderableFlags::NEEDS_LAYOUT);
-                    scene_node.id()
-                    // } else {
-                    // None
-                    // }
-                })
-                .collect();
-        };
+        nodes_for_layout(self);
+        
         // 2.0 update the layout tree using taffy
         update_layout_tree(self);
 
         // 3.0 update render nodes and trigger repaint
-        let mut damage = update_nodes(self, updated_nodes);
+
+        let mut damage = self.update_nodes();
+
         // 4.0 trigger the callbacks for the listeners on the transitions
-        trigger_callbacks(self);
+        trigger_callbacks(self, &started_animations);
 
         // 5.0 cleanup the animations marked as done and
         // transactions already exectured
@@ -621,7 +795,9 @@ impl Engine {
         // 6.0 cleanup the nodes that are marked as removed
         let removed_damage = cleanup_nodes(self);
         damage.join(removed_damage);
-        *self.damage.write().unwrap() = damage;
+
+        let mut current_damage = self.damage.write().unwrap();
+        current_damage.join(damage);
 
         #[cfg(feature = "debugger")]
         {
@@ -631,7 +807,25 @@ impl Engine {
 
         needs_draw
     }
-
+    #[profiling::function]
+    pub fn update_nodes(&self) -> skia_safe::Rect {
+        // iterate in parallel over the nodes and
+        // repaint if necessary
+        let layout = self.layout_tree.read().unwrap();
+        let arena = self.scene.nodes.data();
+        let arena = arena.read().unwrap();
+    
+        let mut damage = skia_safe::Rect::default();
+    
+        let node = self.scene_root.read().unwrap();
+    
+        if let Some(root_id) = *node {
+            let (_, _, d) = update_node(&arena, &layout, root_id.0, None, false);
+            damage = d;
+        }
+    
+        damage
+    }
     pub fn get_node_layout_style(&self, node: taffy::NodeId) -> Style {
         let layout = self.layout_tree.read().unwrap();
         layout.style(node).unwrap().clone()
@@ -667,51 +861,57 @@ impl Engine {
         result
     }
     #[allow(clippy::unwrap_or_default)]
-    fn add_transaction_handler<F: Fn(f32) + Send + Sync + 'static>(
+    fn add_transaction_handler(
         &self,
         transaction: TransactionRef,
         event_type: TransactionEventType,
-        handler: F,
+        handler: TransactionCallback,
     ) {
-        if let Some(t) = self.transactions.get(&transaction.0) {
-            if let Some(animation) = t.animation_id {
-                let mut ch = self
-                    .transaction_handlers
-                    .get(&animation.0)
-                    .unwrap_or_else(TransitionCallbacks::new);
-                let handler = Arc::new(handler) as FnTransactionCallback;
-                match event_type {
-                    TransactionEventType::Start => ch.on_start.push(handler),
-                    TransactionEventType::Finish => ch.on_finish.push(handler),
-                    TransactionEventType::Update => ch.on_update.push(handler),
-                };
+        let mut ch = self
+            .transaction_handlers
+            .get(&transaction.id)
+            .unwrap_or_else(TransitionCallbacks::new);
 
-                self.transaction_handlers.insert_with_id(ch, animation.0);
-            }
-        }
+        match event_type {
+            TransactionEventType::Start => ch.on_start.push(handler),
+            TransactionEventType::Finish => ch.on_finish.push(handler),
+            TransactionEventType::Update => ch.on_update.push(handler),
+        };
+
+        self.transaction_handlers.insert_with_id(ch, transaction.id);
     }
 
-    pub fn on_start<F: Fn(f32) + Send + Sync + 'static>(
+    pub fn on_start<F: Into<TransactionCallback>>(
         &self,
         transaction: TransactionRef,
         handler: F,
+        once: bool,
     ) {
+        let mut handler = handler.into();
+        handler.once = once;
         self.add_transaction_handler(transaction, TransactionEventType::Start, handler);
     }
 
-    pub fn on_finish<F: Fn(f32) + Send + Sync + 'static>(
+    pub fn on_finish<F: Into<TransactionCallback>>(
         &self,
         transaction: TransactionRef,
         handler: F,
+        once: bool,
     ) {
+        let mut handler = handler.into();
+        handler.once = once;
         self.add_transaction_handler(transaction, TransactionEventType::Finish, handler);
     }
 
-    pub fn on_update<F: Fn(f32) + Send + Sync + 'static>(
+    pub fn on_update<F: Into<TransactionCallback>>(
         &self,
         transaction: TransactionRef,
         handler: F,
+        once: bool,
     ) {
+        let transaction = transaction.into();
+        let mut handler = handler.into();
+        handler.once = once;
         self.add_transaction_handler(transaction, TransactionEventType::Update, handler);
     }
 
@@ -780,11 +980,14 @@ impl Engine {
                 .insert_with_id(pointer_callback, node_id);
         }
     }
-    fn bubble_up_event(&self, node_id: NodeId, event_type: &PointerEventType) {
-        if let Some(node) = self.scene.get_node(node_id) {
+    fn bubble_up_event(&self, node_id: NodeRef, event_type: &PointerEventType) {
+        if let Some(node) = self.scene.get_node(node_id.0) {
+            if node.is_removed() {
+                return;
+            }
             let layer = node.get().layer.clone();
 
-            if let Some(pointer_handler) = self.pointer_handlers.get(&node_id.into()) {
+            if let Some(pointer_handler) = self.pointer_handlers.get(&node_id.0.into()) {
                 let pos = *self.pointer_position.read().unwrap();
                 // trigger node's own handlers
                 for handler in pointer_handler.handlers(event_type) {
@@ -792,7 +995,7 @@ impl Engine {
                 }
             }
             if let Some(parent_id) = node.parent() {
-                self.bubble_up_event(parent_id, event_type);
+                self.bubble_up_event(NodeRef(parent_id), event_type);
             }
         }
     }
@@ -816,7 +1019,7 @@ impl Engine {
         let root_id = root_id.unwrap();
         let (root_node, children) = self.scene.with_arena(|arena| {
             let root_node = arena.get(root_id).unwrap().get().clone();
-            let children: Vec<NodeId> = root_id.reverse_children(arena).collect();
+            let children: Vec<NodeId> = root_id.children(arena).collect();
             (root_node, children)
         });
 
@@ -832,7 +1035,10 @@ impl Engine {
             root_node
                 .pointer_hover
                 .store(true, std::sync::atomic::Ordering::SeqCst);
-            self.current_hover_node.write().unwrap().replace(root_id);
+            self.current_hover_node
+                .write()
+                .unwrap()
+                .replace(NodeRef(root_id));
 
             if !root_node_hover {
                 if let Some(pointer_handler) = self.pointer_handlers.get(&root_id.into()) {
@@ -887,6 +1093,9 @@ impl Engine {
         if let Some(node) = *self.current_hover_node.read().unwrap() {
             self.bubble_up_event(node, &PointerEventType::Up);
         }
+    }
+    pub fn current_hover(&self) -> Option<NodeRef> {
+        *self.current_hover_node.read().unwrap()
     }
 }
 
