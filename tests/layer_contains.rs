@@ -34,7 +34,7 @@ pub fn scene_node_contains() {
 
     engine.update(0.016);
 
-    let point = Point { x: 150.0, y: 150.0 };
+    let point = Point { x: 149.0, y: 149.0 };
 
     let node = engine.scene_layer_at(point);
 
