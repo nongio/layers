@@ -151,7 +151,6 @@ impl Easing {
             y2: 1.0,
         }
     }
-
 }
 #[derive(Clone, Copy, Debug)]
 pub enum TimingFunction {

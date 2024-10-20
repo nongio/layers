@@ -776,7 +776,7 @@ impl Engine {
 
         // merge the updated nodes with the nodes that are part of the layout calculation
         nodes_for_layout(self);
-        
+
         // 2.0 update the layout tree using taffy
         update_layout_tree(self);
 
@@ -814,16 +814,16 @@ impl Engine {
         let layout = self.layout_tree.read().unwrap();
         let arena = self.scene.nodes.data();
         let arena = arena.read().unwrap();
-    
+
         let mut damage = skia_safe::Rect::default();
-    
+
         let node = self.scene_root.read().unwrap();
-    
+
         if let Some(root_id) = *node {
             let (_, _, d) = update_node(&arena, &layout, root_id.0, None, false);
             damage = d;
         }
-    
+
         damage
     }
     pub fn get_node_layout_style(&self, node: taffy::NodeId) -> Style {
