@@ -191,7 +191,6 @@ pub(crate) fn update_node(
     parent: Option<&RenderLayer>,
     parent_changed: bool,
 ) -> (RenderLayer, bool, skia::Rect) {
-
     let node = arena.get(node_id).unwrap().get();
 
     let node_layout = layout.layout(node.layout_node_id).unwrap();

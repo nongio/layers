@@ -107,9 +107,9 @@ impl<V: Clone + Send + Sync> FlatStorage<V> {
     }
 
     pub fn with_data_mut<T>(&self, f: impl FnOnce(&mut FlatStorageData<V>) -> T) -> T {
-            let mut guard = self.data.write().unwrap();
-            f(&mut guard)
-        }
+        let mut guard = self.data.write().unwrap();
+        f(&mut guard)
+    }
 }
 
 impl<V: Clone + Send + Sync> Default for FlatStorage<V> {
