@@ -126,7 +126,7 @@ async fn main() {
     test_layer.set_size(Size::points(200.0, 200.0), None);
     // test_layer.set_scale((2.0, 2.0), None);
 
-    test_layer.set_draw_content(Some(move |canvas: &skia::Canvas, w, h| {
+    test_layer.set_draw_content(move |canvas: &skia::Canvas, w, h| {
         let paint = skia::Paint::new(skia::Color4f::new(1.0, 1.0, 1.0, 1.0), None);
         canvas.draw_image_rect_with_sampling_options(
             &image,
@@ -137,7 +137,7 @@ async fn main() {
             &paint,
         );
         skia::Rect::from_xywh(0.0, 0.0, w, h)
-    }));
+    });
 
     test_layer.set_border_width(5.0, None);
     // enable image cache

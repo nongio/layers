@@ -139,12 +139,12 @@ async fn main() {
     let data = layers::skia::Data::new_copy(&data);
     let image = layers::skia::Image::from_encoded(data).unwrap();
 
-    test_layer.set_draw_content(Some(move |canvas: &layers::skia::Canvas, w, h| {
+    test_layer.set_draw_content(move |canvas: &layers::skia::Canvas, w, h| {
         let paint = layers::skia::Paint::new(layers::skia::Color4f::new(1.0, 1.0, 1.0, 1.0), None);
 
         canvas.draw_image(&image, (6.0, 6.0), Some(&paint));
         layers::skia::Rect::from_xywh(0.0, 0.0, w, h)
-    }));
+    });
 
     test_layer.set_border_width(5.0, None);
     test_layer.set_position((100.0, 100.0), None);

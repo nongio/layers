@@ -115,16 +115,15 @@ async fn main() {
     let data = std::fs::read("./assets/bg.jpg").unwrap();
     let data = layers::skia::Data::new_copy(&data);
     let image = layers::skia::Image::from_encoded(data).unwrap();
-    root.set_draw_content(Some(move |canvas: &layers::skia::Canvas, w, h| {
-        let mut paint =
-            layers::skia::Paint::new(layers::skia::Color4f::new(1.0, 1.0, 1.0, 1.0), None);
+    root.set_draw_content(move |canvas: &layers::skia::Canvas, w, h| {
+        let paint = layers::skia::Paint::new(layers::skia::Color4f::new(1.0, 1.0, 1.0, 1.0), None);
         // paint.set_stroke(true);
         // paint.set_stroke_width(10.0);
         // let rect = layers::skia::Rect::new(0.0, 0.0, 100.0, 100.0);
         // canvas.draw_rect(rect, &paint);
         canvas.draw_image(&image, (0.0, 0.0), Some(&paint));
         layers::skia::Rect::from_xywh(0.0, 0.0, w, h)
-    }));
+    });
     let layer = engine.new_layer();
     engine.scene_add_layer_to(layer.clone(), root.id());
 
@@ -141,7 +140,7 @@ async fn main() {
 
     state.apps.push("App 1".to_string());
 
-    let mut app_switcher = View::new(
+    let app_switcher = View::new(
         "app_switcher_view",
         state.clone(),
         Box::new(view_app_switcher),
