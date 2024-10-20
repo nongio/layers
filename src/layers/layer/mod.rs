@@ -6,10 +6,13 @@ pub(crate) mod state;
 pub(crate) use self::model::ModelLayer;
 use self::model::{ContentDrawFunction, PointerHandlerFunction};
 
-use skia::Contains;
+use skia::{Contains, ImageFilter};
 use state::LayerDataProps;
-use std::sync::{atomic::AtomicBool, RwLock};
 use std::{fmt, sync::Arc};
+use std::{
+    hash::{Hash, Hasher},
+    sync::{atomic::AtomicBool, RwLock},
+};
 use taffy::style::Style;
 use taffy::{prelude::NodeId, style::Display};
 
@@ -19,10 +22,10 @@ use crate::engine::{command::*, PointerEventType};
 use crate::engine::{Engine, NodeRef, TransactionRef};
 
 use crate::types::*;
-
+#[allow(private_interfaces)]
 #[derive(Clone)]
 pub struct Layer {
-    pub(crate) engine: Arc<Engine>,
+    pub engine: Arc<Engine>,
     pub(crate) id: Arc<RwLock<Option<NodeRef>>>,
     pub(crate) key: Arc<RwLock<String>>,
     pub(crate) hidden: Arc<AtomicBool>,
@@ -31,8 +34,15 @@ pub struct Layer {
     pub(crate) model: Arc<ModelLayer>,
     pub(crate) image_cache: Arc<AtomicBool>,
     pub(crate) state: Arc<RwLock<LayerDataProps>>,
+    pub(crate) effect: Arc<RwLock<Option<Arc<dyn Effect>>>>,
 }
 
+pub trait Effect: Send + Sync {
+    fn init(&self, layer: &Layer);
+    fn start(&self, layer: &Layer);
+    fn update(&self, layer: &Layer, time: f32);
+    fn finish(&self, layer: &Layer);
+}
 impl Layer {
     pub(crate) fn with_engine(engine: Arc<Engine>) -> Self {
         let id = Arc::new(RwLock::new(None));
@@ -57,6 +67,7 @@ impl Layer {
             pointer_events: Arc::new(AtomicBool::new(true)),
             image_cache: Arc::new(AtomicBool::new(false)),
             state: Arc::new(RwLock::new(LayerDataProps::new())),
+            effect: Arc::new(RwLock::new(None)),
         }
     }
     pub fn set_id(&self, id: NodeRef) {
@@ -143,12 +154,14 @@ impl Layer {
     change_model!(shadow_radius, f32, RenderableFlags::NEEDS_PAINT);
     change_model!(shadow_spread, f32, RenderableFlags::NEEDS_PAINT);
     change_model!(shadow_color, Color, RenderableFlags::NEEDS_PAINT);
+    change_model!(filter_progress, f32, RenderableFlags::NEEDS_PAINT);
 
     pub fn set_size(
         &self,
         value: impl Into<Size>,
-        transition: Option<Transition>,
+        transition: impl Into<Option<Transition>>,
     ) -> TransactionRef {
+        let transition = transition.into();
         let value: Size = value.into();
         let flags = RenderableFlags::NEEDS_LAYOUT;
 
@@ -157,7 +170,10 @@ impl Layer {
             flag: flags,
         });
         let id: Option<NodeRef> = *self.id.read().unwrap();
-        let mut tr = TransactionRef(0);
+        let mut tr = TransactionRef {
+            id: 0,
+            engine_id: self.engine.id,
+        };
         if let Some(id) = id {
             let animation = transition.map(|t| {
                 self.engine.add_animation(
@@ -192,13 +208,18 @@ impl Layer {
         self.engine.get_node_layout_style(self.layout_node_id)
     }
 
-    pub fn set_draw_content<F: Into<ContentDrawFunction>>(&self, content_handler: Option<F>) {
+    pub fn set_draw_content<F: Into<ContentDrawFunction>>(&self, content_handler: F) {
         let mut model_content = self.model.draw_content.write().unwrap();
-        if let Some(content_handler) = content_handler {
-            *model_content = Some(content_handler.into());
-        } else {
-            *model_content = None;
+        *model_content = Some(content_handler.into());
+        if let Some(id) = self.id() {
+            let mut node = self.engine.scene.get_node(id).unwrap();
+            let node = node.get_mut();
+            node.insert_flags(RenderableFlags::NEEDS_PAINT);
         }
+    }
+    pub fn remove_draw_content(&self) {
+        let mut model_content = self.model.draw_content.write().unwrap();
+        *model_content = None;
         if let Some(id) = self.id() {
             let mut node = self.engine.scene.get_node(id).unwrap();
             let node = node.get_mut();
@@ -220,20 +241,6 @@ impl Layer {
         self.model.display.set(display);
     }
 
-    pub fn on_finish<F: Fn(f32) + Send + Sync + 'static>(
-        &self,
-        transaction: TransactionRef,
-        handler: F,
-    ) {
-        self.engine.on_finish(transaction, handler);
-    }
-    pub fn on_update<F: Fn(f32) + Send + Sync + 'static>(
-        &self,
-        transaction: TransactionRef,
-        handler: F,
-    ) {
-        self.engine.on_update(transaction, handler);
-    }
     pub fn add_on_pointer_move<F: Into<PointerHandlerFunction>>(
         &self,
         handler: F,
@@ -342,8 +349,8 @@ impl Layer {
             let rl = render_layer.read().unwrap();
 
             return Point {
-                x: rl.transformed_bounds.x(),
-                y: rl.transformed_bounds.y(),
+                x: rl.global_transformed_bounds.x(),
+                y: rl.global_transformed_bounds.y(),
             };
         }
         Point { x: 0.0, y: 0.0 }
@@ -356,25 +363,48 @@ impl Layer {
             let rl = render_layer.read().unwrap();
 
             return Point {
-                x: rl.transformed_bounds.width(),
-                y: rl.transformed_bounds.height(),
+                x: rl.global_transformed_bounds.width(),
+                y: rl.global_transformed_bounds.height(),
             };
         }
         Point { x: 0.0, y: 0.0 }
     }
-    pub fn render_bounds(&self) -> skia_safe::Rect {
+    pub fn render_bounds_transformed(&self) -> skia_safe::Rect {
         let id = self.id();
         if let Some(id) = id {
             let node = self.engine.scene.get_node(id).unwrap();
             let render_layer = node.get().render_layer.clone();
             let rl = render_layer.read().unwrap();
 
-            return rl.transformed_bounds;
+            return rl.global_transformed_bounds;
         }
         skia_safe::Rect::default()
     }
-    pub fn cointains_point(&self, point: skia_safe::Point) -> bool {
-        self.render_bounds().contains(point)
+    pub fn render_bounds_with_children_transformed(&self) -> skia_safe::Rect {
+        let id = self.id();
+        if let Some(id) = id {
+            let node = self.engine.scene.get_node(id).unwrap();
+            let render_layer = node.get().render_layer.clone();
+            let rl = render_layer.read().unwrap();
+
+            return rl.global_transformed_bounds_with_children;
+        }
+        skia_safe::Rect::default()
+    }
+    pub fn render_bounds_with_children(&self) -> skia_safe::Rect {
+        let id = self.id();
+        if let Some(id) = id {
+            let node = self.engine.scene.get_node(id).unwrap();
+            let render_layer = node.get().render_layer.clone();
+            let rl = render_layer.read().unwrap();
+
+            return rl.bounds_with_children;
+        }
+        skia_safe::Rect::default()
+    }
+    pub fn cointains_point(&self, point: impl Into<skia_safe::Point>) -> bool {
+        let point = point.into();
+        self.render_bounds_transformed().contains(point)
     }
     pub fn children(&self) -> Vec<NodeRef> {
         if let Some(node_ref) = self.id() {
@@ -401,6 +431,63 @@ impl Layer {
         let mut data = self.state.write().unwrap();
         f(&mut data)
     }
+
+    pub fn set_filter(&self, filter: impl Into<Option<ImageFilter>>) {
+        let filter = filter.into();
+        if filter.is_some() {
+            // self.set_image_cache(true);
+        }
+        let mut model_filter = self.model.filter.write().unwrap();
+        *model_filter = filter;
+    }
+    pub fn set_filter_bounds(&self, bounds: impl Into<Option<skia::Rect>>) {
+        let mut model_filter_bounds = self.model.filter_bounds.write().unwrap();
+        let bounds = bounds.into();
+        *model_filter_bounds = bounds;
+    }
+    pub fn remove(&self) {
+        if let Some(id) = self.id() {
+            self.engine.mark_for_delete(id);
+        }
+    }
+
+    pub fn set_effect(&self, effect: impl Effect + 'static) {
+        let effect = Arc::new(effect);
+        effect.init(self);
+        let filter_model_id = self.model.filter_progress.id;
+        let tr = TransactionRef {
+            id: filter_model_id,
+            engine_id: self.engine.id,
+        };
+        let effect_ref = effect.clone();
+        self.engine.on_update(
+            tr,
+            move |l: &Layer, _p| {
+                effect_ref.update(l, l.model.filter_progress.value());
+            },
+            false,
+        );
+        let effect_ref = effect.clone();
+        self.engine.on_start(
+            tr,
+            move |l: &Layer, _| {
+                let filter_progress = l.model.filter_progress.value();
+                if filter_progress == 0.0 {
+                    effect_ref.start(l);
+                }
+            },
+            false,
+        );
+        *self.effect.write().unwrap() = Some(effect.clone());
+    }
+    pub fn remove_effect(&self) {
+        let mut effect = self.effect.write().unwrap();
+        if let Some(effect) = &*effect {
+            effect.finish(self);
+        }
+
+        *effect = None;
+    }
 }
 
 impl fmt::Debug for Layer {
@@ -415,5 +502,16 @@ impl fmt::Debug for Layer {
 impl PartialEq for Layer {
     fn eq(&self, other: &Self) -> bool {
         self.id() == other.id()
+    }
+}
+impl Eq for Layer {}
+impl Hash for Layer {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.id().hash(state);
+    }
+}
+impl Into<Option<NodeRef>> for Layer {
+    fn into(self) -> Option<NodeRef> {
+        self.id()
     }
 }

@@ -14,7 +14,11 @@ pub struct Color {
     pub b: f32,
     pub alpha: f32,
 }
-
+impl Color {
+    pub fn c4f(&self) -> skia::Color4f {
+        Color4f::from(*self)
+    }
+}
 #[derive(Clone, Copy, Serialize, Debug)]
 #[repr(C)]
 pub struct Point {
@@ -22,6 +26,11 @@ pub struct Point {
     pub y: f32,
 }
 
+impl Point {
+    pub fn new(x: f32, y: f32) -> Self {
+        Point { x, y }
+    }
+}
 #[derive(Clone, Copy, Serialize, Debug)]
 #[repr(C)]
 pub struct Size {

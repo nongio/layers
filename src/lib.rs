@@ -52,7 +52,7 @@ mod layers;
 pub mod prelude;
 pub mod renderer;
 pub mod types;
-mod utils;
+pub mod utils;
 pub mod view;
 
 #[cfg(feature = "export-skia")]

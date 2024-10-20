@@ -8,7 +8,7 @@
 
 use super::{
     animation::Transition, node::RenderableFlags, AnimationRef, Command, Engine, SyncCommand,
-    TransactionRef,
+    TransactionCallback, TransactionRef,
 };
 use crate::easing::Interpolate;
 use std::sync::{
@@ -76,11 +76,14 @@ pub struct Transaction {
 }
 
 impl Transaction {
-    pub fn on_start<F: Fn(f32) + Send + Sync + 'static>(&self, handler: F) {
-        self.engine.on_start(self.id, handler);
+    pub fn on_start<F: Into<TransactionCallback>>(&self, handler: F) {
+        self.engine.on_start(self.id, handler, true);
     }
-    pub fn on_update<F: Fn(f32) + Send + Sync + 'static>(&self, handler: F) {
-        self.engine.on_update(self.id, handler);
+    pub fn on_update<F: Into<TransactionCallback>>(&self, handler: F) {
+        self.engine.on_update(self.id, handler, true);
+    }
+    pub fn on_finish<F: Into<TransactionCallback>>(&self, handler: F) {
+        self.engine.on_finish(self.id, handler, true);
     }
 }
 
@@ -137,8 +140,9 @@ macro_rules! change_model {
             pub fn [<set_ $variable_name>](
                 &self,
                 value: impl Into<$variable_type>,
-                transition: Option<Transition>,
+                transition: impl Into<Option<Transition>>,
             )  -> TransactionRef {
+                let transition = transition.into();
                 let value:$variable_type = value.into();
 
                 // if  self.model.$variable_name.value() != value  {
@@ -148,7 +152,10 @@ macro_rules! change_model {
                     flag: flags,
                 });
                 // }
-                let mut tr = crate::engine::TransactionRef(0);
+                let mut tr = crate::engine::TransactionRef {
+                    id: 0,
+                    engine_id: self.engine.id,
+                };
                 let id:Option<NodeRef> = *self.id.read().unwrap();
                 if let Some(id) = id {
                     // if let Some(change) = change {

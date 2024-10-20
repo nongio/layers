@@ -48,6 +48,16 @@ impl<V: Clone + Send + Sync> TreeStorage<V> {
     pub fn remove_at(&self, id: &TreeStorageId) {
         id.remove_subtree(&mut self.data.write().unwrap());
     }
+
+    pub fn with_data<T>(&self, f: impl FnOnce(&TreeStorageData<V>) -> T) -> T {
+        let guard = self.data.read().unwrap();
+        f(&guard)
+    }
+
+    pub fn with_data_mut<T>(&self, f: impl FnOnce(&mut TreeStorageData<V>) -> T) -> T {
+        let mut guard = self.data.write().unwrap();
+        f(&mut guard)
+    }
 }
 
 impl<V: Clone + Send + Sync> Default for TreeStorage<V> {
@@ -90,6 +100,16 @@ impl<V: Clone + Send + Sync> FlatStorage<V> {
     pub fn remove_at(&self, id: &FlatStorageId) {
         self.data.write().unwrap().remove(id);
     }
+
+    pub fn with_data<T>(&self, f: impl FnOnce(&FlatStorageData<V>) -> T) -> T {
+        let guard = self.data.read().unwrap();
+        f(&guard)
+    }
+
+    pub fn with_data_mut<T>(&self, f: impl FnOnce(&mut FlatStorageData<V>) -> T) -> T {
+            let mut guard = self.data.write().unwrap();
+            f(&mut guard)
+        }
 }
 
 impl<V: Clone + Send + Sync> Default for FlatStorage<V> {

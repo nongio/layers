@@ -13,7 +13,6 @@ use crate::prelude::{Layer, Point};
 use super::{
     node::{RenderableFlags, SceneNode},
     storage::{TreeStorage, TreeStorageId, TreeStorageNode},
-    // Engine,
     NodeRef,
 };
 pub struct Scene {

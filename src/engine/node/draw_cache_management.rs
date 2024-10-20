@@ -7,6 +7,7 @@ pub trait DrawCacheManagement {
     fn needs_repaint(&self) -> bool;
     fn needs_layout(&self) -> bool;
     fn set_need_repaint(&self, value: bool);
-    fn layout_if_needed(&self, layout: &Layout, matrix: Option<&M44>) -> bool;
+    fn layout_if_needed(&self, layout: &Layout, matrix: Option<&M44>, context_opacity: f32)
+        -> bool;
     fn set_need_layout(&self, value: bool);
 }

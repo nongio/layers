@@ -5,6 +5,7 @@ pub use super::{
     engine::{animation::timing::*, animation::*, scene::Scene, LayersEngine, NodeRef},
     layers::{
         layer::model::{ContentDrawError, ContentDrawFunction},
+        layer::Effect,
         layer::Layer,
     },
     types::{
