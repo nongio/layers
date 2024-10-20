@@ -123,6 +123,18 @@ async fn main() {
         },
         None,
     );
+
+    let test2 = engine.new_layer();
+    engine.scene_add_layer_to(test2.clone(), test_layer.id());
+    test2.set_anchor_point((0.0, 0.0), None);
+    test2.set_size(Size::points(100.0, 100.0), None);
+    test2.set_background_color(
+        PaintColor::Solid {
+            color: Color::new_rgba255(0, 255, 0, 255),
+        },
+        None,
+    );
+
     let data = std::fs::read("./assets/grid.jpg").unwrap();
     let data = layers::skia::Data::new_copy(&data);
     let image = layers::skia::Image::from_encoded(data).unwrap();
@@ -138,16 +150,16 @@ async fn main() {
     test_layer.set_position((100.0, 100.0), None);
 
     engine.start_debugger();
-
-    let sksl = read_to_string("./assets/shader.sksl").expect("Failed to read SKSL file");
+    const SHADERFILE: &str = "./assets/genie.sksl";
+    let sksl = read_to_string(SHADERFILE).expect("Failed to read SKSL file");
 
     let runtime_effect = layers::skia::RuntimeEffect::make_for_shader(sksl, None).unwrap();
     let mut builder = layers::skia::runtime_effect::RuntimeShaderBuilder::new(runtime_effect);
 
     let mut target_x = 300.0;
     let mut target_y = 1000.0;
-    let target_w = 50.0;
-    let target_h = 50.0;
+    let target_w = 250.0;
+    let target_h = 250.0;
 
     let mut progress = 0.0;
 
@@ -242,14 +254,13 @@ async fn main() {
                     device_id: _,
                     input,
                     is_synthetic: _,
-                } =>
-                {
+                } => {
                     #[allow(clippy::single_match)]
                     match input.virtual_keycode {
                         Some(keycode) => match keycode {
                             glutin::event::VirtualKeyCode::Space => {
                                 if input.state == glutin::event::ElementState::Released {
-                                    let sksl = read_to_string("./assets/shader.sksl")
+                                    let sksl = read_to_string(SHADERFILE)
                                         .expect("Failed to read SKSL file");
 
                                     let runtime_effect =
@@ -271,7 +282,7 @@ async fn main() {
                             glutin::event::VirtualKeyCode::D => {
                                 if input.state == glutin::event::ElementState::Released {
                                     progress = progress + ANIMATION_STEP;
-                                    println!("progress {:?}", progress);
+                                    // println!("progress {:?}", progress);
 
                                     builder.set_uniform_float("progress", &[progress]);
 
@@ -283,7 +294,7 @@ async fn main() {
                             glutin::event::VirtualKeyCode::A => {
                                 if input.state == glutin::event::ElementState::Released {
                                     progress = progress - ANIMATION_STEP;
-                                    println!("progress {:?}", progress);
+                                    // println!("progress {:?}", progress);
 
                                     builder.set_uniform_float("progress", &[progress]);
 
@@ -313,9 +324,10 @@ async fn main() {
                     if !forward {
                         progress = 1.0 - progress;
                     }
+                    // println!("progress {:?}", progress);
                     builder.set_uniform_float("progress", &[progress as f32]);
                 }
-                let render_layer = test_layer.render_bounds();
+                let render_layer = test_layer.render_bounds_transformed();
                 builder.set_uniform_float(
                     "src_bounds",
                     &[
@@ -330,7 +342,22 @@ async fn main() {
                 filter_shader = layers::skia::image_filters::runtime_shader(&builder, "", None);
 
                 test_layer.set_filter(filter_shader.clone());
+                let bounds = layers::skia::Rect::join2(
+                    layers::skia::Rect::from_xywh(
+                        0.0,
+                        0.0,
+                        render_layer.width(),
+                        render_layer.height(),
+                    ),
+                    layers::skia::Rect::from_xywh(
+                        target_x - render_layer.x(),
+                        target_y - render_layer.y(),
+                        target_w,
+                        target_h,
+                    ),
+                );
 
+                test_layer.set_filter_bounds(Some(bounds));
                 if update_frame != frame_number {
                     update_frame = frame_number;
                     let dt = 0.016;
