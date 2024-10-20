@@ -21,20 +21,24 @@ pub fn call_finish_transaction() {
     );
     let called = Arc::new(RwLock::new(0));
     let c = called.clone();
-    engine.on_finish(transaction, move |_: &Layer, _| {
-        println!("Transaction finished");
-        let mut c = c.write().unwrap();
-        *c += 1;
-        layer.set_position(
-            Point { x: 200.0, y: 100.0 },
-            Some(Transition {
-                duration: 0.1,
-                ..Default::default()
-            }),
-        );
-        // check we are not in a dead lock
-        assert!(true);
-    });
+    engine.on_finish(
+        transaction,
+        move |_: &Layer, _| {
+            println!("Transaction finished");
+            let mut c = c.write().unwrap();
+            *c += 1;
+            layer.set_position(
+                Point { x: 200.0, y: 100.0 },
+                Some(Transition {
+                    duration: 0.1,
+                    ..Default::default()
+                }),
+            );
+            // check we are not in a dead lock
+            assert!(true);
+        },
+        true,
+    );
     engine.update(0.2);
     engine.update(0.2);
     engine.update(0.2);
@@ -59,11 +63,14 @@ pub fn call_start_transaction() {
     );
     let called = Arc::new(RwLock::new(0));
     let c = called.clone();
-    transaction.on_start(move |_: &Layer, _| {
-        println!("Transaction started");
-        let mut c = c.write().unwrap();
-        *c += 1;
-    });
+    transaction.on_start(
+        move |_: &Layer, _| {
+            println!("Transaction started");
+            let mut c = c.write().unwrap();
+            *c += 1;
+        },
+        true,
+    );
     engine.update(0.1);
     engine.update(0.1);
     engine.update(0.1);
@@ -90,11 +97,14 @@ pub fn call_update_transaction() {
                 ..Default::default()
             }),
         )
-        .on_update(move |_: &Layer, progress| {
-            println!("Transaction update {}", progress);
-            let mut c = c.write().unwrap();
-            *c = progress;
-        });
+        .on_update(
+            move |_: &Layer, progress| {
+                println!("Transaction update {}", progress);
+                let mut c = c.write().unwrap();
+                *c = progress;
+            },
+            true,
+        );
     engine.update(0.05);
     engine.update(0.05);
 
