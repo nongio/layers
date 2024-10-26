@@ -50,6 +50,7 @@ impl<S: Hash + Clone> View<S> {
         }
     }
     /// Render the view into the layer
+    #[profiling::function]
     pub fn render(&self, layer: &Layer) {
         let state = self.state.read().unwrap();
         let view = (self.render_function)(&state, self);
@@ -66,6 +67,7 @@ impl<S: Hash + Clone> View<S> {
         *self.state.write().unwrap() = state;
     }
     /// Update the state of the view and render the layer if the state has changed
+    #[profiling::function]
     pub fn update_state(&self, state: &S) -> bool {
         let mut hasher = DefaultHasher::new();
         state.hash(&mut hasher);
@@ -123,7 +125,7 @@ impl<S: Hash + Clone> View<S> {
             .map(|v| v.front().unwrap())
             .and_then(|node| {
                 if let Some(root) = &*self.layer.read().unwrap() {
-                    if let Some(node) = root.engine.scene_get_node(*node) {
+                    if let Some(node) = root.engine.scene_get_node(node) {
                         let scene_node = node.get();
                         return Some(scene_node.layer.clone());
                     }

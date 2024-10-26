@@ -64,6 +64,7 @@ pub trait BuildLayerTree {
 }
 
 impl BuildLayerTree for Layer {
+    #[profiling::function]
     fn build_layer_tree_internal(
         &self,
         viewlayer_tree: &LayerTree,
@@ -130,7 +131,7 @@ impl BuildLayerTree for Layer {
         }
 
         // Handlers
-        scene_layer.remove_all_handlers();
+        scene_layer.remove_all_pointer_handlers();
 
         if let Some(on_pointer_move) = viewlayer_tree.on_pointer_move.clone() {
             scene_layer.add_on_pointer_move(on_pointer_move);
