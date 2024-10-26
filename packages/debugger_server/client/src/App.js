@@ -3,7 +3,8 @@ import Layer from './Layer';
 import LayerDetails from './LayerDetails';
 
 async function registerUser() {
-  const response = await fetch('http://localhost:8000/register', {
+  console.log(`Using domain ${window.location.origin}`);
+  const response = await fetch(`${window.location.origin}/register`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
@@ -16,10 +17,11 @@ async function registerUser() {
   }
 
   const data = await response.json();
-  return data.url; // Assuming the response contains a field 'websocket_url'
+  return data; // Assuming the response contains a field 'websocket_url'
 }
 
-function connectWebSocket(url, setMessage, setSocket) {
+function connectWebSocket(socketInfo, setMessage, setSocket) {
+  let url = `ws://${window.location.hostname}:${socketInfo.port}/ws/${socketInfo.uuid}`;
   const socket = new WebSocket(url);
 
   socket.onopen = function () {
@@ -46,8 +48,8 @@ async function init(setMessage, setSocket) {
   console.log("Debugger client init");
 
   try {
-    const websocketUrl = await registerUser();
-    connectWebSocket(websocketUrl, setMessage, setSocket);
+    const websocket = await registerUser();
+    connectWebSocket(websocket, setMessage, setSocket);
   } catch (error) {
     console.error('Error during initialization:', error);
   }

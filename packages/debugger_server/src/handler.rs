@@ -13,10 +13,9 @@ use crate::{with_client, with_server, DebugServerError, CLIENT};
 pub async fn register_handler(body: RegisterRequest) -> Result<impl Reply> {
     let user_id = body.user_id;
     let uuid = Uuid::new_v4().simple().to_string();
+
     register_client(uuid.clone(), user_id).await;
-    Ok(json(&RegisterResponse {
-        url: format!("ws://127.0.0.1:8000/ws/{}", uuid),
-    }))
+    Ok(json(&RegisterResponse { uuid, port: 8000 }))
 }
 
 pub async fn register_client(_id: String, user_id: usize) {
