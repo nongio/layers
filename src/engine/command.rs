@@ -178,6 +178,20 @@ macro_rules! change_model {
             pub fn $variable_name(&self) -> $variable_type {
                 self.model.$variable_name.value()
             }
+            pub fn [<change_ $variable_name>](&self, value: impl Into<$variable_type>,) -> AnimatedNodeChange {
+                let flags = $flags;
+                let value = value.into();
+                let change = Arc::new(ModelChange {
+                    value_change: self.model.$variable_name.to(value, None),
+                    flag: flags,
+                });
+                let node_id = self.id().unwrap();
+                AnimatedNodeChange {
+                    animation_id: None,
+                    change,
+                    node_id,
+                }
+            }
         }
     };
 }

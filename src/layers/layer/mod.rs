@@ -6,7 +6,7 @@ pub(crate) mod state;
 pub(crate) use self::model::ModelLayer;
 use self::model::{ContentDrawFunction, PointerHandlerFunction};
 
-use skia::{Contains, ImageFilter};
+use skia::{ColorFilter, Contains, ImageFilter};
 use state::LayerDataProps;
 use std::{fmt, sync::Arc};
 use std::{
@@ -16,9 +16,9 @@ use std::{
 use taffy::style::Style;
 use taffy::{prelude::NodeId, style::Display};
 
-use crate::engine::node::RenderableFlags;
-use crate::engine::{animation::*, storage::TreeStorageId};
+use crate::engine::{animation::*, storage::TreeStorageId, AnimatedNodeChange};
 use crate::engine::{command::*, PointerEventType};
+use crate::engine::{node::RenderableFlags, TransactionCallback};
 use crate::engine::{Engine, NodeRef, TransactionRef};
 
 use crate::types::*;
@@ -154,8 +154,21 @@ impl Layer {
     change_model!(shadow_radius, f32, RenderableFlags::NEEDS_PAINT);
     change_model!(shadow_spread, f32, RenderableFlags::NEEDS_PAINT);
     change_model!(shadow_color, Color, RenderableFlags::NEEDS_PAINT);
-    change_model!(filter_progress, f32, RenderableFlags::NEEDS_PAINT);
+    change_model!(image_filter_progress, f32, RenderableFlags::NEEDS_PAINT);
 
+    pub fn change_size(&self, value: Size) -> AnimatedNodeChange {
+        let flags = RenderableFlags::NEEDS_LAYOUT;
+        let change: Arc<ModelChange<Size>> = Arc::new(ModelChange {
+            value_change: self.model.size.to(value, None),
+            flag: flags,
+        });
+        let node_id = self.id().unwrap();
+        AnimatedNodeChange {
+            animation_id: None,
+            change,
+            node_id,
+        }
+    }
     pub fn set_size(
         &self,
         value: impl Into<Size>,
@@ -335,70 +348,74 @@ impl Layer {
             self.engine.remove_pointer_handler(id, handler_id);
         }
     }
-    pub fn remove_all_handlers(&self) {
+    pub fn remove_all_pointer_handlers(&self) {
         if let Some(id) = self.id() {
-            self.engine.remove_all_handlers(id);
+            self.engine.remove_all_pointer_handlers(id);
         }
     }
 
     pub fn render_position(&self) -> Point {
         let id = self.id();
         if let Some(id) = id {
-            let node = self.engine.scene.get_node(id).unwrap();
-            let render_layer = node.get().render_layer.clone();
-            let rl = render_layer.read().unwrap();
+            if let Some(node) = self.engine.scene.get_node(id) {
+                let render_layer = node.get().render_layer.clone();
+                let rl = render_layer.read().unwrap();
 
-            return Point {
-                x: rl.global_transformed_bounds.x(),
-                y: rl.global_transformed_bounds.y(),
-            };
+                return Point {
+                    x: rl.global_transformed_bounds.x(),
+                    y: rl.global_transformed_bounds.y(),
+                };
+            }
         }
         Point { x: 0.0, y: 0.0 }
     }
     pub fn render_size(&self) -> Point {
         let id = self.id();
         if let Some(id) = id {
-            let node = self.engine.scene.get_node(id).unwrap();
-            let render_layer = node.get().render_layer.clone();
-            let rl = render_layer.read().unwrap();
+            if let Some(node) = self.engine.scene.get_node(id) {
+                let render_layer = node.get().render_layer.clone();
+                let rl = render_layer.read().unwrap();
 
-            return Point {
-                x: rl.global_transformed_bounds.width(),
-                y: rl.global_transformed_bounds.height(),
-            };
+                return Point {
+                    x: rl.global_transformed_bounds.width(),
+                    y: rl.global_transformed_bounds.height(),
+                };
+            }
         }
         Point { x: 0.0, y: 0.0 }
     }
     pub fn render_bounds_transformed(&self) -> skia_safe::Rect {
         let id = self.id();
         if let Some(id) = id {
-            let node = self.engine.scene.get_node(id).unwrap();
-            let render_layer = node.get().render_layer.clone();
-            let rl = render_layer.read().unwrap();
-
-            return rl.global_transformed_bounds;
+            if let Some(node) = self.engine.scene.get_node(id) {
+                let render_layer = node.get().render_layer.clone();
+                let rl = render_layer.read().unwrap();
+                return rl.global_transformed_bounds;
+            }
         }
         skia_safe::Rect::default()
     }
     pub fn render_bounds_with_children_transformed(&self) -> skia_safe::Rect {
         let id = self.id();
         if let Some(id) = id {
-            let node = self.engine.scene.get_node(id).unwrap();
-            let render_layer = node.get().render_layer.clone();
-            let rl = render_layer.read().unwrap();
+            if let Some(node) = self.engine.scene.get_node(id) {
+                let render_layer = node.get().render_layer.clone();
+                let rl = render_layer.read().unwrap();
 
-            return rl.global_transformed_bounds_with_children;
+                return rl.global_transformed_bounds_with_children;
+            }
         }
         skia_safe::Rect::default()
     }
     pub fn render_bounds_with_children(&self) -> skia_safe::Rect {
         let id = self.id();
         if let Some(id) = id {
-            let node = self.engine.scene.get_node(id).unwrap();
-            let render_layer = node.get().render_layer.clone();
-            let rl = render_layer.read().unwrap();
+            if let Some(node) = self.engine.scene.get_node(id) {
+                let render_layer = node.get().render_layer.clone();
+                let rl = render_layer.read().unwrap();
 
-            return rl.bounds_with_children;
+                return rl.bounds_with_children;
+            }
         }
         skia_safe::Rect::default()
     }
@@ -406,13 +423,30 @@ impl Layer {
         let point = point.into();
         self.render_bounds_transformed().contains(point)
     }
-    pub fn children(&self) -> Vec<NodeRef> {
+    pub fn children_nodes(&self) -> Vec<NodeRef> {
         if let Some(node_ref) = self.id() {
             let node_id: TreeStorageId = node_ref.into();
             return {
                 let arena = self.engine.scene.nodes.data();
                 let arena = arena.read().unwrap();
                 node_id.children(&arena).map(NodeRef).collect()
+            };
+        }
+        vec![]
+    }
+    pub fn children(&self) -> Vec<Layer> {
+        if let Some(node_ref) = self.id() {
+            let node_id: TreeStorageId = node_ref.into();
+            return {
+                let arena = self.engine.scene.nodes.data();
+                let arena = arena.read().unwrap();
+                node_id
+                    .children(&arena)
+                    .map(|cid| {
+                        let c = arena.get(cid).unwrap();
+                        c.get().layer.clone()
+                    })
+                    .collect()
             };
         }
         vec![]
@@ -432,12 +466,18 @@ impl Layer {
         f(&mut data)
     }
 
-    pub fn set_filter(&self, filter: impl Into<Option<ImageFilter>>) {
+    pub fn set_image_filter(&self, filter: impl Into<Option<ImageFilter>>) {
         let filter = filter.into();
-        if filter.is_some() {
-            // self.set_image_cache(true);
-        }
-        let mut model_filter = self.model.filter.write().unwrap();
+        let mut model_filter = self.model.image_filter.write().unwrap();
+        *model_filter = filter;
+    }
+    pub fn set_color_filter(&self, filter: impl Into<Option<ColorFilter>>) {
+        let filter = filter.into();
+
+        let id = self.id().unwrap();
+        let change = Arc::new(NoopChange::new(id.0.into()));
+        self.engine.schedule_change(id, change, None);
+        let mut model_filter = self.model.color_filter.write().unwrap();
         *model_filter = filter;
     }
     pub fn set_filter_bounds(&self, bounds: impl Into<Option<skia::Rect>>) {
@@ -454,7 +494,7 @@ impl Layer {
     pub fn set_effect(&self, effect: impl Effect + 'static) {
         let effect = Arc::new(effect);
         effect.init(self);
-        let filter_model_id = self.model.filter_progress.id;
+        let filter_model_id = self.model.image_filter_progress.id;
         let tr = TransactionRef {
             id: filter_model_id,
             engine_id: self.engine.id,
@@ -463,7 +503,7 @@ impl Layer {
         self.engine.on_update(
             tr,
             move |l: &Layer, _p| {
-                effect_ref.update(l, l.model.filter_progress.value());
+                effect_ref.update(l, l.model.image_filter_progress.value());
             },
             false,
         );
@@ -471,10 +511,7 @@ impl Layer {
         self.engine.on_start(
             tr,
             move |l: &Layer, _| {
-                let filter_progress = l.model.filter_progress.value();
-                if filter_progress == 0.0 {
-                    effect_ref.start(l);
-                }
+                effect_ref.start(l);
             },
             false,
         );
@@ -487,6 +524,17 @@ impl Layer {
         }
 
         *effect = None;
+    }
+    pub fn on_change_size<F: Into<TransactionCallback>>(&self, f: F, once: bool) {
+        let size_id = self.model.size.id;
+        self.engine.on_update(
+            TransactionRef {
+                id: size_id,
+                engine_id: self.engine.id,
+            },
+            f,
+            once,
+        );
     }
 }
 

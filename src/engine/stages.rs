@@ -44,7 +44,7 @@ pub(crate) fn update_animations(
                     return;
                 }
                 let (animation_progress, time_progress) = animation.value_at(timestamp.0);
-                if !(*is_started) {
+                if !(*is_started) && animation.start <= timestamp.0 {
                     *is_started = true;
                     started_animations.write().unwrap().push(*id);
                 }
@@ -148,6 +148,7 @@ pub(crate) fn nodes_for_layout(engine: &Engine) -> Vec<NodeRef> {
 #[profiling::function]
 pub(crate) fn update_layout_tree(engine: &Engine) {
     {
+        profiling::scope!("update_nodes_size");
         let arena = engine.scene.nodes.data();
         let arena = arena.read().unwrap();
         arena.iter().for_each(|node| {
@@ -167,15 +168,18 @@ pub(crate) fn update_layout_tree(engine: &Engine) {
     // if layout.dirty(layout_root).unwrap() {
     let scene_size = engine.scene.size.read().unwrap();
 
-    layout
-        .compute_layout(
-            layout_root,
-            Size {
-                width: length(scene_size.x),
-                height: length(scene_size.y),
-            },
-        )
-        .unwrap();
+    {
+        profiling::scope!("compute_layout");
+        layout
+            .compute_layout(
+                layout_root,
+                Size {
+                    width: length(scene_size.x),
+                    height: length(scene_size.y),
+                },
+            )
+            .unwrap();
+    }
 
     // }
 }
@@ -194,9 +198,14 @@ pub(crate) fn update_node(
 
     let node_layout = layout.layout(node.layout_node_id).unwrap();
 
-    let mut transformed_bounds = {
+    let mut transformed_bounds;
+    let mut opacity;
+    (transformed_bounds, opacity) = {
         let render_layer = node.render_layer.read().unwrap();
-        render_layer.global_transformed_bounds
+        (
+            render_layer.global_transformed_bounds,
+            render_layer.premultiplied_opacity,
+        )
     };
 
     let cumulative_transform = parent.map(|p| &p.transform);
@@ -206,7 +215,7 @@ pub(crate) fn update_node(
     let _new_layout = node.layout_if_needed(node_layout, cumulative_transform, context_opacity);
 
     let render_layer = node.render_layer();
-    let new_transformed_bounds = { render_layer.global_transformed_bounds };
+    let new_transformed_bounds = render_layer.global_transformed_bounds;
 
     // update the picture of the node
     let mut node_damage = node.repaint_if_needed();
@@ -219,7 +228,11 @@ pub(crate) fn update_node(
     let pos_changed = transformed_bounds.x() != new_transformed_bounds.x()
         || transformed_bounds.y() != new_transformed_bounds.y();
 
-    if pos_changed && !transformed_bounds.is_empty() && render_layer.premultiplied_opacity > 0.0 {
+    let opacity_changed = opacity != render_layer.premultiplied_opacity;
+
+    if (pos_changed && !transformed_bounds.is_empty()) && render_layer.premultiplied_opacity > 0.0
+        || opacity_changed
+    {
         let mut last_damage = node.repaint_damage.write().unwrap();
 
         let ld = *last_damage;
@@ -248,7 +261,7 @@ pub(crate) fn update_node(
         })
         .fold(
             (node.render_layer(), damaged, node_damage),
-            |(_, damaged, node_damage), (r, _, child_damage)| {
+            |(_, damaged, node_damage), (r, child_damaged, child_damage)| {
                 // update the bounds of the node to include the children
 
                 // update bounds_with_children
@@ -258,18 +271,6 @@ pub(crate) fn update_node(
                     .global_transformed_bounds_with_children
                     .join(r.global_transformed_bounds_with_children);
 
-                // println!(
-                //     "({}) fold: child.bounds_with_children: {:?}",
-                //     node_id, r.bounds_with_children
-                // );
-                // println!(
-                //     "({}) fold: child.position: {:?}",
-                //     node_id,
-                //     (
-                //         r.local_transform.to_m33().translate_x(),
-                //         r.local_transform.to_m33().translate_y()
-                //     )
-                // );
                 let (child_bounds, _) = r.local_transform.to_m33().map_rect(r.bounds_with_children);
                 // let child_bounds = r.bounds_with_children;
                 // println!(
@@ -279,19 +280,10 @@ pub(crate) fn update_node(
 
                 render_layer.bounds_with_children.join(child_bounds);
 
-                // println!(
-                //     "({}) fold: bounds_with_children: {:?}",
-                //     node_id, render_layer.bounds_with_children
-                // );
-
                 let node_damage = skia::Rect::join2(node_damage, child_damage);
-                (render_layer.clone(), damaged, node_damage)
+                (render_layer.clone(), damaged || child_damaged, node_damage)
             },
         );
-    // println!(
-    //     "({}) update_node: bounds_with_children: {:?}",
-    //     node_id, render_layer.bounds_with_children
-    // );
 
     // if the node has some drawing in it, and has changed size or position
     // we need to repaint
@@ -300,7 +292,8 @@ pub(crate) fn update_node(
     //     transformed_bounds.join(new_transformed_bounds);
     //     node_damage.join(transformed_bounds);
     // }
-    if !node_damage.is_empty() {
+    if damaged {
+        // if !node_damage.is_empty() {
         node.increase_frame();
     }
     // let render_layer = node.render_layer.read().unwrap();
@@ -330,22 +323,24 @@ pub(crate) fn trigger_callbacks(engine: &Engine, started_animations: &[FlatStora
                     is_finished: true,
                     is_started: false,
                 });
-            let node = scene.get_node(command.node_id.0).unwrap();
-            let node = node.get();
-            let started = command
-                .animation_id
-                .map(|a| started_animations.contains(&a.0))
-                .unwrap_or(false);
-            let to_remove = transaction_callbacks(&animation_state, ch, &node.layer, started);
-            {
-                engine
-                    .transaction_handlers
-                    .with_data_mut(|transatction_handlers| {
-                        let handler = transatction_handlers.get_mut(id).unwrap();
-                        to_remove.iter().for_each(|tr_callback| {
-                            handler.remove(tr_callback);
+            // the check is needed because the node could have been removed
+            if let Some(node) = scene.get_node(command.node_id.0) {
+                let node = node.get();
+                let started = command
+                    .animation_id
+                    .map(|a| started_animations.contains(&a.0))
+                    .unwrap_or(false);
+                let to_remove = transaction_callbacks(&animation_state, ch, &node.layer, started);
+                {
+                    engine
+                        .transaction_handlers
+                        .with_data_mut(|transatction_handlers| {
+                            let handler = transatction_handlers.get_mut(id).unwrap();
+                            to_remove.iter().for_each(|tr_callback| {
+                                handler.remove(tr_callback);
+                            });
                         });
-                    });
+                }
             }
         }
     });
@@ -402,21 +397,24 @@ fn transaction_callbacks(
 pub(crate) fn cleanup_animations(engine: &Engine, finished_animations: Vec<FlatStorageId>) {
     let animations = engine.animations.data();
     let mut animations = animations.write().unwrap();
-    let handlers = engine.transaction_handlers.data();
-    let mut handlers = handlers.write().unwrap();
 
     let animations_finished_to_remove = finished_animations;
     for animation_id in animations_finished_to_remove.iter() {
         animations.remove(animation_id);
-        handlers.remove(animation_id);
     }
 }
 #[profiling::function]
 pub(crate) fn cleanup_transactions(engine: &Engine, finished_transations: Vec<FlatStorageId>) {
     let transactions = engine.transactions.data();
     let mut transactions = transactions.write().unwrap();
+    let handlers = engine.transaction_handlers.data();
+    let mut handlers = handlers.write().unwrap();
+
     for command_id in finished_transations.iter() {
         transactions.remove(command_id);
+        if let Some(handler) = handlers.get_mut(command_id) {
+            handler.cleanup_once_callbacks();
+        }
     }
 }
 #[profiling::function]
