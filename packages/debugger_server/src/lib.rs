@@ -19,7 +19,8 @@ struct RegisterRequest {
 
 #[derive(serde::Deserialize, serde::Serialize)]
 struct RegisterResponse {
-    url: String,
+    uuid: String,
+    port: u16,
 }
 
 #[derive(serde::Deserialize, serde::Serialize)]
@@ -87,7 +88,11 @@ async fn start_debugger(debug_server: Arc<dyn DebugServer>) {
 
     let client_files = warp::path("client").and(static_dir!("client/build/"));
     let cors = warp::cors()
-        .allow_origins(vec!["http://localhost:3000", "http://localhost:8000"])
+        .allow_origins(vec![
+            "http://localhost:3000",
+            "http://localhost:8000",
+            "http://192.168.122.246:8000",
+        ])
         .allow_headers(vec![
             "User-Agent",
             "Sec-Fetch-Mode",
@@ -110,7 +115,7 @@ async fn start_debugger(debug_server: Arc<dyn DebugServer>) {
         .or(client_files)
         .with(cors);
 
-    warp::serve(routes).run(([127, 0, 0, 1], 8000)).await;
+    warp::serve(routes).run(([0, 0, 0, 0], 8000)).await;
 }
 
 pub struct DebugServerError;

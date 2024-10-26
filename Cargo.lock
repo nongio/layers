@@ -353,6 +353,12 @@ checksum = "8f1fe948ff07f4bd06c30984e69f5b4899c516a3ef74f34df92a2df2ab535495"
 
 [[package]]
 name = "bytes"
+version = "1.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8f1fe948ff07f4bd06c30984e69f5b4899c516a3ef74f34df92a2df2ab535495"
+
+[[package]]
+name = "bytes"
 version = "1.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d71b6127be86fdcfddb610f7182ac57211d4b18a3e9c82eb2d17662f2227ad6a"
@@ -2116,7 +2122,7 @@ version = "0.1.0"
 dependencies = [
  "gl",
  "glutin 0.28.0",
- "image 0.24.7",
+ "image 0.24.9",
  "layers",
  "rand 0.8.5",
  "winit 0.26.1",
@@ -2128,7 +2134,7 @@ version = "0.1.0"
 dependencies = [
  "gl",
  "glutin 0.29.1",
- "image 0.24.7",
+ "image 0.24.9",
  "layers",
  "mt-dom",
  "rand 0.8.5",
@@ -2142,7 +2148,7 @@ version = "0.1.0"
 dependencies = [
  "gl",
  "glutin 0.29.1",
- "image 0.24.7",
+ "image 0.24.9",
  "layers",
  "mt-dom",
  "rand 0.8.5",
@@ -2156,7 +2162,7 @@ version = "0.1.0"
 dependencies = [
  "gl",
  "glutin 0.29.1",
- "image 0.24.7",
+ "image 0.24.9",
  "layers",
  "mt-dom",
  "rand 0.8.5",
@@ -2376,9 +2382,9 @@ dependencies = [
 
 [[package]]
 name = "image"
-version = "0.25.5"
+version = "0.25.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cd6f44aed642f18953a158afeb30206f4d50da59fbc66ecb53c66488de73563b"
+checksum = "bc144d44a31d753b02ce64093d532f55ff8dc4ebf2ffb8a63c0dda691385acae"
 dependencies = [
  "bytemuck",
  "byteorder-lite",
@@ -2392,7 +2398,7 @@ version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "96cd73af13ae2e7220a1c02fe7d6bb53be50612ba7fabbb5c88e7753645f1f3c"
 dependencies = [
- "image 0.25.5",
+ "image 0.25.4",
  "itertools 0.12.1",
  "rayon",
  "thiserror",
@@ -2466,7 +2472,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "strum",
- "syn 2.0.99",
+ "syn 2.0.77",
  "thiserror",
 ]
 
@@ -2663,7 +2669,7 @@ dependencies = [
  "foreign-types-shared 0.1.1",
  "gl",
  "glutin 0.29.1",
- "image 0.25.5",
+ "image 0.25.4",
  "image-compare",
  "indexmap 1.9.3",
  "indextree",
@@ -4902,6 +4908,28 @@ dependencies = [
  "proc-macro2",
  "quote",
  "rustversion",
+ "syn 2.0.77",
+]
+
+[[package]]
+name = "subtle"
+version = "2.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8fec0f0aef304996cf250b31b5a10dee7980c85da9d759361292b8bca5a18f06"
+dependencies = [
+ "strum_macros",
+]
+
+[[package]]
+name = "strum_macros"
+version = "0.26.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4c6bee85a5a24955dc440386795aa378cd9cf82acd5f764469152d2270e581be"
+dependencies = [
+ "heck 0.5.0",
+ "proc-macro2",
+ "quote",
+ "rustversion",
  "syn 2.0.99",
 ]
 
@@ -5016,7 +5044,7 @@ dependencies = [
  "glib",
  "glib-sys",
  "gtk",
- "image 0.24.7",
+ "image 0.24.9",
  "instant",
  "jni",
  "lazy_static",
