@@ -125,10 +125,10 @@ pub fn draw_debug(
     render_layer: &RenderLayer,
 ) {
     let font_mgr = skia_safe::FontMgr::new();
-    let typeface = font_mgr
+    let font = font_mgr
         .match_family_style("Inter", skia_safe::FontStyle::default())
-        .unwrap();
-    let font = skia_safe::Font::from_typeface_with_params(typeface, 22.0, 1.0, 0.0);
+        .map(|t| skia_safe::Font::from_typeface_with_params(t, 22.0, 1.0, 0.0))
+        .unwrap_or_default();
 
     let mut paint = skia_safe::Paint::default();
     paint.set_color4f(crate::types::Color::new_hex("#8ABFFF70").c4f(), None);
@@ -152,8 +152,16 @@ pub fn draw_debug(
     // canvas.draw_rect(bounds, &paint);
 
     // paint.set_color4f(skia_safe::Color4f::new(1.0, 1.0, 1.0, 1.0), None);
-    let balloon =
-        skia::RRect::new_rect_xy(skia::Rect::from_xywh(0.0, 0.0, 100.0, 30.0), 10.0, 10.0);
+    let balloon = skia::RRect::new_rect_xy(
+        skia::Rect::from_xywh(
+            render_layer.bounds_with_children.x(),
+            render_layer.bounds_with_children.y(),
+            100.0,
+            30.0,
+        ),
+        10.0,
+        10.0,
+    );
     paint.set_color4f(crate::types::Color::new_hex("#ffffffff").c4f(), None);
     paint.set_stroke(false);
     canvas.draw_rrect(balloon, &paint);
@@ -163,8 +171,14 @@ pub fn draw_debug(
     canvas.draw_rrect(balloon, &paint);
     paint.set_stroke(false);
     canvas.draw_str(
-        format!("{} | {}", &dbg_info.info, dbg_info.frame),
-        (20.0, 20.0),
+        format!(
+            "{} | {} | {}",
+            &dbg_info.info, dbg_info.frame, render_layer.opacity
+        ),
+        (
+            render_layer.bounds_with_children.x() + 20.0,
+            render_layer.bounds_with_children.y() + 20.0,
+        ),
         &font,
         &paint,
     );

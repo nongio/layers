@@ -79,7 +79,6 @@ impl DrawCache {
         if self.size.width == 0.0 || self.size.height == 0.0 {
             return;
         }
-
         canvas.draw_picture(&self.picture, None, Some(paint));
     }
 }

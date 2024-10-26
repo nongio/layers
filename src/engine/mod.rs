@@ -29,6 +29,7 @@ use indextree::NodeId;
 use node::ContainsPoint;
 
 #[cfg(feature = "debugger")]
+#[allow(unused_imports)]
 use stages::send_debugger;
 
 use stages::{nodes_for_layout, trigger_callbacks, update_node};
@@ -75,10 +76,10 @@ trait CommandWithAnimation: SyncCommand {
 }
 
 #[derive(Clone, Debug)]
-struct AnimatedNodeChange {
+pub struct AnimatedNodeChange {
     pub change: Arc<dyn SyncCommand>,
-    animation_id: Option<AnimationRef>,
-    node_id: NodeRef,
+    pub animation_id: Option<AnimationRef>,
+    pub node_id: NodeRef,
 }
 
 /// A struct that contains the state of an animation.
@@ -150,6 +151,11 @@ impl TransitionCallbacks {
         self.on_start.retain(|h| h != tr);
         self.on_finish.retain(|h| h != tr);
         self.on_update.retain(|h| h != tr);
+    }
+    pub fn cleanup_once_callbacks(&mut self) {
+        self.on_start.retain(|h| !h.once);
+        self.on_finish.retain(|h| !h.once);
+        self.on_update.retain(|h| !h.once);
     }
 }
 impl Default for TransitionCallbacks {
@@ -368,11 +374,22 @@ impl LayersEngine {
             effect: Arc::new(RwLock::new(None)),
         }
     }
-    pub fn new_animation(&self, transition: Transition) -> AnimationRef {
-        self.engine.add_animation_from_transition(transition)
+    pub fn new_animation(&self, transition: Transition, autostart: bool) -> AnimationRef {
+        self.engine
+            .add_animation_from_transition(transition, autostart)
     }
     pub fn attach_animation(&self, transaction: TransactionRef, animation: AnimationRef) {
         self.engine.attach_animation(transaction, animation);
+    }
+    pub fn start_animation(&self, animation: AnimationRef, delay: f32) {
+        self.engine.start_animation(animation, delay);
+    }
+    pub fn add_animated_changes(
+        &self,
+        animated_changes: &[AnimatedNodeChange],
+        animation: impl Into<Option<AnimationRef>>,
+    ) -> Vec<TransactionRef> {
+        self.engine.schedule_changes(animated_changes, animation)
     }
     pub fn update(&self, dt: f32) -> bool {
         self.engine.update(dt)
@@ -409,10 +426,10 @@ impl LayersEngine {
     pub fn scene_set_root(&self, layer: impl Into<Layer>) -> NodeRef {
         self.engine.scene_set_root(layer)
     }
-    pub fn scene_get_node(&self, node: NodeRef) -> Option<TreeStorageNode<SceneNode>> {
+    pub fn scene_get_node(&self, node: &NodeRef) -> Option<TreeStorageNode<SceneNode>> {
         self.engine.scene_get_node(node)
     }
-    pub fn scene_get_node_parent(&self, node: NodeRef) -> Option<NodeRef> {
+    pub fn scene_get_node_parent(&self, node: &NodeRef) -> Option<NodeRef> {
         self.engine.scene_get_node_parent(node)
     }
     pub fn scene(&self) -> &Arc<Scene> {
@@ -431,12 +448,13 @@ impl LayersEngine {
     pub fn damage(&self) -> skia_safe::Rect {
         *self.engine.damage.read().unwrap()
     }
+    #[profiling::function]
     pub fn clear_damage(&self) {
         *self.engine.damage.write().unwrap() = skia_safe::Rect::default();
     }
     pub fn root_layer(&self) -> Option<SceneNode> {
         let root_id = self.scene_root()?;
-        let node = self.scene_get_node(root_id)?;
+        let node = self.scene_get_node(&root_id)?;
         Some(node.get().clone())
     }
     pub fn pointer_move(&self, point: impl Into<Point>, root_id: impl Into<Option<NodeId>>) {
@@ -475,6 +493,9 @@ impl LayersEngine {
         once: bool,
     ) {
         self.engine.on_start(transaction, handler, once);
+    }
+    pub fn get_pointer_position(&self) -> Point {
+        self.engine.get_pointer_position()
     }
 }
 
@@ -618,7 +639,7 @@ impl Engine {
         let position = layer.render_position();
         let parent_position = parent
             .and_then(|parent| {
-                self.scene_get_node(parent).map(|parent| {
+                self.scene_get_node(&parent).map(|parent| {
                     let b = parent.get().transformed_bounds();
                     Point { x: b.x(), y: b.y() }
                 })
@@ -628,17 +649,22 @@ impl Engine {
             x: position.x - parent_position.x,
             y: position.y - parent_position.y,
         };
-        // println!("current position {:?}", position);
-        // println!("parent position {:?}", parent_position);
-        // println!("new position {:?}", new_position);
-        layer.set_position(new_position, None);
+
         let node = self.scene_add_layer(layer.clone(), parent);
+        layer.set_position(new_position, None);
         {
             execute_transactions(self);
             nodes_for_layout(self);
             update_layout_tree(self);
             self.update_nodes();
         }
+
+        // println!("current position {:?}", position);
+        // println!("parent position {:?}", parent_position);
+        // println!("new model position {:?}", new_position);
+        // let new_position = layer.render_position();
+        // println!("new render position {:?}", new_position);
+
         node
     }
     pub fn mark_for_delete(&self, layer: NodeRef) {
@@ -673,11 +699,11 @@ impl Engine {
             }
         }
     }
-    pub fn scene_get_node(&self, node: NodeRef) -> Option<TreeStorageNode<SceneNode>> {
-        self.scene.get_node(node)
+    pub fn scene_get_node(&self, node: &NodeRef) -> Option<TreeStorageNode<SceneNode>> {
+        self.scene.get_node(*node)
     }
-    pub fn scene_get_node_parent(&self, node: NodeRef) -> Option<NodeRef> {
-        let node = self.scene.get_node(node)?;
+    pub fn scene_get_node_parent(&self, node: &NodeRef) -> Option<NodeRef> {
+        let node = self.scene.get_node(*node)?;
         let parent = node.parent();
         parent.map(NodeRef)
     }
@@ -685,7 +711,11 @@ impl Engine {
         self.timestamp.read().unwrap().0
     }
 
-    pub fn add_animation_from_transition(&self, transition: Transition) -> AnimationRef {
+    pub fn add_animation_from_transition(
+        &self,
+        transition: Transition,
+        autostart: bool,
+    ) -> AnimationRef {
         let start = self.now() + transition.delay;
 
         self.add_animation(
@@ -694,7 +724,7 @@ impl Engine {
                 duration: transition.duration,
                 timing: transition.timing,
             },
-            true,
+            autostart,
         )
     }
 
@@ -708,18 +738,40 @@ impl Engine {
             is_started: false,
         }))
     }
-    pub fn start_animation(&self, animation: AnimationRef, delay: Option<f32>) {
+    pub fn start_animation(&self, animation: AnimationRef, delay: f32) {
         let animations = self.animations.data();
         let mut animations = animations.write().unwrap();
         if let Some(animation_state) = animations.get_mut(&animation.0) {
-            animation_state.animation.start =
-                self.timestamp.read().unwrap().0 + delay.unwrap_or(0.0);
+            animation_state.animation.start = self.timestamp.read().unwrap().0 + delay;
             animation_state.is_running = true;
             animation_state.is_finished = false;
             animation_state.progress = 0.0;
         }
     }
 
+    pub fn schedule_changes(
+        &self,
+        animated_changes: &[AnimatedNodeChange],
+        animation: impl Into<Option<AnimationRef>>,
+    ) -> Vec<TransactionRef> {
+        let animation = animation.into();
+        let mut transactions = Vec::with_capacity(animated_changes.len());
+        for animated_node_change in animated_changes {
+            let mut animated_node_change = animated_node_change.clone();
+            if animation.is_some() {
+                animated_node_change.animation_id = animation;
+            }
+            let transaction_id = animated_node_change.change.value_id();
+            let transaction = TransactionRef {
+                id: self
+                    .transactions
+                    .insert_with_id(animated_node_change.clone(), transaction_id),
+                engine_id: self.id,
+            };
+            transactions.push(transaction);
+        }
+        transactions
+    }
     pub fn schedule_change(
         &self,
         target_id: NodeRef,
@@ -729,7 +781,7 @@ impl Engine {
         let node = self.scene.nodes.get(target_id.0);
         if node.is_some() {
             let transaction_id: usize = change.value_id();
-            let node_change = AnimatedNodeChange {
+            let animated_node_change = AnimatedNodeChange {
                 change,
                 animation_id,
                 node_id: target_id,
@@ -737,7 +789,7 @@ impl Engine {
             TransactionRef {
                 id: self
                     .transactions
-                    .insert_with_id(node_change, transaction_id),
+                    .insert_with_id(animated_node_change, transaction_id),
                 engine_id: self.id,
             }
         } else {
@@ -796,6 +848,7 @@ impl Engine {
 
         // 6.0 cleanup the nodes that are marked as removed
         let removed_damage = cleanup_nodes(self);
+
         damage.join(removed_damage);
 
         let mut current_damage = self.damage.write().unwrap();
@@ -807,7 +860,7 @@ impl Engine {
             send_debugger(self.scene.clone(), scene_root);
         }
 
-        needs_draw
+        needs_draw || !damage.is_empty()
     }
     #[profiling::function]
     pub fn update_nodes(&self) -> skia_safe::Rect {
@@ -840,13 +893,17 @@ impl Engine {
     pub fn set_node_layout_size(&self, node: taffy::NodeId, size: crate::types::Size) {
         let mut layout = self.layout_tree.write().unwrap();
         let mut style = layout.style(node).unwrap().clone();
-        style.size = taffy::geometry::Size {
+        let new_size = taffy::geometry::Size {
             width: size.width,
             height: size.height,
         };
+        if style.size != new_size {
+            style.size = new_size;
+            layout.set_style(node, style).unwrap();
+        }
 
         // println!("{:?} set_node_layout_size: {:?}", node, style.size);
-        layout.set_style(node, style).unwrap();
+        // layout.set_style(node, style).unwrap();
     }
 
     pub fn layer_at(&self, point: Point) -> Option<NodeRef> {
@@ -968,7 +1025,7 @@ impl Engine {
         }
     }
 
-    pub fn remove_all_handlers(&self, layer_node: NodeRef) {
+    pub fn remove_all_pointer_handlers(&self, layer_node: NodeRef) {
         let node_id = layer_node.0.into();
         if let Some(mut pointer_callback) = self.pointer_handlers.get(&node_id) {
             pointer_callback.on_move.clear();
@@ -1097,6 +1154,9 @@ impl Engine {
     }
     pub fn current_hover(&self) -> Option<NodeRef> {
         *self.current_hover_node.read().unwrap()
+    }
+    pub fn get_pointer_position(&self) -> Point {
+        *self.pointer_position.read().unwrap()
     }
 }
 

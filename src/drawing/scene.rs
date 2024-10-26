@@ -1,14 +1,14 @@
 #![allow(warnings)]
 
 use indextree::{Arena, NodeId};
-use skia::Surface;
+use skia::{FontStyle, Surface};
 use skia_safe::Canvas;
 use skia_safe::Contains;
 
 use crate::{
     engine::{
         draw_to_picture::DrawDebugInfo,
-        node::{DrawCacheManagement, SceneNode},
+        node::{self, DrawCacheManagement, SceneNode},
         scene::Scene,
         storage::TreeStorageId,
         NodeRef,
@@ -160,7 +160,6 @@ pub fn create_surface_for_node(
     render_layer: &RenderLayer,
     context: &mut skia_safe::gpu::DirectContext,
 ) -> Option<Surface> {
-    println!("Creating surface for node {:?}", node.id().unwrap().0);
     let bounds = surface_size_for_render_layer(render_layer);
     const safe_multiplier: f32 = 1.2;
     let width = (bounds.x * safe_multiplier) as i32;
@@ -193,21 +192,26 @@ pub fn create_surface_for_node(
 }
 
 // paint a node and his subtree in the provided canvas
+#[profiling::function]
 fn paint_node_tree(
     node_ref: NodeRef,
     arena: &Arena<SceneNode>,
     render_canvas: &skia_safe::Canvas,
     render_layer: &RenderLayer,
     context_opacity: f32,
+    offscreen: bool,
     dbg_info: Option<&DrawDebugInfo>,
 ) {
     let node_id: TreeStorageId = node_ref.into();
 
-    paint_node(node_ref, arena, render_canvas, context_opacity);
+    paint_node(node_ref, arena, render_canvas, context_opacity, offscreen);
     if let Some(dbg_info) = dbg_info {
         draw_debug(render_canvas, dbg_info, render_layer);
     }
-    let context_opacity = render_layer.opacity * context_opacity;
+    let mut context_opacity = render_layer.opacity * context_opacity;
+    if (offscreen) {
+        context_opacity = render_layer.opacity;
+    }
     // let bounds = skia_safe::Rect::from_wh(render_layer.size.x, render_layer.size.y);
     // canvas.clip_rect(bounds, None, None);
     node_id.children(arena).for_each(|child_id| {
@@ -218,14 +222,13 @@ fn paint_node_tree(
 
 // render a node and his subtree in the provided canvas
 // taking care of the image caching if needed
+#[profiling::function]
 pub fn render_node_tree(
     node_ref: NodeRef,
     arena: &Arena<SceneNode>,
     render_canvas: &skia_safe::Canvas,
     context_opacity: f32,
 ) {
-    #[cfg(feature = "profile-with-puffin")]
-    profiling::puffin::profile_scope!("render_node_tree");
     let node_id: TreeStorageId = node_ref.into();
 
     let scene_node = arena.get(node_id).unwrap().get();
@@ -239,27 +242,34 @@ pub fn render_node_tree(
     let dbg_info = scene_node.debug_info.read().unwrap();
     let dbg_info = dbg_info.as_ref();
     if scene_node.is_image_cached() {
+        #[cfg(feature = "profile-with-puffin")]
+        profiling::puffin::profile_scope!("image_cached");
         // in this case the layer is ping-ponged
-
         if let Some(rendering_surface) = unsafe { render_canvas.surface() } {
             if let Some(mut recording_ctx) = rendering_surface.recording_context() {
-                if let Some((recorded_frame, mut recording_surface, image)) = surface_for_node(
+                if let Some((recorded_frame, mut recording_surface, mut image)) = surface_for_node(
                     scene_node,
                     &render_layer,
                     &mut recording_ctx.as_direct_context().unwrap(),
                 ) {
                     // if there is a surface for image caching draw in it
+                    let surface_size = surface_size_for_render_layer(&render_layer);
                     let surface_offset = surface_offset_for_render_layer(&render_layer);
+
+                    let surface_position_x = render_layer.bounds_with_children.x();
+                    let surface_position_y = render_layer.bounds_with_children.y();
+
+                    let bounds = render_layer.bounds;
+
                     let offset = skia_safe::M44::translate(
-                        surface_offset.x - render_layer.bounds_with_children.x(),
-                        surface_offset.y - render_layer.bounds_with_children.y(),
+                        surface_offset.x - surface_position_x,
+                        surface_offset.y - surface_position_y,
                         0.0,
                     );
 
                     // draw into the offscreen surface
                     let current_frame = scene_node.frame.load(std::sync::atomic::Ordering::Relaxed);
                     if current_frame != recorded_frame {
-                        // println!("Drawing into the offscreen surface");
                         let surface_bounds = skia::Rect::from_wh(
                             recording_surface.width() as f32,
                             recording_surface.height() as f32,
@@ -271,57 +281,84 @@ pub fn render_node_tree(
                         recording_canvas.save();
                         recording_canvas.set_matrix(&offset);
 
-                        // debug drawing
-                        // let mut paint = skia_safe::Paint::default();
-                        // paint.set_color4f(Color::new_hex("#27AC12").c4f(), None);
-                        // paint.set_stroke(true);
-                        // paint.set_stroke_width(4.0);
-                        // recording_canvas.draw_rect(render_layer.bounds_with_children, &paint);
-
                         paint_node_tree(
                             node_ref,
                             arena,
                             &recording_canvas,
                             &render_layer,
                             context_opacity,
+                            true,
                             dbg_info,
                         );
+                        // debug drawing
+                        // let mut paint = skia_safe::Paint::default();
+                        // paint.set_color4f(Color::new_hex("#27AC12").c4f(), None);
+                        // paint.set_stroke(true);
+                        // paint.set_stroke_width(4.0);
+                        // recording_canvas.draw_rect(render_layer.bounds_with_children, &paint);
+                        // let font_mgr = skia_safe::FontMgr::new();
+                        // let typeface = font_mgr
+                        //     .match_family_style("Inter", FontStyle::normal())
+                        //     .unwrap();
+                        // let font = skia::Font::from_typeface_with_params(typeface, 20.0, 1.0, 0.0);
+                        // paint.set_stroke(false);
+                        // recording_canvas.draw_str(
+                        //     format!("{} | {}", render_layer.opacity, current_frame),
+                        //     (
+                        //         render_layer.bounds_with_children.x() + 5.0,
+                        //         render_layer.bounds_with_children.y() + 25.0,
+                        //     ),
+                        //     &font,
+                        //     &paint,
+                        // );
 
                         recording_canvas.restore();
 
-                        if let Some(mut context) = recording_ctx.as_direct_context() {
-                            context.flush_and_submit_surface(
-                                &mut recording_surface,
-                                Some(sb::GrSyncCpu::No),
-                            );
-                        }
+                        // if let Some(mut context) = recording_ctx.as_direct_context() {
+                        //     context.flush_and_submit_surface(
+                        //         &mut recording_surface,
+                        //         Some(sb::GrSyncCpu::No),
+                        //     );
+                        // } else {
+                        //     println!("Failed to get the direct context");
+                        // }
 
-                        let image = recording_surface.image_snapshot();
+                        image = recording_surface.image_snapshot();
                         set_surface_for_node(
                             &node_ref,
                             recording_surface.clone(),
-                            image,
+                            image.clone(),
                             current_frame,
                         );
                     } // end draw into the offscreen surface
 
-                    let filter = scene_node.layer.model.filter.read().unwrap();
+                    let image = recording_surface.image_snapshot();
+
+                    let image_filter = scene_node.layer.model.image_filter.read().unwrap();
                     let mut paint = skia_safe::Paint::default();
                     paint.set_color4f(skia_safe::Color4f::new(1.0, 0.0, 0.0, 1.0), None);
-                    // paint.set_image_filter(filter.clone());
 
                     let width = recording_surface.width() as f32;
                     let height = recording_surface.height() as f32;
                     let x = render_layer.bounds.x();
                     let y = render_layer.bounds.y();
                     let filter_bounds = scene_node.layer.model.filter_bounds.read().unwrap();
-                    if let Some(filter_bounds) = *filter_bounds {
-                        render_canvas.clip_rect(&filter_bounds, None, None);
-                    }
 
-                    // paint.set_alpha_f(context_opacity);
-                    if let Some(filter) = filter.as_ref() {
+                    paint.set_alpha_f(context_opacity * render_layer.opacity);
+
+                    let color_filter = scene_node.layer.model.color_filter.read().unwrap();
+
+                    if let Some(filter) = image_filter.as_ref() {
+                        if let Some(filter_bounds) = *filter_bounds {
+                            render_canvas.clip_rect(&filter_bounds, None, None);
+                        }
                         paint.set_image_filter(filter.clone());
+                    }
+                    if let Some(filter) = color_filter.as_ref() {
+                        if let Some(filter_bounds) = *filter_bounds {
+                            render_canvas.clip_rect(&filter_bounds, None, None);
+                        }
+                        paint.set_color_filter(filter.clone());
                     }
                     // the render_canvas has already the transform applied
                     let x = render_layer.bounds_with_children.x() - surface_offset.x;
@@ -329,40 +366,6 @@ pub fn render_node_tree(
 
                     render_canvas.draw_image(&image, (x, y), Some(&paint));
 
-                    // println!("Drawing image {} in {},{}", nid, x,y);
-                    // render_canvas.draw_image_rect_with_sampling_options(
-                    //     &image,
-                    //     None,
-                    //     skia_safe::Rect::from_xywh(
-                    //         render_layer.bounds_with_children.x() - surface_offset.x,
-                    //         render_layer.bounds_with_children.y() - surface_offset.y,
-                    //         width,
-                    //         height,
-                    //     ),
-                    //     skia_safe::SamplingOptions::default(),
-                    //     // skia_safe::SamplingOptions::from(resampler),
-                    //     &paint,
-                    // );
-
-                    // utils::save_image(
-                    //     &mut recording_ctx.as_direct_context().unwrap(),
-                    //     &image,
-                    //     &format!("image_{}.png", node_ref.0),
-                    // );
-                    // if nid == 20 {
-                    //     let rendering_matrix = render_canvas.total_matrix();
-                    //     let translation = rendering_matrix.map_origin();
-                    //     println!("Canvas offset {:?}", translation);
-                    //     let translation = render_layer.local_transform.to_m33().map_origin();
-                    //     println!("Layer offset {:?}", translation);
-                    //     let p = scene_node.layer.position();
-                    //     println!("Layer position {:?}", p);
-                    //     let pp = scene_node.layer.render_position();
-                    //     println!("Layer render position {:?}", pp);
-                    //     let mut paint = skia_safe::Paint::default();
-                    //     paint.set_color(skia::Color::RED);
-                    //     render_canvas.draw_rect(skia_safe::Rect::from_xywh(0.0, 0.0, 100.0, 100.0), &paint);
-                    // }
                     render_canvas.restore_to_count(restore_transform);
                     return;
                 }
@@ -371,12 +374,14 @@ pub fn render_node_tree(
     }
 
     // here is when the layer is directly rendered to the screen
+
     paint_node_tree(
         node_ref,
         arena,
         render_canvas,
         &render_layer,
         context_opacity,
+        false,
         dbg_info,
     );
 
@@ -385,17 +390,22 @@ pub fn render_node_tree(
 pub(crate) const BACKGROUND_BLUR_SIGMA: f32 = 25.0;
 
 // paint a single node in the provided canvas
+#[profiling::function]
 pub(crate) fn paint_node(
     node_ref: NodeRef,
     arena: &Arena<SceneNode>,
     canvas: &skia_safe::Canvas,
     context_opacity: f32,
+    offscreen: bool,
 ) -> usize {
     let node_id: TreeStorageId = node_ref.into();
     let node = arena.get(node_id).unwrap().get();
     let render_layer = node.render_layer.read().unwrap();
     let node_opacity = render_layer.opacity;
-    let opacity = context_opacity * node_opacity;
+    let mut opacity = 1.0;
+    if !offscreen {
+        opacity = context_opacity * node_opacity;
+    }
 
     let blend_mode = render_layer.blend_mode;
     let restore_transform = canvas.save();
@@ -414,6 +424,7 @@ pub(crate) fn paint_node(
     paint.set_alpha_f(opacity);
 
     if blend_mode == crate::prelude::BlendMode::BackgroundBlur && opacity > 0.0 {
+        profiling::scope!("background_blur");
         let border_corner_radius = render_layer.border_corner_radius;
         let rrbounds = skia_safe::RRect::new_rect_radii(
             bounds_to_origin,
@@ -448,6 +459,7 @@ pub(crate) fn paint_node(
 
         // blur can fail
         if let Some(blur) = blur.as_ref() {
+            profiling::scope!("apply backdrop");
             let mut save_layer_rec = skia_safe::canvas::SaveLayerRec::default();
             save_layer_rec = save_layer_rec.bounds(&bounds_to_origin).paint(&paint);
             save_layer_rec = save_layer_rec.backdrop(blur);
@@ -457,6 +469,7 @@ pub(crate) fn paint_node(
     }
 
     if let Some(draw_cache) = &*draw_cache {
+        profiling::scope!("draw_cache");
         draw_cache.draw(canvas, &paint);
     }
 
