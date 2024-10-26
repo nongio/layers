@@ -33,11 +33,19 @@ profiling = { version = "1.0" }
 bezier_easing = "0.1.1"
 
 [dependencies.skia-safe]
-version = "=0.70"
+path = "../rust-skia/skia-safe"
+# version = "=0.70"
 # this set of features is required for enabling to use the pre-built
 # binaries of skia-safe
+[dependencies.skia-bindings]
+# version = "=0.70"
+path = "../rust-skia/skia-bindings"
+
 [target.'cfg(target_os = "linux")'.dependencies.skia-safe]
-version = "=0.70"
+# path = "../rust-skia"
+path = "../rust-skia/skia-safe"
+
+# version = "=0.70"
 features = [
     "binary-cache",
     "egl",
@@ -51,7 +59,8 @@ features = [
 ]
 
 [target.'cfg(target_os = "macos")'.dependencies.skia-safe]
-version = "=0.70"
+path = "../rust-skia/skia-safe"
+# version = "=0.70"
 features = ["binary-cache", "gl", "metal", "svg", "textlayout", "webp"]
 
 [dev-dependencies]

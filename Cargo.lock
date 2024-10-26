@@ -2366,9 +2366,9 @@ dependencies = [
 
 [[package]]
 name = "image"
-version = "0.25.4"
+version = "0.25.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc144d44a31d753b02ce64093d532f55ff8dc4ebf2ffb8a63c0dda691385acae"
+checksum = "99314c8a2152b8ddb211f924cdae532d8c5e4c8bb54728e12fff1b0cd5963a10"
 dependencies = [
  "bytemuck",
  "byteorder-lite",
@@ -2382,7 +2382,7 @@ version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "96cd73af13ae2e7220a1c02fe7d6bb53be50612ba7fabbb5c88e7753645f1f3c"
 dependencies = [
- "image 0.25.4",
+ "image 0.25.2",
  "itertools 0.12.1",
  "rayon",
  "thiserror",
@@ -2436,9 +2436,9 @@ dependencies = [
 
 [[package]]
 name = "indextree"
-version = "4.7.3"
+version = "4.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "91f3e68a01402c3404bfb739079f38858325bc7ad775b07922278a8a415b1a3f"
+checksum = "0d6f1b8dbc8f1e5a0f45e05b9293c42cbab79086baeb3e914d3936f8149edc4f"
 dependencies = [
  "indextree-macros",
  "rayon",
@@ -2447,9 +2447,9 @@ dependencies = [
 
 [[package]]
 name = "indextree-macros"
-version = "0.1.2"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "477e2e7ec7379407656293ff74902caea786a1dda427ca1f84b923c4fdeb7659"
+checksum = "357230c23ee6024223892ce0de19888a04139ca5bb94f5becb04d38b75a4bccf"
 dependencies = [
  "either",
  "itertools 0.13.0",
@@ -2652,7 +2652,7 @@ dependencies = [
  "foreign-types-shared 0.1.1",
  "gl",
  "glutin 0.29.1",
- "image 0.25.4",
+ "image 0.25.2",
  "image-compare",
  "indexmap 1.9.3",
  "indextree",
@@ -2667,6 +2667,7 @@ dependencies = [
  "rayon",
  "serde",
  "serde_json",
+ "skia-bindings",
  "skia-safe",
  "taffy",
  "winit 0.28.7",
@@ -4662,14 +4663,12 @@ checksum = "38b58827f4464d87d377d175e90bf58eb00fd8716ff0a62f80356b5e61555d0d"
 
 [[package]]
 name = "skia-bindings"
-version = "0.70.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4bc61a106126a429bb4775ce5fbe23b2bcaa74d1a9c484997f4700de31480b44"
+version = "0.78.2"
 dependencies = [
  "bindgen",
  "cc",
  "flate2",
- "heck 0.4.1",
+ "heck 0.5.0",
  "lazy_static",
  "regex",
  "serde_json",
@@ -4679,11 +4678,9 @@ dependencies = [
 
 [[package]]
 name = "skia-safe"
-version = "0.70.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3201eba92bca1f83864f5c3a48309bcfee7e0590bebd7826e7ab0a49aa24a750"
+version = "0.78.2"
 dependencies = [
- "base64 0.21.7",
+ "base64 0.22.1",
  "bitflags 2.6.0",
  "lazy_static",
  "skia-bindings",
