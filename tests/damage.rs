@@ -19,7 +19,7 @@ mod tests {
 
         engine.update(0.016);
 
-        let scene_node = engine.scene_get_node(node).unwrap();
+        let scene_node = engine.scene_get_node(&node).unwrap();
         let scene_node = scene_node.get();
         let render_layer = scene_node.render_layer();
         let renderer = SkiaImageRenderer::new(1000, 1000, "damage.png");

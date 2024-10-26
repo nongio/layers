@@ -127,25 +127,25 @@ pub fn rebuild_a_view() {
     let layer = view.layer.read().unwrap().clone().unwrap();
 
     debug_scene(engine.scene(), engine.scene_root().unwrap());
-    let num_children = layer.children().len();
+    let num_children = layer.children_nodes().len();
     assert!(num_children == 0);
 
     view.update_state(&true);
     engine.update(0.016);
     debug_scene(engine.scene(), engine.scene_root().unwrap());
-    let num_children = layer.children().len();
+    let num_children = layer.children_nodes().len();
     assert!(num_children == 1);
 
     view.update_state(&false);
     engine.update(0.016);
     debug_scene(engine.scene(), engine.scene_root().unwrap());
-    let num_children = layer.children().len();
+    let num_children = layer.children_nodes().len();
     assert!(num_children == 0);
 
     view.update_state(&true);
     engine.update(0.016);
     debug_scene(engine.scene(), engine.scene_root().unwrap());
-    let num_children = layer.children().len();
+    let num_children = layer.children_nodes().len();
     assert!(num_children == 1);
 }
 
@@ -164,7 +164,7 @@ pub fn nested_views() {
     let layer = view.layer.read().unwrap().clone().unwrap();
 
     debug_scene(engine.scene(), engine.scene_root().unwrap());
-    let num_children = layer.children().len();
+    let num_children = layer.children_nodes().len();
     assert!(num_children == 3);
 
     println!("--");
@@ -182,7 +182,7 @@ pub fn nested_views() {
     engine.update(0.016);
     debug_scene(engine.scene(), engine.scene_root().unwrap());
 
-    let num_children = layer.children().len();
+    let num_children = layer.children_nodes().len();
     assert!(num_children == 3);
 }
 

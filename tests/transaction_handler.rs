@@ -58,6 +58,7 @@ pub fn call_start_transaction() {
         Point { x: 200.0, y: 100.0 },
         Some(Transition {
             duration: 1.0,
+            delay: 0.2,
             ..Default::default()
         }),
     );
@@ -72,12 +73,24 @@ pub fn call_start_transaction() {
         true,
     );
     engine.update(0.1);
+    // with a delay in the animation the start handler should not be called
+    {
+        let c = called.read().unwrap();
+        assert_eq!(*c, 0);
+    }
+    // now it should be called
     engine.update(0.1);
+    {
+        let c = called.read().unwrap();
+        assert_eq!(*c, 1);
+    }
+    // it should be called only once
     engine.update(0.1);
 
-    let called = called.read().unwrap();
-
-    assert_eq!(*called, 1);
+    {
+        let c = called.read().unwrap();
+        assert_eq!(*c, 1);
+    }
 }
 
 /// it should call the update handler on every update until the transaction is finished

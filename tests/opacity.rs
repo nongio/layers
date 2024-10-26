@@ -11,7 +11,7 @@ mod tests {
 
         layer.set_opacity(0.0, None);
         engine.update(0.016);
-        let scene_node = engine.scene_get_node(node).unwrap();
+        let scene_node = engine.scene_get_node(&node).unwrap();
         let scene_node = scene_node.get();
         let render_layer = scene_node.render_layer();
 
@@ -45,7 +45,7 @@ mod tests {
         let node = engine.scene_add_layer_to(layer.clone(), wrap.clone());
 
         engine.update(0.016);
-        let scene_node = engine.scene_get_node(node).unwrap();
+        let scene_node = engine.scene_get_node(&node).unwrap();
         let scene_node = scene_node.get();
         let render_layer = scene_node.render_layer();
 
