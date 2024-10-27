@@ -1,6 +1,6 @@
 use layers::{
     engine::{animation::Transition, LayersEngine},
-    prelude::{spring::Spring, Layer},
+    prelude::{Layer, Spring},
 };
 use layers::{prelude::TimingFunction, types::Point};
 use std::sync::{Arc, RwLock};

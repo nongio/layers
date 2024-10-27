@@ -120,3 +120,40 @@ impl<V: Clone + Send + Sync> Default for FlatStorage<V> {
         }
     }
 }
+
+#[test]
+pub fn test_flat_storage() {
+    let flat = FlatStorage::<usize>::new();
+    let id = flat.insert(1);
+    let id2 = flat.insert(2);
+    let id3 = flat.insert(3);
+
+    assert_eq!(flat.get(&id).unwrap(), 1);
+    assert_eq!(flat.get(&id2).unwrap(), 2);
+    assert_eq!(flat.get(&id3).unwrap(), 3);
+
+    flat.remove_at(&id);
+    assert_eq!(flat.get(&id), None);
+}
+
+#[test]
+pub fn test_tree_storage() {
+    let tree = TreeStorage::<usize>::new();
+    let id = tree.insert(1);
+    let id2 = tree.insert(2);
+    let id3 = tree.insert(3);
+    tree.with_data_mut(|arena| {
+        id.append(id2, arena);
+        id.append(id3, arena);
+    });
+
+    assert_eq!(*tree.get(id).unwrap().get(), 1);
+
+    let children = tree.with_data(|arena| {
+        id.children(arena)
+            .map(|child| *arena.get(child).unwrap().get())
+            .collect::<Vec<_>>()
+    });
+
+    assert_eq!(children, [2, 3]);
+}

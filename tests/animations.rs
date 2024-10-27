@@ -1,6 +1,6 @@
 use layers::{
     engine::{animation::Transition, LayersEngine},
-    prelude::{spring::Spring, Layer, TimingFunction},
+    prelude::{Layer, Spring, TimingFunction},
 };
 
 /// it should call the finish handler when the transaction is finished 1 time

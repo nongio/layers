@@ -1,10 +1,13 @@
 use core::fmt;
 
-pub mod spring;
-pub mod timing;
-use timing::Easing;
+pub mod easing;
+mod spring;
+mod timing;
 
-use self::timing::TimingFunction;
+pub use self::timing::TimingFunction;
+
+pub use easing::Easing;
+pub use spring::Spring;
 
 /// Transition is a data structure that contains the information needed to
 /// create an animation that can start at a later time.
