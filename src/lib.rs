@@ -1,7 +1,7 @@
 #![deny(warnings)]
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
 #![doc(
-    html_logo_url = "https://raw.githubusercontent.com/nongio/layers/assets/LayersEngine-dark.png"
+    html_logo_url = "https://raw.githubusercontent.com/nongio/layers/refs/heads/main/assets/LayersEngine-dark.png"
 )]
 
 //! # Layers Engine
