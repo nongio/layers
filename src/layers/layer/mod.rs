@@ -494,30 +494,24 @@ impl Layer {
     pub fn set_effect(&self, effect: impl Effect + 'static) {
         let effect = Arc::new(effect);
         effect.init(self);
-        let filter_model_id = self.model.image_filter_progress.id;
-        let tr = TransactionRef {
-            id: 0,
-            value_id: filter_model_id,
-            engine_id: self.engine.id,
-        };
         let effect_ref = effect.clone();
-        self.engine.on_update(
-            tr,
+        let value_id = self.image_filter_progress_value_id();
+        self.engine.on_update_value(
+            value_id,
             move |l: &Layer, _p| {
                 effect_ref.update(l, l.model.image_filter_progress.value());
             },
             false,
         );
         let effect_ref = effect.clone();
-        self.engine.on_start(
-            tr,
+        self.engine.on_start_value(
+            value_id,
             move |l: &Layer, _| {
                 effect_ref.start(l);
             },
             false,
         );
         *self.effect.write().unwrap() = Some(effect.clone());
-        unimplemented!("set_effect fixme");
     }
     pub fn remove_effect(&self) {
         let mut effect = self.effect.write().unwrap();
