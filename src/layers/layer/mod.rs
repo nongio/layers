@@ -184,14 +184,13 @@ impl Layer {
         });
         let id: Option<NodeRef> = *self.id.read().unwrap();
         let mut tr = TransactionRef {
-            id: 0,
+            value_id: 0,
             engine_id: self.engine.id,
         };
         if let Some(id) = id {
             let animation = transition.map(|t| {
                 self.engine.add_animation(
                     Animation {
-                        duration: t.duration,
                         timing: t.timing,
                         start: t.delay + self.engine.now(),
                     },
@@ -496,7 +495,7 @@ impl Layer {
         effect.init(self);
         let filter_model_id = self.model.image_filter_progress.id;
         let tr = TransactionRef {
-            id: filter_model_id,
+            value_id: filter_model_id,
             engine_id: self.engine.id,
         };
         let effect_ref = effect.clone();
@@ -529,7 +528,7 @@ impl Layer {
         let size_id = self.model.size.id;
         self.engine.on_update(
             TransactionRef {
-                id: size_id,
+                value_id: size_id,
                 engine_id: self.engine.id,
             },
             f,

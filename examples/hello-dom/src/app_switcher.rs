@@ -3,7 +3,7 @@ use std::hash::Hash;
 
 use layers::{
     prelude::*,
-    skia::{Color4f, Font, FontStyle, Typeface},
+    skia::{Color4f, Font},
 };
 use layers::{skia, types::Size};
 
@@ -56,7 +56,7 @@ pub fn view_app_icon(state: &AppIconState, view: &View<AppIconState>) -> LayerTr
         canvas.draw_str(text, (w / 2.0 - 20.0, h / 2.0 - 30.0), &font, &paint);
         skia::Rect::from_xywh(0.0, 0.0, width, width)
     };
-    let index = state.index;
+    // let index = state.index;
     let view1 = view.clone();
     let view2 = view.clone();
     LayerTreeBuilder::default()
@@ -78,13 +78,13 @@ pub fn view_app_icon(state: &AppIconState, view: &View<AppIconState>) -> LayerTr
         .content(Some(draw_picture))
         .on_pointer_in(move |layer: Layer, x, _y| {
             println!("pointer in");
-            let val = layer.with_state(|state| state.get::<i32>("notification").unwrap_or(0));
+            // let val = layer.with_state(|state| state.get::<i32>("notification").unwrap_or(0));
             layer.with_mut_state(|state| state.insert("notification", x as i32));
             view1.render(&layer);
         })
         .on_pointer_out(move |layer: Layer, x, _y| {
             println!("pointer out");
-            let val = layer.with_state(|state| state.get::<i32>("notification").unwrap_or(0));
+            // let val = layer.with_state(|state| state.get::<i32>("notification").unwrap_or(0));
             layer.with_mut_state(|state| state.insert("notification", x as i32));
             // println!("({}) {}", index, val);
             view2.render(&layer);
@@ -205,10 +205,7 @@ pub fn view_app_switcher(state: &AppSwitcherState, _view: &View<AppSwitcherState
                 width: taffy::Dimension::Length(component_width),
                 height: taffy::Dimension::Length(component_height),
             },
-            Some(Transition {
-                duration: 1.0,
-                ..Default::default()
-            }),
+            Some(Transition::ease_in_quad(1.0)),
             // None,
         ))
         .blend_mode(BlendMode::BackgroundBlur)
@@ -239,10 +236,7 @@ pub fn view_app_switcher(state: &AppSwitcherState, _view: &View<AppSwitcherState
                     width: taffy::Dimension::Auto,
                     height: taffy::Dimension::Length(component_height),
                 },
-                Some(Transition {
-                    duration: 2.0,
-                    ..Default::default()
-                }),
+                Some(Transition::ease_in_quad(2.0)),
             ))
             .layout_style(taffy::Style {
                 position: taffy::Position::Absolute,

@@ -43,14 +43,14 @@ pub(crate) fn update_animations(
                 if !*is_running {
                     return;
                 }
-                let (animation_progress, time_progress) = animation.value_at(timestamp.0);
+                let (animation_progress, time_progress) = animation.update_at(timestamp.0);
                 if !(*is_started) && animation.start <= timestamp.0 {
                     *is_started = true;
                     started_animations.write().unwrap().push(*id);
                 }
                 *progress = animation_progress;
-                *time = time_progress.clamp(0.0, 1.0);
-                if time_progress >= 1.0 {
+                *time = time_progress.clamp(0.0, time_progress);
+                if animation.done(timestamp.0) {
                     *is_running = false;
                     *is_finished = true;
                     done_animations.write().unwrap().push(*id);

@@ -1,5 +1,6 @@
 use std::{
     fs::read_to_string,
+    sync::atomic::{AtomicBool, AtomicI32},
     time::{Duration, Instant},
 };
 
@@ -9,6 +10,7 @@ use glutin::window::WindowBuilder;
 use glutin::GlProfile;
 use layers::types::Size;
 use layers::{prelude::*, skia};
+use spring::Spring;
 
 #[allow(unused_assignments)]
 #[tokio::main]
@@ -101,89 +103,39 @@ async fn main() {
     let mut draw_frame = -1;
     let last_instant = instant;
 
-    let test_layer = engine.new_layer();
-    engine.scene_add_layer_to(test_layer.clone(), root.id());
-    test_layer.set_background_color(
+    let layer = engine.new_layer();
+    layer.set_key("test_layer");
+    layer.set_position((100.0, 0.0), None);
+    layer.set_size(Size::points(100.0, 100.0), None);
+    layer.set_background_color(
         PaintColor::Solid {
             color: Color::new_rgba255(255, 0, 0, 255),
         },
         None,
     );
-    test_layer.set_border_corner_radius(50.0, None);
-    test_layer.set_border_color(
+    layer.set_border_width(5.0, None);
+    layer.set_border_color(
         PaintColor::Solid {
             color: Color::new_rgba255(0, 0, 0, 255),
         },
         None,
     );
+    layer.set_border_corner_radius(BorderRadius::new_single(50.0), None);
 
-    let data = std::fs::read("./assets/square-test.jpg").unwrap();
-    let data = skia::Data::new_copy(&data);
-    let image = skia::Image::from_encoded(data).unwrap();
+    engine.scene_add_layer(layer.clone());
 
-    test_layer.set_key("test_layer");
-    test_layer.set_position((200.0, 200.0), None);
-    test_layer.set_size(Size::points(200.0, 200.0), None);
-    // test_layer.set_scale((2.0, 2.0), None);
-
-    test_layer.set_draw_content(move |canvas: &skia::Canvas, w, h| {
-        let paint = skia::Paint::new(skia::Color4f::new(1.0, 1.0, 1.0, 1.0), None);
-        canvas.draw_image_rect_with_sampling_options(
-            &image,
-            None,
-            skia::Rect::from_xywh(0.0, 0.0, w, h),
-            skia::SamplingOptions::default(),
-            // skia_safe::SamplingOptions::from(resampler),
-            &paint,
-        );
-        skia::Rect::from_xywh(0.0, 0.0, w, h)
-    });
-
-    test_layer.set_border_width(5.0, None);
-    // enable image cache
-    test_layer.set_image_cache(true);
-
-    let test2 = engine.new_layer();
-    test2.set_key("test_child");
-    test2.set_position((0.0, 200.0), None);
-    test2.set_size(Size::points(300.0, 300.0), None);
-    test2.set_background_color(
-        PaintColor::Solid {
-            color: Color::new_rgba255(0, 0, 100, 255),
-        },
-        None,
-    );
-    test2.set_border_width(5.0, None);
-    test2.set_border_color(
-        PaintColor::Solid {
-            color: Color::new_rgba255(0, 0, 0, 255),
-        },
-        None,
-    );
-    // test2.set_image_cache(true);
-    engine.scene_add_layer_to(test2.clone(), test_layer.id());
-
-    let test3 = engine.new_layer();
-    test3.set_key("test_child2");
-    test3.set_position((100.0, 0.0), None);
-    test3.set_size(Size::points(100.0, 100.0), None);
-    test3.set_background_color(
-        PaintColor::Solid {
-            color: Color::new_rgba255(255, 0, 0, 255),
-        },
-        None,
-    );
-    test3.set_border_width(5.0, None);
-    test3.set_border_color(
-        PaintColor::Solid {
-            color: Color::new_rgba255(0, 0, 0, 255),
-        },
-        None,
-    );
-
-    engine.scene_add_layer_to(test3.clone(), test_layer);
-
-    engine.start_debugger();
+    // engine.start_debugger();
+    let mut mass = 1.0;
+    let mut stiffness = 0.5;
+    let mut damping = 0.9;
+    let animation_start = std::sync::Arc::new(AtomicBool::new(false));
+    let animation_finished = std::sync::Arc::new(AtomicBool::new(false));
+    let animation_progress = std::sync::Arc::new(AtomicI32::new(0));
+    let mut run = 0;
+    let font_mgr = layers::skia::FontMgr::default();
+    let typeface = font_mgr
+        .match_family_style("Inter", layers::skia::FontStyle::default())
+        .unwrap();
 
     events_loop.run(move |event, _, control_flow| {
         let now = std::time::Instant::now();
@@ -226,7 +178,78 @@ async fn main() {
                     ..
                 } => {
                     if button_state == glutin::event::ElementState::Released {
-                        // test3.set_position((500.0, 500.0), Transition::default());
+                        {
+                            animation_start.store(false, std::sync::atomic::Ordering::SeqCst);
+                            animation_finished.store(false, std::sync::atomic::Ordering::SeqCst);
+                            animation_progress.store(0, std::sync::atomic::Ordering::SeqCst);
+                        }
+                        run += 1;
+                        let animation_start = animation_start.clone();
+                        let animation_finished = animation_finished.clone();
+                        let animation_progress = animation_progress.clone();
+                        let run = run;
+                        let run2 = run;
+                        let run3 = run;
+                        let value_id = layer.position_value_id();
+                        let current_velocity = engine
+                            .get_transaction_for_value(value_id)
+                            .map(|tr| {
+                                let animation_id = tr.animation_id.unwrap();
+                                let animation_state = engine.get_animation(animation_id).unwrap();
+                                let animation = animation_state.animation;
+                                engine.cancel_animation(animation_id);
+                                match animation.timing {
+                                    TimingFunction::Spring(spring) => {
+                                        let (_current_position, current_velocity) =
+                                            spring.update_pos_vel_at(animation_state.time);
+                                        current_velocity
+                                    }
+                                    _ => 0.0,
+                                }
+                            })
+                            .unwrap_or(0.0);
+                        println!("current_velocity: {}", current_velocity);
+                        layer
+                            .set_position(
+                                (_mouse_x as f32, _mouse_y as f32),
+                                Transition {
+                                    delay: 0.0,
+                                    timing: TimingFunction::Spring(
+                                        Spring::with_duration_bounce_and_velocity(
+                                            2.0,
+                                            0.2,
+                                            current_velocity,
+                                        ),
+                                    ),
+                                },
+                            )
+                            .on_start(
+                                move |_l: &Layer, _p| {
+                                    println!("[{}] animation start", run);
+
+                                    animation_start
+                                        .store(true, std::sync::atomic::Ordering::SeqCst);
+                                },
+                                true,
+                            )
+                            .on_update(
+                                move |_l: &Layer, p| {
+                                    println!("[{}] animation update: {}", run2, p);
+                                    animation_progress.store(
+                                        (p * 100.0) as i32,
+                                        std::sync::atomic::Ordering::SeqCst,
+                                    );
+                                },
+                                true,
+                            )
+                            .on_finish(
+                                move |_l: &Layer, p| {
+                                    println!("[{}], animation finished: {}", run3, p);
+                                    animation_finished
+                                        .store(true, std::sync::atomic::Ordering::SeqCst);
+                                },
+                                true,
+                            );
                     }
                 }
                 WindowEvent::KeyboardInput {
@@ -246,8 +269,32 @@ async fn main() {
                                 }
                             }
 
+                            glutin::event::VirtualKeyCode::M => {
+                                if input.state == glutin::event::ElementState::Released {
+                                    if input.modifiers == glutin::event::ModifiersState::SHIFT {
+                                        mass -= 1.0;
+                                    } else {
+                                        mass += 1.0;
+                                    }
+                                }
+                            }
+                            glutin::event::VirtualKeyCode::S => {
+                                if input.state == glutin::event::ElementState::Released {
+                                    if input.modifiers == glutin::event::ModifiersState::SHIFT {
+                                        stiffness -= 0.1;
+                                    } else {
+                                        stiffness += 0.1;
+                                    }
+                                }
+                            }
                             glutin::event::VirtualKeyCode::D => {
-                                if input.state == glutin::event::ElementState::Released {}
+                                if input.state == glutin::event::ElementState::Released {
+                                    if input.modifiers == glutin::event::ModifiersState::SHIFT {
+                                        damping -= 0.1;
+                                    } else {
+                                        damping += 0.1;
+                                    }
+                                }
                             }
                             glutin::event::VirtualKeyCode::A => {
                                 if input.state == glutin::event::ElementState::Released {}
@@ -306,6 +353,48 @@ async fn main() {
                                 canvas.draw_circle((x as f32, y as f32), 5.0, &paint);
                             }
                         }
+                        let c: skia::Color4f = skia::Color::BLACK.into();
+                        let paint = skia::Paint::new(&c, None);
+                        let font = skia::Font::from_typeface(&typeface, 30.0);
+                        canvas.draw_str(format!("mass: {}", mass), (20.0, 30.0), &font, &paint);
+                        canvas.draw_str(
+                            format!("stiffness: {}", stiffness),
+                            (20.0, 60.0),
+                            &font,
+                            &paint,
+                        );
+                        canvas.draw_str(
+                            format!("damping: {}", damping),
+                            (20.0, 90.0),
+                            &font,
+                            &paint,
+                        );
+                        let animation_start =
+                            animation_start.load(std::sync::atomic::Ordering::SeqCst);
+                        let animation_finished =
+                            animation_finished.load(std::sync::atomic::Ordering::SeqCst);
+                        let animation_progress = animation_progress
+                            .load(std::sync::atomic::Ordering::SeqCst)
+                            .to_string();
+                        canvas.draw_str(
+                            format!("animation_start: {}", animation_start),
+                            (20.0, 120.0),
+                            &font,
+                            &paint,
+                        );
+                        canvas.draw_str(
+                            format!("animation_finish: {}", animation_finished),
+                            (20.0, 150.0),
+                            &font,
+                            &paint,
+                        );
+                        canvas.draw_str(
+                            format!("animation_progress: {}", animation_progress),
+                            (20.0, 180.0),
+                            &font,
+                            &paint,
+                        );
+
                         engine.clear_damage();
                         skia_renderer.gr_context.flush_submit_and_sync_cpu();
                     }

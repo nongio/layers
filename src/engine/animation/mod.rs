@@ -1,6 +1,8 @@
 use core::fmt;
 
+pub mod spring;
 pub mod timing;
+use timing::Easing;
 
 use self::timing::TimingFunction;
 
@@ -9,7 +11,7 @@ use self::timing::TimingFunction;
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct Transition {
-    pub duration: f32,
+    // pub duration: f32,
     pub delay: f32,
     // easing
     pub timing: TimingFunction,
@@ -18,9 +20,8 @@ pub struct Transition {
 impl Default for Transition {
     fn default() -> Self {
         Transition {
-            duration: 0.3,
             delay: 0.0,
-            timing: TimingFunction::default(),
+            timing: TimingFunction::Easing(Easing::default(), 0.3),
         }
     }
 }
@@ -28,51 +29,56 @@ impl Default for Transition {
 impl Transition {
     pub fn linear(duration: f32) -> Self {
         Transition {
-            duration,
             delay: 0.0,
-            timing: TimingFunction::linear(),
+            timing: TimingFunction::linear(duration),
         }
     }
     pub fn ease_in(duration: f32) -> Self {
         Transition {
-            duration,
             delay: 0.0,
-            timing: TimingFunction::ease_in(),
+            timing: TimingFunction::ease_in(duration),
         }
     }
     pub fn ease_out(duration: f32) -> Self {
         Transition {
-            duration,
             delay: 0.0,
-            timing: TimingFunction::ease_out(),
+            timing: TimingFunction::ease_out(duration),
         }
     }
     pub fn ease_in_out(duration: f32) -> Self {
         Transition {
-            duration,
             delay: 0.0,
-            timing: TimingFunction::ease_in_out(),
+            timing: TimingFunction::ease_in_out(duration),
         }
     }
     pub fn ease_out_quad(duration: f32) -> Self {
         Transition {
-            duration,
             delay: 0.0,
-            timing: TimingFunction::ease_out_quad(),
+            timing: TimingFunction::ease_out_quad(duration),
         }
     }
     pub fn ease_in_quad(duration: f32) -> Self {
         Transition {
-            duration,
             delay: 0.0,
-            timing: TimingFunction::ease_in_quad(),
+            timing: TimingFunction::ease_in_quad(duration),
         }
     }
     pub fn ease_in_out_quad(duration: f32) -> Self {
         Transition {
-            duration,
             delay: 0.0,
-            timing: TimingFunction::ease_in_out_quad(),
+            timing: TimingFunction::ease_in_out_quad(duration),
+        }
+    }
+    pub fn spring(duration: f32, bounce: f32) -> Self {
+        Transition {
+            delay: 0.0,
+            timing: TimingFunction::spring(duration, bounce),
+        }
+    }
+    pub fn spring_with_velocity(duration: f32, bounce: f32, velocity: f32) -> Self {
+        Transition {
+            delay: 0.0,
+            timing: TimingFunction::spring_with_initial_velocity(duration, bounce, velocity),
         }
     }
 }
@@ -81,27 +87,30 @@ impl Transition {
 #[derive(Clone, Default)]
 pub struct Animation {
     pub start: f32,
-    pub duration: f32,
+    // pub duration: f32,
     pub timing: TimingFunction,
 }
 
 // getter for Animation value
 impl Animation {
-    pub fn value_at(&self, time: f32) -> (f32, f32) {
+    pub fn update_at(&mut self, current_time: f32) -> (f32, f32) {
         let Animation {
             start,
-            duration,
+            // duration,
             timing,
         } = self;
-        let mut t = (time - start) / duration;
-        t = t.clamp(0.0, 1.0);
+        let elapsed = current_time - *start;
+        // t = t.clamp(0.0, 1.0);
         // println!("[{} / {}] ({}, {})", time, duration, t, timing.value_at(t));
-        (timing.value_at(t), t)
+        timing.update_at(elapsed)
+    }
+    pub fn done(&self, current_time: f32) -> bool {
+        self.timing.done(self.start, current_time)
     }
 }
 
 impl fmt::Debug for Animation {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "({:?}->{:?})", self.start, self.duration)
+        write!(f, "([{:.5}]->{:?})", self.start, self.timing)
     }
 }

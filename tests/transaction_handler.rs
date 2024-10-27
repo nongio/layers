@@ -1,8 +1,8 @@
-use layers::types::Point;
 use layers::{
     engine::{animation::Transition, LayersEngine},
-    prelude::Layer,
+    prelude::{spring::Spring, Layer},
 };
+use layers::{prelude::TimingFunction, types::Point};
 use std::sync::{Arc, RwLock};
 
 /// it should call the finish handler when the transaction is finished 1 time
@@ -14,10 +14,7 @@ pub fn call_finish_transaction() {
 
     let transaction = layer.set_position(
         Point { x: 200.0, y: 100.0 },
-        Some(Transition {
-            duration: 0.1,
-            ..Default::default()
-        }),
+        Some(Transition::ease_out(0.5)),
     );
     let called = Arc::new(RwLock::new(0));
     let c = called.clone();
@@ -29,10 +26,7 @@ pub fn call_finish_transaction() {
             *c += 1;
             layer.set_position(
                 Point { x: 200.0, y: 100.0 },
-                Some(Transition {
-                    duration: 0.1,
-                    ..Default::default()
-                }),
+                Some(Transition::ease_out(0.3)),
             );
             // check we are not in a dead lock
             // assert!(true);
@@ -57,7 +51,6 @@ pub fn call_start_transaction() {
     let transaction = layer.set_position(
         Point { x: 200.0, y: 100.0 },
         Some(Transition {
-            duration: 1.0,
             delay: 0.2,
             ..Default::default()
         }),
@@ -103,24 +96,102 @@ pub fn call_update_transaction() {
     let called = Arc::new(RwLock::new(0.0));
     let c = called.clone();
     layer
-        .set_position(
-            Point { x: 200.0, y: 100.0 },
-            Some(Transition {
-                duration: 0.1,
-                ..Default::default()
-            }),
-        )
+        .set_position(Point { x: 200.0, y: 100.0 }, Some(Transition::linear(0.1)))
         .on_update(
             move |_: &Layer, progress| {
                 println!("Transaction update {}", progress);
                 let mut c = c.write().unwrap();
                 *c = progress;
             },
-            true,
+            false,
         );
     engine.update(0.05);
+    {
+        let called = called.read().unwrap();
+        assert_eq!(*called, 0.5);
+    }
+
     engine.update(0.05);
+    {
+        let called = called.read().unwrap();
+        assert_eq!(*called, 1.0);
+    }
+}
+
+/// it should call the finish handler when the spring transaction is finished 1 time
+#[test]
+pub fn call_finish_transaction_spring() {
+    let engine = LayersEngine::new(1000.0, 1000.0);
+    let layer = engine.new_layer();
+    engine.scene_add_layer(layer.clone());
+
+    let transaction = layer.set_position(
+        Point { x: 200.0, y: 100.0 },
+        Some(Transition {
+            delay: 0.0,
+            timing: TimingFunction::Spring(Spring::new(1.0, 100.0, 2.0)),
+        }),
+    );
+    let called = Arc::new(RwLock::new(0));
+    let c = called.clone();
+    engine.on_finish(
+        transaction,
+        move |_: &Layer, _| {
+            println!("Transaction finished");
+            let mut c = c.write().unwrap();
+            *c += 1;
+            layer.set_position(
+                Point { x: 200.0, y: 100.0 },
+                Some(Transition::ease_out(0.3)),
+            );
+            // check we are not in a dead lock
+            // assert!(true);
+        },
+        true,
+    );
+    engine.update(2.0);
+    engine.update(2.0);
+    engine.update(2.0);
 
     let called = called.read().unwrap();
-    assert_eq!(*called, 1.0);
+    assert_eq!(*called, 1);
+}
+
+/// it should call the finish handler when the spring transaction is finished 1 time
+#[test]
+pub fn call_finish_transaction_spring_predictable() {
+    let engine = LayersEngine::new(1000.0, 1000.0);
+    let layer = engine.new_layer();
+    engine.scene_add_layer(layer.clone());
+
+    let transaction = layer.set_position(
+        Point { x: 200.0, y: 100.0 },
+        Some(Transition {
+            delay: 0.0,
+            timing: TimingFunction::spring(1.0, 0.2),
+        }),
+    );
+    let called = Arc::new(RwLock::new(0));
+    let c = called.clone();
+    engine.on_finish(
+        transaction,
+        move |_: &Layer, _| {
+            println!("Transaction finished");
+            let mut c = c.write().unwrap();
+            *c += 1;
+            layer.set_position(
+                Point { x: 200.0, y: 100.0 },
+                Some(Transition::ease_out(0.3)),
+            );
+            // check we are not in a dead lock
+            // assert!(true);
+        },
+        true,
+    );
+    engine.update(0.5);
+    engine.update(0.5);
+    engine.update(0.5);
+
+    let called = called.read().unwrap();
+    assert_eq!(*called, 1);
 }

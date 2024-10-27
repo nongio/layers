@@ -9,11 +9,8 @@ use glutin::{
     dpi::LogicalSize, event_loop::EventLoop, platform::unix::EventLoopBuilderExtUnix,
     window::WindowBuilder, GlProfile,
 };
-use layers::{
-    engine::LayersEngine,
-    prelude::{timing::TimingFunction, DrawScene, Layer, Transition},
-    types::*,
-};
+use layers::{engine::LayersEngine, prelude::*, types::*};
+
 #[allow(dead_code)]
 fn criterion_benchmark_update(c: &mut Criterion) {
     let mut group = c.benchmark_group("update_children");
@@ -37,20 +34,9 @@ fn criterion_benchmark_update(c: &mut Criterion) {
             for layer in layers.iter() {
                 layer.set_size(
                     Size::points(1000.0, 1000.0),
-                    Some(Transition {
-                        duration: 10000.0,
-                        delay: 0.0,
-                        timing: TimingFunction::default(),
-                    }),
+                    Some(Transition::ease_out_quad(10000.0)),
                 );
-                layer.set_opacity(
-                    0.5,
-                    Some(Transition {
-                        duration: 10000.0,
-                        delay: 0.0,
-                        timing: TimingFunction::default(),
-                    }),
-                );
+                layer.set_opacity(0.5, Some(Transition::ease_in_quad(10000.0)));
             }
             b.iter(|| engine.update(black_box(0.0)));
         });
@@ -160,21 +146,10 @@ fn criterion_benchmark_draw(c: &mut Criterion) {
                 for (i, layer) in layers.iter().enumerate() {
                     let i = i as f32;
 
-                    layer.set_position(
-                        (i * 10.0, i * 20.0),
-                        Some(Transition {
-                            duration: 10.0,
-                            delay: 0.0,
-                            timing: TimingFunction::default(),
-                        }),
-                    );
+                    layer.set_position((i * 10.0, i * 20.0), Some(Transition::ease_out_quad(10.0)));
                     layer.set_size(
                         Size::points(500.0 / (i + 1.0), 500.0 / (i + 1.0)),
-                        Some(Transition {
-                            duration: 20.0,
-                            delay: 0.0,
-                            timing: TimingFunction::default(),
-                        }),
+                        Some(Transition::ease_out_quad(20.0)),
                     );
                 }
 
@@ -254,21 +229,11 @@ fn criterion_benchmark_draw_shadow(c: &mut Criterion) {
                 for (i, layer) in layers.iter().enumerate() {
                     let i = i as f32;
 
-                    layer.set_position(
-                        (i * 10.0, i * 10.0),
-                        Some(Transition {
-                            duration: 100.0,
-                            delay: 0.0,
-                            timing: TimingFunction::default(),
-                        }),
-                    );
+                    layer
+                        .set_position((i * 10.0, i * 10.0), Some(Transition::ease_out_quad(100.0)));
                     layer.set_size(
                         Size::points(500.0 / (i + 1.0), 500.0 / (i + 1.0)),
-                        Some(Transition {
-                            duration: 20.0,
-                            delay: 0.0,
-                            timing: TimingFunction::default(),
-                        }),
+                        Some(Transition::ease_out_quad(20.0)),
                     );
                 }
                 // println!("running bench...");

@@ -66,17 +66,15 @@ mod tests {
             layer.set_size(
                 Size::points(1000.0, 1000.0),
                 Some(Transition {
-                    duration: 10000.0,
                     delay: 0.0,
-                    timing: TimingFunction::default(),
+                    timing: TimingFunction::linear(1000.0),
                 }),
             );
             layer.set_opacity(
                 0.5,
                 Some(Transition {
-                    duration: 10000.0,
                     delay: 0.0,
-                    timing: TimingFunction::default(),
+                    timing: TimingFunction::linear(1000.0),
                 }),
             );
         }
@@ -117,20 +115,9 @@ mod tests {
         for layer in layers.iter() {
             layer.set_size(
                 Size::points(1000.0, 1000.0),
-                Some(Transition {
-                    duration: 10000.0,
-                    delay: 0.0,
-                    timing: TimingFunction::default(),
-                }),
+                Some(Transition::linear(1000.0)),
             );
-            layer.set_opacity(
-                0.5,
-                Some(Transition {
-                    duration: 10000.0,
-                    delay: 0.0,
-                    timing: TimingFunction::default(),
-                }),
-            );
+            layer.set_opacity(0.5, Some(Transition::linear(1000.0)));
         }
 
         engine.update(0.0083);
