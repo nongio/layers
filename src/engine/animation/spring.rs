@@ -124,7 +124,7 @@ impl Spring {
     pub fn done(&self, elapsed: f32) -> bool {
         let target = 1.0;
         let (position, velocity) = self.update_pos_vel_at(elapsed);
-        let ret = (position - target).abs() < TOLERANCE && velocity.abs() < TOLERANCE;
-        ret
+
+        (position - target).abs() < TOLERANCE && velocity.abs() < TOLERANCE
     }
 }

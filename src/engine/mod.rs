@@ -610,10 +610,7 @@ impl Engine {
             .read()
             .unwrap()
             .get(&value_id)
-            .and_then(|id| {
-                self.transactions
-                    .with_data(|d| d.get(id).map(|v| v.clone()))
-            })
+            .and_then(|id| self.transactions.with_data(|d| d.get(id).cloned()))
     }
     pub fn get_animation(&self, animation: AnimationRef) -> Option<AnimationState> {
         self.animations.with_data(|d| d.get(&animation.0).cloned())
