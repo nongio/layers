@@ -145,8 +145,9 @@ macro_rules! change_model {
                 let transition = transition.into();
                 let value:$variable_type = value.into();
 
-                // if  self.model.$variable_name.value() != value  {
                 let flags = $flags;
+
+                let value_id = self.model.$variable_name.id;
                 let change = Arc::new(ModelChange {
                     value_change: self.model.$variable_name.to(value.clone(), transition),
                     flag: flags,
@@ -154,21 +155,44 @@ macro_rules! change_model {
                 // }
                 let mut tr = crate::engine::TransactionRef {
                     id: 0,
+                    value_id: 0,
                     engine_id: self.engine.id,
                 };
-                let id:Option<NodeRef> = *self.id.read().unwrap();
-                if let Some(id) = id {
-                    // if let Some(change) = change {
+                let node_id:Option<NodeRef> = *self.id.read().unwrap();
+                if let Some(node_id) = node_id {
                         let animation = transition.map(|t| {
+                            // if there is a transition
+                            let merged_timing = if let TimingFunction::Spring(mut spring) = t.timing {
+                                // and the transition is a spring, check if there is already a running transaction
+                                let velocity = self.engine.get_transaction_for_value(value_id)
+                                    .map(|running_transaction| {
+                                        if let Some(animation_id) = running_transaction.animation_id {
+                                            let animation_state = self.engine.get_animation(animation_id).unwrap();
+                                            let animation = animation_state.animation;
+                                            match animation.timing {
+                                                TimingFunction::Spring(s) => {
+                                                    let (_current_position, current_velocity) =
+                                                        s.update_pos_vel_at(animation_state.time);
+                                                    current_velocity
+                                                }
+                                                _ => 0.0,
+                                            }
+                                        } else {
+                                            0.0
+                                        }
+                                    }).unwrap_or(0.0);
+                                spring.initial_velocity = velocity;
+                                TimingFunction::Spring(spring)
+                            } else {
+                                t.timing
+                            };
                             self.engine.add_animation(Animation {
-                                duration: t.duration,
-                                timing: t.timing,
+                                timing: merged_timing,
                                 start: t.delay + self.engine.now(),
                             }, true)
                         });
 
-                        tr = self.engine.schedule_change(id, change, animation);
-                    // }
+                        tr = self.engine.schedule_change(node_id, change, animation);
                 } else {
                     self.model.$variable_name.set(value.clone());
                 }
@@ -177,6 +201,9 @@ macro_rules! change_model {
             }
             pub fn $variable_name(&self) -> $variable_type {
                 self.model.$variable_name.value()
+            }
+            pub fn [< $variable_name _value_id>](&self) -> usize {
+                    self.model.$variable_name.id
             }
             pub fn [<change_ $variable_name>](&self, value: impl Into<$variable_type>,) -> AnimatedNodeChange {
                 let flags = $flags;
