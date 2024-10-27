@@ -1,7 +1,6 @@
 use std::{
-    fs::read_to_string,
     sync::atomic::{AtomicBool, AtomicI32},
-    time::{Duration, Instant},
+    time::Duration,
 };
 
 use glutin::event::WindowEvent;
@@ -131,7 +130,6 @@ async fn main() {
     let animation_start = std::sync::Arc::new(AtomicBool::new(false));
     let animation_finished = std::sync::Arc::new(AtomicBool::new(false));
     let animation_progress = std::sync::Arc::new(AtomicI32::new(0));
-    let mut run = 0;
     let font_mgr = layers::skia::FontMgr::default();
     let typeface = font_mgr
         .match_family_style("Inter", layers::skia::FontStyle::default())
@@ -183,11 +181,9 @@ async fn main() {
                             animation_finished.store(false, std::sync::atomic::Ordering::SeqCst);
                             animation_progress.store(0, std::sync::atomic::Ordering::SeqCst);
                         }
-                        run += 1;
                         let animation_start = animation_start.clone();
                         let animation_finished = animation_finished.clone();
                         let animation_progress = animation_progress.clone();
-                        let run = run;
 
                         layer
                             .set_position(
@@ -219,7 +215,7 @@ async fn main() {
                                 false,
                             )
                             .on_finish(
-                                move |_l: &Layer, p| {
+                                move |_l: &Layer, _p| {
                                     // println!("[{}], animation finished: {}", run3, p);
                                     animation_finished
                                         .store(true, std::sync::atomic::Ordering::SeqCst);
