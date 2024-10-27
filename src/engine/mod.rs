@@ -81,11 +81,7 @@ pub struct AnimatedNodeChange {
     pub node_id: NodeRef,
 }
 
-/// A struct that contains the state of an animation.
-/// The f32 is the current progress of the animation.
-/// The bool is a flag that indicates if the animation is finished.
-/// the progres can not be used to determine if the animation is finished
-/// because the animation could be reversed or looped
+/// A struct that contains the state of a given animation.
 #[derive(Clone, Debug)]
 pub struct AnimationState {
     pub animation: Animation,
@@ -210,19 +206,35 @@ pub enum PointerEventType {
 
 pub(crate) struct Engine {
     pub id: usize,
+    /// The scene is a tree of nodes
     pub(crate) scene: Arc<Scene>,
+    /// The root node of the scene
     scene_root: RwLock<Option<NodeRef>>,
+    /// The transactions (node changes) that are scheduled to be executed
     transactions: FlatStorage<AnimatedNodeChange>,
+    /// The animations that are scheduled to be executed
     animations: FlatStorage<AnimationState>,
+    /// The current timestamp of the engine
     pub(crate) timestamp: RwLock<Timestamp>,
-    transaction_handlers: FlatStorage<TransitionCallbacks>,
+    /// The Taffy layout tree
     pub(crate) layout_tree: RwLock<TaffyTree>,
+    /// The root node of the layout tree
     layout_root: RwLock<taffy::prelude::NodeId>,
-    pub(crate) damage: Arc<RwLock<skia_safe::Rect>>,
-    // pointer handlers
-    pointer_position: RwLock<Point>,
-    current_hover_node: RwLock<Option<NodeRef>>,
+
+    /// The indexmap of handlers for the transactions
+    transaction_handlers: FlatStorage<TransitionCallbacks>,
+
+    /// The indexmap of handlers for the pointer events
     pointer_handlers: FlatStorage<PointerCallback>,
+
+    /// The damage rect for the current frame
+    pub(crate) damage: Arc<RwLock<skia_safe::Rect>>,
+    /// The current pointer position
+    pointer_position: RwLock<Point>,
+    /// The node that is currently hovered by the pointer
+    /// Press, Release and CursorIn, CursorOut events are triggered
+    /// based on the current_hover_node
+    current_hover_node: RwLock<Option<NodeRef>>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -240,19 +252,40 @@ impl TransactionRef {
         let engines = engines.read().unwrap();
         engines.get(&self.engine_id).unwrap().clone()
     }
-
-    pub fn on_finish<F: Into<TransactionCallback>>(&self, handler: F, once: bool) -> &Self {
-        self.engine().on_finish(*self, handler, once);
-        self
-    }
-    pub fn on_update<F: Into<TransactionCallback>>(&self, handler: F, once: bool) -> &Self {
-        self.engine().on_update(*self, handler, once);
-        self
-    }
+    /// Add a callback that is triggered when the transaction is started.
+    /// The callback is removed when the transaction is finished.
+    ///
+    /// # Arguments
+    /// * `handler`: the callback function to be called
+    /// * `once`: if true, the callback is removed after it is triggered
     pub fn on_start<F: Into<TransactionCallback>>(&self, handler: F, once: bool) -> &Self {
         self.engine().on_start(*self, handler, once);
         self
     }
+    /// Add a callback that is triggered when the transaction is finished.
+    /// The callback is removed when the transaction is finished.
+    ///
+    /// # Arguments
+    /// * `handler`: the callback function to be called
+    /// * `once`: if true, the callback is removed after it is triggered
+    pub fn on_finish<F: Into<TransactionCallback>>(&self, handler: F, once: bool) -> &Self {
+        self.engine().on_finish(*self, handler, once);
+        self
+    }
+    /// Add a callback that is triggered when the transaction is updated.
+    /// The callback is removed when the transaction is finished.
+    ///
+    /// # Arguments
+    /// * `handler`: the callback function to be called
+    /// * `once`: if true, the callback is removed after it is triggered
+    pub fn on_update<F: Into<TransactionCallback>>(&self, handler: F, once: bool) -> &Self {
+        self.engine().on_update(*self, handler, once);
+        self
+    }
+    /// Alias for on_finish
+    ///
+    /// the callback is added with the once flag set to true
+    /// ie. the callback is removed after it is triggered
     pub fn then<F: Into<TransactionCallback>>(&self, handler: F) -> &Self {
         self.engine().on_finish(*self, handler, true);
         self
