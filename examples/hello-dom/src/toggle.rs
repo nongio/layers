@@ -1,8 +1,5 @@
 #![allow(dead_code)]
-use layers::{
-    prelude::{timing::TimingFunction, *},
-    types::Size,
-};
+use layers::{prelude::*, types::Size};
 
 pub struct ToggleState {
     pub value: bool,
@@ -35,20 +32,12 @@ pub fn view_toggle(state: ToggleState) -> LayerTree {
             PaintColor::Solid {
                 color: background_color,
             },
-            Some(Transition {
-                delay: 0.0,
-                duration: 0.3,
-                timing: TimingFunction::default(),
-            }),
+            Some(Transition::ease_out_quad(0.3)),
         ))
         .border_corner_radius((BorderRadius::new_single((SIZE + PADDING * 2.0) / 2.0), None))
         .scale((
             Point { x: 3.0, y: 3.0 },
-            Some(Transition {
-                delay: 0.0,
-                duration: 1.0,
-                timing: TimingFunction::default(),
-            }),
+            Some(Transition::ease_out_quad(0.3)),
         ))
         .children(vec![LayerTreeBuilder::default()
             .position((
@@ -56,11 +45,7 @@ pub fn view_toggle(state: ToggleState) -> LayerTree {
                     x: position,
                     y: PADDING,
                 },
-                Some(Transition {
-                    delay: 0.0,
-                    duration: 0.3,
-                    timing: TimingFunction::default(),
-                }),
+                Some(Transition::ease_out_quad(0.3)),
             ))
             .size((
                 Size {

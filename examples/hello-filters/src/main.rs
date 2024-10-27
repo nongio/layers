@@ -165,8 +165,8 @@ async fn main() {
 
     engine.update(0.0);
 
-    builder.set_uniform_float("dst_bounds", &[target_x, target_y, target_w, target_h]);
-    builder.set_uniform_float("progress", &[progress]);
+    let _ = builder.set_uniform_float("dst_bounds", &[target_x, target_y, target_w, target_h]);
+    let _ = builder.set_uniform_float("progress", &[progress]);
 
     let mut animation_start = Instant::now();
     let animation_duration = 1.0;
@@ -224,7 +224,7 @@ async fn main() {
                         target_x = _mouse_x as f32;
                         target_y = _mouse_y as f32;
 
-                        builder.set_uniform_float(
+                        let _ = builder.set_uniform_float(
                             "dst_bounds",
                             &[target_x, target_y, target_w, target_h],
                         );
@@ -233,7 +233,7 @@ async fn main() {
                         if !forward {
                             progress = 1.0;
                         }
-                        builder.set_uniform_float("progress", &[progress]);
+                        let _ = builder.set_uniform_float("progress", &[progress]);
 
                         // let render_layer = test_layer.render_bounds();
 
@@ -271,7 +271,7 @@ async fn main() {
                                             runtime_effect,
                                         );
                                     progress = 0.0;
-                                    builder.set_uniform_float("progress", &[progress]);
+                                    let _ = builder.set_uniform_float("progress", &[progress]);
                                     forward = !forward;
                                     let dt = 0.016;
                                     engine.update(dt);
@@ -284,7 +284,7 @@ async fn main() {
                                     progress = progress + ANIMATION_STEP;
                                     // println!("progress {:?}", progress);
 
-                                    builder.set_uniform_float("progress", &[progress]);
+                                    let _ = builder.set_uniform_float("progress", &[progress]);
 
                                     let dt = 0.016;
                                     engine.update(dt);
@@ -296,7 +296,7 @@ async fn main() {
                                     progress = progress - ANIMATION_STEP;
                                     // println!("progress {:?}", progress);
 
-                                    builder.set_uniform_float("progress", &[progress]);
+                                    let _ = builder.set_uniform_float("progress", &[progress]);
 
                                     let dt = 0.016;
                                     engine.update(dt);
@@ -325,10 +325,10 @@ async fn main() {
                         progress = 1.0 - progress;
                     }
                     // println!("progress {:?}", progress);
-                    builder.set_uniform_float("progress", &[progress as f32]);
+                    let _ = builder.set_uniform_float("progress", &[progress as f32]);
                 }
                 let render_layer = test_layer.render_bounds_transformed();
-                builder.set_uniform_float(
+                let _ = builder.set_uniform_float(
                     "src_bounds",
                     &[
                         (render_layer.x()),
@@ -337,11 +337,12 @@ async fn main() {
                         render_layer.height(),
                     ],
                 );
-                builder.set_uniform_float("dst_bounds", &[target_x, target_y, target_w, target_h]);
+                let _ = builder
+                    .set_uniform_float("dst_bounds", &[target_x, target_y, target_w, target_h]);
 
                 filter_shader = layers::skia::image_filters::runtime_shader(&builder, "", None);
 
-                test_layer.set_filter(filter_shader.clone());
+                test_layer.set_image_filter(filter_shader.clone());
                 let bounds = layers::skia::Rect::join2(
                     layers::skia::Rect::from_xywh(
                         0.0,

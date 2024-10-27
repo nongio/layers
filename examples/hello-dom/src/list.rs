@@ -24,20 +24,12 @@ pub fn view_list(_state: ListState) -> LayerTree {
             PaintColor::Solid {
                 color: background_color,
             },
-            Some(Transition {
-                delay: 0.0,
-                duration: 0.3,
-                timing: TimingFunction::default(),
-            }),
+            Some(Transition::ease_in_quad(0.3)),
         ))
         .border_corner_radius((BorderRadius::new_single(5.0), None))
         .scale((
             Point { x: 2.0, y: 2.0 },
-            Some(Transition {
-                delay: 0.0,
-                duration: 1.0,
-                timing: TimingFunction::default(),
-            }),
+            Some(Transition::ease_in_quad(1.0)),
         ))
         .children(vec![LayerTreeBuilder::default()
             .position((
