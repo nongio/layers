@@ -1,6 +1,54 @@
+//! # Timing functions for animations:
+//! * `Easing`: a quadratic bezier curve timing defined by two points and a duration
+//! * `Spring`: a physics-based spring timing, emulating a dumped harmonic oscillator
+//!
+//! # Helper functions:
+//! * `Transition::ease_in(duration: f32) -> Transition`
+//! * `Transition::ease_out(duration: f32) -> Transition`
+//! * `Transition::ease_in_out(duration: f32) -> Transition`
+//! * `Transition::ease_out_quad(duration: f32) -> Transition`
+//! * `Transition::ease_in_quad(duration: f32) -> Transition`
+//! * `Transition::ease_in_out_quad(duration: f32) -> Transition`
+//! * `Transition::spring(duration: f32, bounce: f32) -> Transition`
+//! * `Transition::spring_with_velocity(duration: f32, bounce: f32, velocity: f32) -> Transition`
+//! ...
+//!
+//! # Usage
+//! ```rust
+//! // use default easing function
+//! layer.set_position((100.0, 100.0), Transition::ease_in(0.3));
+//!
+//! // spring helper with perceptual duration and bounce
+//! layer.set_position((100.0, 100.0), Transition::spring(0.3, 0.3));
+//!
+//! // spring helper with perceptual duration and initial velocity
+//! layer.set_position((100.0, 100.0), Transition::spring_with_velocity(0.3, 0.3, 0.3));
+//! ```
+//!
+//! # Advanced Easing usage
+//! ```rust
+//! // use custom set a delay and easing function
+//! layer.set_position((100.0, 100.0), Transition {
+//!     delay: 0.1,
+//!     timing: TimingFunction::ease_in_out_quad(1.0)
+//! });
+//! // use predefined easing functions
+//! layer.set_position((100.0, 100.0),  Transition {
+//!     delay: 0.0,
+//!     timing: TimingFunction::Easing(Easing::ease_in_out_quad(), 0.3)
+//! });
+//!
+//! // access the easing parameters directly
+//! layer.set_position((100.0, 100.0), Transition {
+//!    delay: 0.0,
+//!    timing: TimingFunction::Easing(Easing{x1: 0.0, y1: 0.0, x2: 1.0, y2: 1.0}, 0.3)
+//! });
+//! ```
+//!
+
 use core::fmt;
 
-pub mod easing;
+mod easing;
 mod spring;
 mod timing;
 

@@ -7,6 +7,15 @@
 //! - The *draw* step generates a displaylist
 //! - The *render* step uses the displaylist to generate a texture of the node
 //! - The *compose* step generates the final image using the textures
+//! The `LayersEngine` is the main engine responsible for managing layers and rendering.
+//!
+//! # Usage:
+//!
+//! ```
+//! let engine = LayersEngine::new();
+//! engine.add_layer(Layer::new());
+//! engine.render();
+//! ```
 pub use layers_engine::LayersEngine;
 
 mod layers_engine;
@@ -210,6 +219,8 @@ pub(crate) struct Engine {
     pub(crate) scene: Arc<Scene>,
     /// The root node of the scene
     scene_root: RwLock<Option<NodeRef>>,
+
+    pub(crate) values_transactions: RwLock<HashMap<usize, usize>>,
     /// The transactions (node changes) that are scheduled to be executed
     transactions: FlatStorage<AnimatedNodeChange>,
     /// The animations that are scheduled to be executed
@@ -239,6 +250,7 @@ pub(crate) struct Engine {
 
 #[derive(Clone, Copy, Debug)]
 pub struct TransactionRef {
+    pub(crate) id: usize,
     pub value_id: FlatStorageId,
     pub(crate) engine_id: usize,
 }
@@ -295,6 +307,11 @@ impl TransactionRef {
 #[derive(Clone, Copy, Debug)]
 pub struct AnimationRef(FlatStorageId);
 
+impl std::fmt::Display for AnimationRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "AnimationRef({})", self.0)
+    }
+}
 /// An identifier for a node in the three storage
 #[derive(Clone, Copy, PartialEq, PartialOrd, Eq, std::cmp::Ord, Hash)]
 pub struct NodeRef(pub TreeStorageId);
@@ -348,6 +365,7 @@ impl Engine {
             animations: FlatStorage::new(),
             timestamp: RwLock::new(Timestamp(0.0)),
             transaction_handlers: FlatStorage::new(),
+            values_transactions: RwLock::new(HashMap::new()),
             layout_tree: RwLock::new(layout_tree),
             layout_root,
             scene_root,
@@ -575,19 +593,27 @@ impl Engine {
             if animation.is_some() {
                 animated_node_change.animation_id = animation;
             }
-            let transaction_id = animated_node_change.change.value_id();
+            let value_id = animated_node_change.change.value_id();
+            let transaction_id = self.transactions.insert(animated_node_change.clone());
             let transaction = TransactionRef {
-                value_id: self
-                    .transactions
-                    .insert_with_id(animated_node_change.clone(), transaction_id),
+                id: transaction_id,
+                value_id,
                 engine_id: self.id,
             };
             inserted_transactions.push(transaction);
         }
         inserted_transactions
     }
+
     pub fn get_transaction_for_value(&self, value_id: usize) -> Option<AnimatedNodeChange> {
-        self.transactions.with_data(|d| d.get(&value_id).cloned())
+        self.values_transactions
+            .read()
+            .unwrap()
+            .get(&value_id)
+            .and_then(|id| {
+                self.transactions
+                    .with_data(|d| d.get(id).map(|v| v.clone()))
+            })
     }
     pub fn get_animation(&self, animation: AnimationRef) -> Option<AnimationState> {
         self.animations.with_data(|d| d.get(&animation.0).cloned())
@@ -600,20 +626,35 @@ impl Engine {
     ) -> TransactionRef {
         let node = self.scene.nodes.get(target_id.0);
         if node.is_some() {
-            let transaction_id: usize = change.value_id();
+            let value_id: usize = change.value_id();
+
             let animated_node_change = AnimatedNodeChange {
                 change,
                 animation_id,
                 node_id: target_id,
             };
+            let transaction_id = self.transactions.insert(animated_node_change);
+            let mut values_transactions = self.values_transactions.write().unwrap();
+            if let Some(existing_transaction) = values_transactions.get(&value_id) {
+                self.cancel_transaction(TransactionRef {
+                    id: *existing_transaction,
+                    value_id,
+                    engine_id: self.id,
+                });
+            }
+            values_transactions.insert(value_id, transaction_id);
             TransactionRef {
-                value_id: self
-                    .transactions
-                    .insert_with_id(animated_node_change, transaction_id),
+                id: transaction_id,
+                value_id,
                 engine_id: self.id,
             }
         } else {
+            println!(
+                "Attention! Adding a change on a node not found {:?}",
+                target_id
+            );
             TransactionRef {
+                id: 0,
                 value_id: FlatStorageId::default(),
                 engine_id: self.id,
             }
@@ -630,8 +671,12 @@ impl Engine {
     }
     pub fn cancel_animation(&self, animation: AnimationRef) {
         self.animations.with_data_mut(|d| {
-            println!("cancel animation {:?}", animation.0);
             d.remove(&animation.0);
+        });
+    }
+    pub fn cancel_transaction(&self, transaction: TransactionRef) {
+        self.transactions.with_data_mut(|d| {
+            d.remove(&transaction.id);
         });
     }
     pub fn step_time(&self, dt: f32) {
@@ -755,7 +800,7 @@ impl Engine {
     ) {
         let mut ch = self
             .transaction_handlers
-            .get(&transaction.value_id)
+            .get(&transaction.id)
             .unwrap_or_else(TransitionCallbacks::new);
 
         match event_type {
@@ -764,8 +809,7 @@ impl Engine {
             TransactionEventType::Update => ch.on_update.push(handler),
         };
 
-        self.transaction_handlers
-            .insert_with_id(ch, transaction.value_id);
+        self.transaction_handlers.insert_with_id(ch, transaction.id);
     }
 
     pub fn on_start<F: Into<TransactionCallback>>(

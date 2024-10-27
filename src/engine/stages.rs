@@ -310,7 +310,7 @@ pub(crate) fn trigger_callbacks(engine: &Engine, started_animations: &[FlatStora
     let transaction_handlers = transaction_handlers.read().unwrap().clone();
     let scene = engine.scene.clone();
     transactions.iter().for_each(|(id, command)| {
-        if let Some(ch) = transaction_handlers.get(id) {
+        if let Some(tcallbacks) = transaction_handlers.get(id) {
             let animation_state = command
                 .animation_id
                 .as_ref()
@@ -330,7 +330,8 @@ pub(crate) fn trigger_callbacks(engine: &Engine, started_animations: &[FlatStora
                     .animation_id
                     .map(|a| started_animations.contains(&a.0))
                     .unwrap_or(false);
-                let to_remove = transaction_callbacks(&animation_state, ch, &node.layer, started);
+                let to_remove =
+                    transaction_callbacks(&animation_state, tcallbacks, &node.layer, started);
                 {
                     engine
                         .transaction_handlers
@@ -410,9 +411,17 @@ pub(crate) fn cleanup_transactions(engine: &Engine, finished_transations: Vec<Fl
     let handlers = engine.transaction_handlers.data();
     let mut handlers = handlers.write().unwrap();
 
-    for command_id in finished_transations.iter() {
-        transactions.remove(command_id);
-        if let Some(handler) = handlers.get_mut(command_id) {
+    for tid in finished_transations.iter() {
+        let tr = transactions.get(tid).unwrap();
+        let vid = tr.change.value_id();
+        transactions.remove(tid);
+        let mut values_transactions = engine.values_transactions.write().unwrap();
+        if let Some(existing_tid) = values_transactions.get(&vid) {
+            if (*existing_tid) == *tid {
+                values_transactions.remove(&vid);
+            }
+        }
+        if let Some(handler) = handlers.get_mut(tid) {
             handler.cleanup_once_callbacks();
         }
     }

@@ -5,6 +5,7 @@ use crate::{engine::draw_to_picture::DrawDebugInfo, layers::layer::render_layer:
 
 use super::scene::BACKGROUND_BLUR_SIGMA;
 
+/// Draw a layer into a skia::Canvas.
 pub fn draw_layer(canvas: &Canvas, layer: &RenderLayer) -> skia_safe::Rect {
     let mut draw_damage = skia_safe::Rect::default();
 
@@ -119,7 +120,7 @@ pub fn draw_layer(canvas: &Canvas, layer: &RenderLayer) -> skia_safe::Rect {
     draw_damage
 }
 
-pub fn draw_debug(
+pub(crate) fn draw_debug(
     canvas: &skia_safe::Canvas,
     dbg_info: &DrawDebugInfo,
     render_layer: &RenderLayer,

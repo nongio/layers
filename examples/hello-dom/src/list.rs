@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 use layers::prelude::*;
-use layers::{prelude::timing::TimingFunction, types::Size};
+use layers::types::Size;
 use std::string::String;
 
 pub struct ListState {

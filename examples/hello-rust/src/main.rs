@@ -10,7 +10,6 @@ use glutin::window::WindowBuilder;
 use glutin::GlProfile;
 use layers::types::Size;
 use layers::{prelude::*, skia};
-use spring::Spring;
 
 #[allow(unused_assignments)]
 #[tokio::main]
@@ -104,6 +103,7 @@ async fn main() {
     let last_instant = instant;
 
     let layer = engine.new_layer();
+    layer.set_anchor_point((0.5, 0.5), None);
     layer.set_key("test_layer");
     layer.set_position((100.0, 0.0), None);
     layer.set_size(Size::points(100.0, 100.0), None);
@@ -188,44 +188,20 @@ async fn main() {
                         let animation_finished = animation_finished.clone();
                         let animation_progress = animation_progress.clone();
                         let run = run;
-                        let run2 = run;
-                        let run3 = run;
-                        let value_id = layer.position_value_id();
-                        let current_velocity = engine
-                            .get_transaction_for_value(value_id)
-                            .map(|tr| {
-                                let animation_id = tr.animation_id.unwrap();
-                                let animation_state = engine.get_animation(animation_id).unwrap();
-                                let animation = animation_state.animation;
-                                engine.cancel_animation(animation_id);
-                                match animation.timing {
-                                    TimingFunction::Spring(spring) => {
-                                        let (_current_position, current_velocity) =
-                                            spring.update_pos_vel_at(animation_state.time);
-                                        current_velocity
-                                    }
-                                    _ => 0.0,
-                                }
-                            })
-                            .unwrap_or(0.0);
-                        println!("current_velocity: {}", current_velocity);
+
                         layer
                             .set_position(
                                 (_mouse_x as f32, _mouse_y as f32),
                                 Transition {
                                     delay: 0.0,
                                     timing: TimingFunction::Spring(
-                                        Spring::with_duration_bounce_and_velocity(
-                                            2.0,
-                                            0.2,
-                                            current_velocity,
-                                        ),
+                                        Spring::with_duration_and_bounce(1.0, 0.4),
                                     ),
                                 },
                             )
                             .on_start(
                                 move |_l: &Layer, _p| {
-                                    println!("[{}] animation start", run);
+                                    // println!("[{}] animation start", run);
 
                                     animation_start
                                         .store(true, std::sync::atomic::Ordering::SeqCst);
@@ -234,17 +210,17 @@ async fn main() {
                             )
                             .on_update(
                                 move |_l: &Layer, p| {
-                                    println!("[{}] animation update: {}", run2, p);
+                                    // println!("[{}] animation update: {}", run2, p);
                                     animation_progress.store(
                                         (p * 100.0) as i32,
                                         std::sync::atomic::Ordering::SeqCst,
                                     );
                                 },
-                                true,
+                                false,
                             )
                             .on_finish(
                                 move |_l: &Layer, p| {
-                                    println!("[{}], animation finished: {}", run3, p);
+                                    // println!("[{}], animation finished: {}", run3, p);
                                     animation_finished
                                         .store(true, std::sync::atomic::Ordering::SeqCst);
                                 },

@@ -25,7 +25,8 @@ pub trait DrawScene {
     fn draw_scene(&self, scene: &Scene, root_id: NodeRef, damage: Option<skia_safe::Rect>);
 }
 
-pub fn draw_scene(canvas: &Canvas, scene: &Scene, root_id: NodeRef) {
+/// Draw the scene to the given skia::Canvas
+pub fn draw_scene(canvas: &skia::Canvas, scene: &Scene, root_id: NodeRef) {
     let arena = scene.nodes.data();
     let arena = arena.read().unwrap();
     if let Some(_root) = scene.get_node(root_id) {
@@ -191,8 +192,8 @@ pub fn create_surface_for_node(
     Some(surface)
 }
 
-// paint a node and his subtree in the provided canvas
 #[profiling::function]
+/// paint a node and his subtree in the provided canvas
 fn paint_node_tree(
     node_ref: NodeRef,
     arena: &Arena<SceneNode>,
@@ -220,9 +221,9 @@ fn paint_node_tree(
     });
 }
 
-// render a node and his subtree in the provided canvas
-// taking care of the image caching if needed
 #[profiling::function]
+/// Render a node and his subtree in the provided canvas
+/// taking care of the image caching if needed
 pub fn render_node_tree(
     node_ref: NodeRef,
     arena: &Arena<SceneNode>,
@@ -484,8 +485,8 @@ pub(crate) fn paint_node(
 
     restore_transform
 }
-
-pub fn debug_scene(scene: &Scene, root_id: NodeRef) {
+/// Print the node tree to the console
+pub fn print_scene(scene: &Scene, root_id: NodeRef) {
     let arena = scene.nodes.data();
     let arena = arena.read().unwrap();
     if let Some(_root) = scene.get_node(root_id) {

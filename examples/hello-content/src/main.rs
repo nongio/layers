@@ -9,7 +9,7 @@ use glutin::{
 };
 
 use layers::{
-    prelude::{timing::TimingFunction, *},
+    prelude::*,
     skia::{self, Color4f, ColorType},
     types::Size,
 };
@@ -18,7 +18,7 @@ pub fn draw(canvas: &skia::Canvas, width: f32, _height: f32) {
     let mut text_style = skia::textlayout::TextStyle::new();
     text_style.set_font_size(60.0);
     let foreground_paint = skia::Paint::new(Color4f::new(0.0, 0.0, 0.0, 1.0), None);
-    text_style.set_foreground_color(&foreground_paint);
+    text_style.set_foreground_paint(&foreground_paint);
     text_style.set_font_families(&["Inter"]);
 
     let font_mgr = skia::FontMgr::new();
@@ -170,13 +170,13 @@ fn main() {
     let instant = std::time::Instant::now();
     let mut update_frame = 0;
     let mut draw_frame = -1;
-    let last_instant = instant;
+    // let last_instant = instant;
 
     let mut w = 1.0;
     let mut h = 1.0;
     events_loop.run(move |event, _, control_flow| {
         let now = std::time::Instant::now();
-        let dt = (now - last_instant).as_secs_f32();
+        // let dt = (now - last_instant).as_secs_f32();
         let next = now.checked_add(Duration::new(0, 2 * 1000000)).unwrap();
         *control_flow = ControlFlow::WaitUntil(next);
 
@@ -221,38 +221,26 @@ fn main() {
                             winit::event::VirtualKeyCode::A => {
                                 content_layer.set_position(
                                     Point { x: 0.0, y: 0.0 },
-                                    Some(Transition {
-                                        duration: 2.0,
-                                        ..Default::default()
-                                    }),
+                                    Some(Transition::ease_in_quad(2.0)),
                                 );
                             }
                             winit::event::VirtualKeyCode::W => {
                                 content_layer.set_scale(
                                     Point { x: 0.5, y: 0.5 },
-                                    Some(Transition {
-                                        duration: 2.0,
-                                        ..Default::default()
-                                    }),
+                                    Some(Transition::ease_in_quad(2.0)),
                                 );
                             }
                             winit::event::VirtualKeyCode::S => {
                                 content_layer.set_scale(
                                     Point { x: 2.0, y: 2.0 },
-                                    Some(Transition {
-                                        duration: 2.0,
-                                        ..Default::default()
-                                    }),
+                                    Some(Transition::ease_in_quad(2.0)),
                                 );
                             }
 
                             winit::event::VirtualKeyCode::D => {
                                 content_layer.set_position(
                                     Point { x: 600.0, y: 600.0 },
-                                    Some(Transition {
-                                        duration: 2.0,
-                                        ..Default::default()
-                                    }),
+                                    Some(Transition::ease_in_quad(2.0)),
                                 );
                             }
                             winit::event::VirtualKeyCode::E => {
@@ -260,10 +248,7 @@ fn main() {
                                 h += 10.0;
                                 content_layer.set_position(
                                     Point { x: 0.0, y: 0.0 },
-                                    Some(Transition {
-                                        duration: 2.0,
-                                        ..Default::default()
-                                    }),
+                                    Some(Transition::ease_in_quad(2.0)),
                                 );
                                 inner_content_layer.set_draw_content(
                                     move |canvas: &layers::skia::Canvas, width, height| -> layers::skia::Rect {

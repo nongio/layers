@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use layers::{
-        drawing::scene::{node_tree_list, node_tree_list_visible},
+        drawing::{node_tree_list, node_tree_list_visible},
         engine::LayersEngine,
         types::*,
     };

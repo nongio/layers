@@ -4,7 +4,7 @@ use glutin::event::WindowEvent;
 use glutin::event_loop::{ControlFlow, EventLoop};
 use glutin::window::WindowBuilder;
 use glutin::GlProfile;
-use layers::{drawing::scene::debug_scene, types::Size};
+use layers::{drawing::print_scene, types::Size};
 use layers::{prelude::*, skia::ColorType};
 
 use crate::{
@@ -242,7 +242,7 @@ async fn main() {
                             }
                             glutin::event::VirtualKeyCode::D => {
                                 if input.state == glutin::event::ElementState::Released {
-                                    debug_scene(engine.scene(), engine.scene_root().unwrap());
+                                    print_scene(engine.scene(), engine.scene_root().unwrap());
                                 }
                             }
                             glutin::event::VirtualKeyCode::Escape => {
