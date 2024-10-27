@@ -306,42 +306,61 @@ pub(crate) fn trigger_callbacks(engine: &Engine, started_animations: &[FlatStora
     let transactions = transactions.read().unwrap().clone();
     let animations = engine.animations.data();
     let animations = animations.read().unwrap().clone();
-    let transaction_handlers = engine.transaction_handlers.data();
-    let transaction_handlers = transaction_handlers.read().unwrap().clone();
     let scene = engine.scene.clone();
     transactions.iter().for_each(|(id, command)| {
-        if let Some(tcallbacks) = transaction_handlers.get(id) {
-            let animation_state = command
+        let animation_state = command
+            .animation_id
+            .as_ref()
+            .and_then(|id| animations.get(&id.0).cloned())
+            .unwrap_or(AnimationState {
+                animation: Default::default(),
+                progress: 1.0,
+                time: 0.0,
+                is_running: false,
+                is_finished: true,
+                is_started: false,
+            });
+        if let Some(node) = scene.get_node(command.node_id.0) {
+            let tcallbacks = {
+                let transaction_handlers = engine.transaction_handlers.data();
+                let transaction_handlers = transaction_handlers.read().unwrap();
+
+                transaction_handlers.get(id).cloned()
+            };
+            let node = node.get();
+            let started = command
                 .animation_id
-                .as_ref()
-                .and_then(|id| animations.get(&id.0).cloned())
-                .unwrap_or(AnimationState {
-                    animation: Default::default(),
-                    progress: 1.0,
-                    time: 0.0,
-                    is_running: false,
-                    is_finished: true,
-                    is_started: false,
-                });
-            // the check is needed because the node could have been removed
-            if let Some(node) = scene.get_node(command.node_id.0) {
-                let node = node.get();
-                let started = command
-                    .animation_id
-                    .map(|a| started_animations.contains(&a.0))
-                    .unwrap_or(false);
-                let to_remove =
-                    transaction_callbacks(&animation_state, tcallbacks, &node.layer, started);
-                {
-                    engine
-                        .transaction_handlers
-                        .with_data_mut(|transatction_handlers| {
-                            let handler = transatction_handlers.get_mut(id).unwrap();
-                            to_remove.iter().for_each(|tr_callback| {
+                .map(|a| started_animations.contains(&a.0))
+                .unwrap_or(false);
+            let vcallbacks = {
+                let value_handlers = engine.value_handlers.data();
+                let value_handlers = value_handlers.read().unwrap();
+                value_handlers.get(&command.change.value_id()).cloned()
+            };
+            let (tcallback_to_remove, vcallback_to_remove) = transaction_callbacks(
+                &animation_state,
+                tcallbacks.as_ref(),
+                vcallbacks.as_ref(),
+                &node.layer,
+                started,
+            );
+            {
+                engine
+                    .transaction_handlers
+                    .with_data_mut(|transatction_handlers| {
+                        if let Some(handler) = transatction_handlers.get_mut(id) {
+                            tcallback_to_remove.iter().for_each(|tr_callback| {
                                 handler.remove(tr_callback);
                             });
+                        }
+                    });
+                engine.value_handlers.with_data_mut(|values_handlers| {
+                    if let Some(handler) = values_handlers.get_mut(&command.change.value_id()) {
+                        vcallback_to_remove.iter().for_each(|v_callback| {
+                            handler.remove(v_callback);
                         });
-                }
+                    }
+                });
             }
         }
     });
@@ -349,50 +368,100 @@ pub(crate) fn trigger_callbacks(engine: &Engine, started_animations: &[FlatStora
 #[profiling::function]
 fn transaction_callbacks(
     animation_state: &AnimationState,
-    handler: &TransitionCallbacks,
+    tr_handler: Option<&TransitionCallbacks>,
+    v_handler: Option<&TransitionCallbacks>,
     layer: &Layer,
     on_start: bool,
-) -> Vec<TransactionCallback> {
-    let mut to_remove: Vec<TransactionCallback> = Vec::new();
+) -> (Vec<TransactionCallback>, Vec<TransactionCallback>) {
+    let mut tr_to_remove: Vec<TransactionCallback> = Vec::new();
+    let mut v_to_remove: Vec<TransactionCallback> = Vec::new();
+
     if animation_state.is_running {
         if on_start {
-            let callbacks = &handler.on_start;
+            tr_handler.map(|tr_handler| {
+                let callbacks = &tr_handler.on_start;
+                callbacks.iter().for_each(|tr_callback| {
+                    let callback = &tr_callback.callback;
+                    callback(layer, animation_state.time);
+                    if tr_callback.once {
+                        tr_to_remove.push(tr_callback.clone());
+                    }
+                });
+            });
+            v_handler.map(|v_handler| {
+                let callbacks = &v_handler.on_start;
+                callbacks.iter().for_each(|tr_callback| {
+                    let callback = &tr_callback.callback;
+                    callback(layer, animation_state.time);
+                    if tr_callback.once {
+                        v_to_remove.push(tr_callback.clone());
+                    }
+                });
+            });
+        }
+        tr_handler.map(|tr_handler| {
+            let callbacks = &tr_handler.on_update;
             callbacks.iter().for_each(|tr_callback| {
                 let callback = &tr_callback.callback;
                 callback(layer, animation_state.time);
                 if tr_callback.once {
-                    to_remove.push(tr_callback.clone());
+                    tr_to_remove.push(tr_callback.clone());
                 }
             });
-        }
-
-        let callbacks = &handler.on_update;
-        callbacks.iter().for_each(|tr_callback| {
-            let callback = &tr_callback.callback;
-            callback(layer, animation_state.time);
-            if tr_callback.once {
-                to_remove.push(tr_callback.clone());
-            }
+        });
+        v_handler.map(|v_handler| {
+            let callbacks = &v_handler.on_update;
+            callbacks.iter().for_each(|tr_callback| {
+                let callback = &tr_callback.callback;
+                callback(layer, animation_state.time);
+                if tr_callback.once {
+                    v_to_remove.push(tr_callback.clone());
+                }
+            });
         });
     } else if animation_state.is_finished {
-        let callbacks = &handler.on_update;
-        callbacks.iter().for_each(|tr_callback| {
-            let callback = &tr_callback.callback;
-            callback(layer, 1.0);
-            if tr_callback.once {
-                to_remove.push(tr_callback.clone());
-            }
+        tr_handler.map(|tr_handler| {
+            let callbacks = &tr_handler.on_update;
+            callbacks.iter().for_each(|tr_callback| {
+                let callback = &tr_callback.callback;
+                callback(layer, 1.0);
+                if tr_callback.once {
+                    tr_to_remove.push(tr_callback.clone());
+                }
+            });
         });
-        let callbacks = &handler.on_finish;
-        callbacks.iter().for_each(|tr_callback| {
-            let callback = &tr_callback.callback;
-            if tr_callback.once {
-                to_remove.push(tr_callback.clone());
-            }
-            callback(layer, 1.0);
+        v_handler.map(|v_handler| {
+            let callbacks = &v_handler.on_update;
+            callbacks.iter().for_each(|tr_callback| {
+                let callback = &tr_callback.callback;
+                callback(layer, animation_state.time);
+                if tr_callback.once {
+                    v_to_remove.push(tr_callback.clone());
+                }
+            });
+        });
+        tr_handler.map(|tr_handler| {
+            let callbacks = &tr_handler.on_finish;
+            callbacks.iter().for_each(|tr_callback| {
+                let callback = &tr_callback.callback;
+                if tr_callback.once {
+                    tr_to_remove.push(tr_callback.clone());
+                }
+                callback(layer, 1.0);
+            });
+        });
+        v_handler.map(|v_handler| {
+            let callbacks = &v_handler.on_finish;
+            callbacks.iter().for_each(|tr_callback| {
+                let callback = &tr_callback.callback;
+                callback(layer, animation_state.time);
+                if tr_callback.once {
+                    v_to_remove.push(tr_callback.clone());
+                }
+            });
         });
     }
-    to_remove
+    (tr_to_remove, v_to_remove)
 }
 #[profiling::function]
 pub(crate) fn cleanup_animations(engine: &Engine, finished_animations: Vec<FlatStorageId>) {
@@ -412,13 +481,19 @@ pub(crate) fn cleanup_transactions(engine: &Engine, finished_transations: Vec<Fl
     let mut handlers = handlers.write().unwrap();
 
     for tid in finished_transations.iter() {
-        let tr = transactions.get(tid).unwrap();
-        let vid = tr.change.value_id();
-        transactions.remove(tid);
-        let mut values_transactions = engine.values_transactions.write().unwrap();
-        if let Some(existing_tid) = values_transactions.get(&vid) {
-            if (*existing_tid) == *tid {
-                values_transactions.remove(&vid);
+        if let Some(tr) = transactions.get(tid) {
+            let vid = tr.change.value_id();
+            transactions.remove(tid);
+            let mut values_transactions = engine.values_transactions.write().unwrap();
+            if let Some(existing_tid) = values_transactions.get(&vid) {
+                if (*existing_tid) == *tid {
+                    values_transactions.remove(&vid);
+                }
+            }
+            let handlers = engine.value_handlers.data();
+            let mut handlers = handlers.write().unwrap();
+            if let Some(handler) = handlers.get_mut(&vid) {
+                handler.cleanup_once_callbacks();
             }
         }
         if let Some(handler) = handlers.get_mut(tid) {

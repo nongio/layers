@@ -234,6 +234,8 @@ pub(crate) struct Engine {
 
     /// The indexmap of handlers for the transactions
     transaction_handlers: FlatStorage<TransitionCallbacks>,
+    /// The indexmap of handlers for the values
+    value_handlers: FlatStorage<TransitionCallbacks>,
 
     /// The indexmap of handlers for the pointer events
     pointer_handlers: FlatStorage<PointerCallback>,
@@ -365,6 +367,7 @@ impl Engine {
             animations: FlatStorage::new(),
             timestamp: RwLock::new(Timestamp(0.0)),
             transaction_handlers: FlatStorage::new(),
+            value_handlers: FlatStorage::new(),
             values_transactions: RwLock::new(HashMap::new()),
             layout_tree: RwLock::new(layout_tree),
             layout_root,
@@ -809,6 +812,27 @@ impl Engine {
         self.transaction_handlers.insert_with_id(ch, transaction.id);
     }
 
+    #[allow(clippy::unwrap_or_default)]
+    fn add_value_handler(
+        &self,
+        value_id: usize,
+        event_type: TransactionEventType,
+        handler: TransactionCallback,
+    ) {
+        let mut ch = self
+            .value_handlers
+            .get(&value_id)
+            .unwrap_or_else(TransitionCallbacks::new);
+
+        match event_type {
+            TransactionEventType::Start => ch.on_start.push(handler),
+            TransactionEventType::Finish => ch.on_finish.push(handler),
+            TransactionEventType::Update => ch.on_update.push(handler),
+        };
+
+        self.value_handlers.insert_with_id(ch, value_id);
+    }
+
     pub fn on_start<F: Into<TransactionCallback>>(
         &self,
         transaction: TransactionRef,
@@ -841,7 +865,36 @@ impl Engine {
         handler.once = once;
         self.add_transaction_handler(transaction, TransactionEventType::Update, handler);
     }
-
+    pub fn on_update_value<F: Into<TransactionCallback>>(
+        &self,
+        value_id: usize,
+        handler: F,
+        once: bool,
+    ) {
+        let mut handler = handler.into();
+        handler.once = once;
+        self.add_value_handler(value_id, TransactionEventType::Update, handler);
+    }
+    pub fn on_start_value<F: Into<TransactionCallback>>(
+        &self,
+        value_id: usize,
+        handler: F,
+        once: bool,
+    ) {
+        let mut handler = handler.into();
+        handler.once = once;
+        self.add_value_handler(value_id, TransactionEventType::Start, handler);
+    }
+    pub fn on_finish_value<F: Into<TransactionCallback>>(
+        &self,
+        value_id: usize,
+        handler: F,
+        once: bool,
+    ) {
+        let mut handler = handler.into();
+        handler.once = once;
+        self.add_value_handler(value_id, TransactionEventType::Finish, handler);
+    }
     #[allow(clippy::unwrap_or_default)]
     pub(crate) fn add_pointer_handler<F: Into<PointerHandlerFunction>>(
         &self,

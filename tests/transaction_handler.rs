@@ -21,7 +21,6 @@ pub fn call_finish_transaction() {
     engine.on_finish(
         transaction,
         move |_: &Layer, _| {
-            println!("Transaction finished");
             let mut c = c.write().unwrap();
             *c += 1;
             layer.set_position(
@@ -59,7 +58,6 @@ pub fn call_start_transaction() {
     let c = called.clone();
     transaction.on_start(
         move |_: &Layer, _| {
-            println!("Transaction started");
             let mut c = c.write().unwrap();
             *c += 1;
         },
@@ -99,7 +97,6 @@ pub fn call_update_transaction() {
         .set_position(Point { x: 200.0, y: 100.0 }, Some(Transition::linear(0.1)))
         .on_update(
             move |_: &Layer, progress| {
-                println!("Transaction update {}", progress);
                 let mut c = c.write().unwrap();
                 *c = progress;
             },
@@ -137,7 +134,6 @@ pub fn call_finish_transaction_spring() {
     engine.on_finish(
         transaction,
         move |_: &Layer, _| {
-            println!("Transaction finished");
             let mut c = c.write().unwrap();
             *c += 1;
             layer.set_position(
@@ -176,7 +172,6 @@ pub fn call_finish_transaction_spring_predictable() {
     engine.on_finish(
         transaction,
         move |_: &Layer, _| {
-            println!("Transaction finished");
             let mut c = c.write().unwrap();
             *c += 1;
             layer.set_position(
@@ -194,4 +189,124 @@ pub fn call_finish_transaction_spring_predictable() {
 
     let called = called.read().unwrap();
     assert_eq!(*called, 1);
+}
+
+/// it should call the start handler when the transaction is started 1 time
+#[test]
+pub fn call_start_value() {
+    let engine = LayersEngine::new(1000.0, 1000.0);
+    let layer = engine.new_layer();
+    engine.scene_add_layer(layer.clone());
+
+    layer.set_position(
+        Point { x: 200.0, y: 100.0 },
+        Some(Transition {
+            delay: 0.2,
+            ..Default::default()
+        }),
+    );
+    let called = Arc::new(RwLock::new(0));
+    let c = called.clone();
+
+    engine.on_start_value(
+        layer.position_value_id(),
+        move |_: &Layer, _| {
+            let mut c = c.write().unwrap();
+            *c += 1;
+        },
+        false,
+    );
+    engine.update(0.1);
+    // with a delay in the animation the start handler should not be called
+    {
+        let c = called.read().unwrap();
+        assert_eq!(*c, 0);
+    }
+    // now it should be called
+    engine.update(0.1);
+    {
+        let c = called.read().unwrap();
+        assert_eq!(*c, 1);
+    }
+    // it should be called only once
+    engine.update(0.1);
+
+    {
+        let c = called.read().unwrap();
+        assert_eq!(*c, 1);
+    }
+    layer.set_position(
+        Point { x: 200.0, y: 100.0 },
+        Some(Transition {
+            delay: 0.0,
+            ..Default::default()
+        }),
+    );
+
+    // it should be called again
+    engine.update(0.1);
+    {
+        let c = called.read().unwrap();
+        assert_eq!(*c, 2);
+    }
+}
+
+/// it should call the finish handler when the transaction is started 1 time
+#[test]
+pub fn call_update_value() {
+    let engine = LayersEngine::new(1000.0, 1000.0);
+    let layer = engine.new_layer();
+    engine.scene_add_layer(layer.clone());
+
+    layer.set_position(
+        Point { x: 200.0, y: 100.0 },
+        Some(Transition {
+            delay: 0.0,
+            ..Default::default()
+        }),
+    );
+    let called = Arc::new(RwLock::new(0));
+    let c = called.clone();
+
+    engine.on_update_value(
+        layer.position_value_id(),
+        move |_: &Layer, _| {
+            let mut c = c.write().unwrap();
+            *c += 1;
+        },
+        false,
+    );
+    engine.update(0.1);
+
+    {
+        let c = called.read().unwrap();
+        assert_eq!(*c, 1);
+    }
+
+    engine.update(0.1);
+    {
+        let c = called.read().unwrap();
+        assert_eq!(*c, 2);
+    }
+
+    engine.update(0.1);
+
+    {
+        let c = called.read().unwrap();
+        assert_eq!(*c, 3);
+    }
+    layer.set_position(
+        Point { x: 200.0, y: 100.0 },
+        Some(Transition {
+            delay: 0.0,
+            ..Default::default()
+        }),
+    );
+
+    // it should be called again
+    engine.update(0.1);
+    {
+        let c = called.read().unwrap();
+        assert_eq!(*c, 4);
+    }
 }

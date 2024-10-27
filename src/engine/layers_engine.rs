@@ -287,6 +287,26 @@ impl LayersEngine {
     ) {
         self.engine.on_start(transaction, handler, once);
     }
+    pub fn on_update_value<F: Into<TransactionCallback>>(
+        &self,
+        value_id: usize,
+        handler: F,
+        once: bool,
+    ) {
+        let mut handler = handler.into();
+        handler.once = once;
+        self.engine.on_update_value(value_id, handler, once);
+    }
+    pub fn on_start_value<F: Into<TransactionCallback>>(
+        &self,
+        value_id: usize,
+        handler: F,
+        once: bool,
+    ) {
+        let mut handler = handler.into();
+        handler.once = once;
+        self.engine.on_start_value(value_id, handler, once);
+    }
     pub fn cancel_animation(&self, animation: AnimationRef) {
         self.engine.cancel_animation(animation);
     }
