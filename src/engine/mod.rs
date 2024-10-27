@@ -7,6 +7,7 @@
 //! - The *draw* step generates a displaylist
 //! - The *render* step uses the displaylist to generate a texture of the node
 //! - The *compose* step generates the final image using the textures
+pub use layers_engine::LayersEngine;
 
 mod layers_engine;
 mod stages;
@@ -17,9 +18,8 @@ pub(crate) mod rendering;
 pub(crate) mod scene;
 
 pub mod animation;
-pub mod node;
-pub mod storage;
-pub use layers_engine::LayersEngine;
+pub(crate) mod node;
+pub(crate) mod storage;
 
 use core::fmt;
 use indextree::NodeId;
