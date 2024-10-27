@@ -1,8 +1,7 @@
-// use crate::easing::bezier_easing_function;
-
 use super::{spring::Spring, Easing};
 
 #[derive(Clone, Copy, Debug)]
+/// Possible timing functions for an animation.
 pub enum TimingFunction {
     Easing(Easing, f32),
     Spring(Spring),

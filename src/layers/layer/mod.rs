@@ -184,6 +184,7 @@ impl Layer {
         });
         let id: Option<NodeRef> = *self.id.read().unwrap();
         let mut tr = TransactionRef {
+            id: 0,
             value_id: 0,
             engine_id: self.engine.id,
         };
@@ -495,6 +496,7 @@ impl Layer {
         effect.init(self);
         let filter_model_id = self.model.image_filter_progress.id;
         let tr = TransactionRef {
+            id: 0,
             value_id: filter_model_id,
             engine_id: self.engine.id,
         };
@@ -515,6 +517,7 @@ impl Layer {
             false,
         );
         *self.effect.write().unwrap() = Some(effect.clone());
+        unimplemented!("set_effect fixme");
     }
     pub fn remove_effect(&self) {
         let mut effect = self.effect.write().unwrap();
@@ -528,12 +531,14 @@ impl Layer {
         let size_id = self.model.size.id;
         self.engine.on_update(
             TransactionRef {
+                id: 0,
                 value_id: size_id,
                 engine_id: self.engine.id,
             },
             f,
             once,
         );
+        unimplemented!("on_change_size fixme");
     }
 }
 

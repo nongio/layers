@@ -32,10 +32,6 @@ where
         let canvas = recorder.begin_recording(bounds_safe, None);
         let damage = self.draw(canvas);
 
-        // if let Some(info) = debug_info {
-        //     draw_debug(canvas, info);
-        // }
-
         (recorder.finish_recording_as_picture(None), damage)
     }
 }

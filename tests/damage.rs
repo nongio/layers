@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use layers::{
-        drawing::layer::draw_layer,
+        drawing::draw_layer,
         engine::LayersEngine,
         renderer::skia_image::SkiaImageRenderer,
         skia,

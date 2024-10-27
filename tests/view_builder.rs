@@ -1,4 +1,4 @@
-use layers::{drawing::scene::debug_scene, layer_trees, layer_trees_opt, prelude::*, types::Size};
+use layers::{drawing::print_scene, layer_trees, layer_trees_opt, prelude::*, types::Size};
 
 pub fn render_one_child_view(state: &bool, _view: &View<bool>) -> LayerTree {
     LayerTreeBuilder::default()
@@ -91,7 +91,7 @@ pub fn simple_build() {
         .unwrap();
     layer.build_layer_tree(&lt);
 
-    debug_scene(engine.scene(), engine.scene_root().unwrap());
+    print_scene(engine.scene(), engine.scene_root().unwrap());
 }
 
 #[test]
@@ -108,7 +108,7 @@ pub fn build_a_view() {
     engine.update(0.016);
 
     // let x = view.layer.unwrap().render_position().x;
-    debug_scene(engine.scene(), engine.scene_root().unwrap());
+    print_scene(engine.scene(), engine.scene_root().unwrap());
     // assert!(x == 0.0);
 }
 
@@ -126,25 +126,25 @@ pub fn rebuild_a_view() {
     engine.update(0.016);
     let layer = view.layer.read().unwrap().clone().unwrap();
 
-    debug_scene(engine.scene(), engine.scene_root().unwrap());
+    print_scene(engine.scene(), engine.scene_root().unwrap());
     let num_children = layer.children_nodes().len();
     assert!(num_children == 0);
 
     view.update_state(&true);
     engine.update(0.016);
-    debug_scene(engine.scene(), engine.scene_root().unwrap());
+    print_scene(engine.scene(), engine.scene_root().unwrap());
     let num_children = layer.children_nodes().len();
     assert!(num_children == 1);
 
     view.update_state(&false);
     engine.update(0.016);
-    debug_scene(engine.scene(), engine.scene_root().unwrap());
+    print_scene(engine.scene(), engine.scene_root().unwrap());
     let num_children = layer.children_nodes().len();
     assert!(num_children == 0);
 
     view.update_state(&true);
     engine.update(0.016);
-    debug_scene(engine.scene(), engine.scene_root().unwrap());
+    print_scene(engine.scene(), engine.scene_root().unwrap());
     let num_children = layer.children_nodes().len();
     assert!(num_children == 1);
 }
@@ -163,24 +163,24 @@ pub fn nested_views() {
     engine.update(0.016);
     let layer = view.layer.read().unwrap().clone().unwrap();
 
-    debug_scene(engine.scene(), engine.scene_root().unwrap());
+    print_scene(engine.scene(), engine.scene_root().unwrap());
     let num_children = layer.children_nodes().len();
     assert!(num_children == 3);
 
     println!("--");
     view.update_state(&true);
     engine.update(0.016);
-    debug_scene(engine.scene(), engine.scene_root().unwrap());
+    print_scene(engine.scene(), engine.scene_root().unwrap());
 
     println!("--");
     view.update_state(&false);
     engine.update(0.016);
-    debug_scene(engine.scene(), engine.scene_root().unwrap());
+    print_scene(engine.scene(), engine.scene_root().unwrap());
 
     println!("--");
     view.update_state(&true);
     engine.update(0.016);
-    debug_scene(engine.scene(), engine.scene_root().unwrap());
+    print_scene(engine.scene(), engine.scene_root().unwrap());
 
     let num_children = layer.children_nodes().len();
     assert!(num_children == 3);

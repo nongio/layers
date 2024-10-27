@@ -1,9 +1,12 @@
 #![deny(warnings)]
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
+#![doc(
+    html_logo_url = "https://raw.githubusercontent.com/nongio/layers/assets/LayersEngine-dark.png"
+)]
 
 //! # Layers Engine
 //!
-//! **Layers** is a rendering engine designed for animated user interfaces.
+//! **Layers** is an animation and rendering engine designed for user interfaces.
 //! It utilizes a scene graph for efficient, retained mode rendering of UI elements,
 //! optimizing common interpolations such as opacity, 2D transformations, and blending.
 //!
@@ -13,6 +16,12 @@
 //! - **Animatable Properties**: Nodes have properties that can be animated, with changes scheduled and executed by the engine using a Command pattern. This ensures a consistent API for both immediate and animated changes.
 //! - **Optimized Rendering**: Uses a display list for efficient rendering commands.
 //! - **Animation Hooks**: The API exposes hooks at different stages of the animation progress.
+//! - **Layout Engine**: Uses the Taffy library for layout calculations.
+//! - **Multi-threaded**: Supports concurrent updates to layer properties.
+//! - **Spring Physics Animations**: Supports spring physics for animations.
+//! - **Easing Functions**: Includes a variety of easing functions for animations.
+//! - **Incremental Rendering**: Only redraws the portions of the scene that have changed.
+//! - **Debugger**: The engine has a built-in debugger for visualizing the scene graph
 //!
 //! ## Layer
 //!
@@ -26,12 +35,14 @@
 //! ## Rendering Model
 //!
 //! - **Retained Mode**: The engine maintains a tree of layers and only redraws those that have changed.
+//! - **Display List**: Uses a display list to optimize rendering commands.
+//! - **Damage tracking**: On every update, the damage of the scene is calculated.
 //!
 //! ## Multi-threaded Support
 //!
 //! - **Concurrent Updates**: Layer properties are updated across multiple threads.
 //!
-//! ## Backend Support
+//! ## Backend Support (Skia)
 //!
 //! - **Drawing Library**: Uses the Skia library.
 //! - **Supported Backends**:
@@ -39,7 +50,7 @@
 //!   - **EGL**: For OpenGL ES contexts
 //!   - **Image**: For testing purposes
 //!
-//! ## Layout
+//! ## Taffy Layout
 //!
 //! - **Layout Engine**: Utilizes the Taffy library, based on the Flexbox model.
 //!

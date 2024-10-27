@@ -1,3 +1,14 @@
+//! Helper struct to build complex layer hierarchies that change over time
+//!
+//! It is a wrapper around a state S, that can change overtime,
+//! and a render function that generates a LayerTree from a given state.
+//!
+//! The view keeps track of the last state and only updates the layertree if the state
+//! has changed. A View is mounted on a root layer and appends and removes layers based on
+//! LayerTree rendered.
+//!
+//! The view keeps a cache of the layers that are rendered
+//! by the engine to optimise their creation.
 mod build_layer_tree;
 mod layer_tree;
 
@@ -14,12 +25,8 @@ pub use build_layer_tree::*;
 pub use layer_tree::*;
 
 /// A View\<S\> is a struct to support the creation of complex hierarchies of layers
-/// that can be rendered by the engine. It is a wrapper around a state S that can be
-/// updated and a render function that generates a LayerTree from the state.
-/// The view keeps track of the last state and only updates the layertree if the state
-/// has changed. A View is mounted on a root layer and appends and removes layers based on
-/// LayerTree rendered.The view also keeps a cache of the layers that are rendered
-/// by the engine to optimise their creation.
+/// that can be rendered by the engine.
+
 #[derive(Clone)]
 pub struct View<S: Hash + Clone> {
     key: String,

@@ -5,11 +5,6 @@ use crate::layers::layer::Layer;
 use crate::prelude::*;
 use indextree::NodeId;
 
-/// Generate a unique key for a layer
-pub fn unique_layer_key() -> String {
-    format!("layer_{}", rand::random::<u64>())
-}
-
 /// Helper function to remove a viewlayer from the cache
 fn cache_remove_viewlayer(
     view_key: &String,
