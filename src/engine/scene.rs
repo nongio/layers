@@ -68,9 +68,7 @@ impl Scene {
     pub fn get_node(&self, id: impl Into<TreeStorageId>) -> Option<TreeStorageNode<SceneNode>> {
         let id = id.into();
         let scene_node = self.nodes.get(id);
-        scene_node.filter(|node| 
-            !node.is_removed()
-        )
+        scene_node.filter(|node| !node.is_removed())
     }
 
     pub fn add<R: Into<Layer>>(&self, renderable: R, layout: TaffyNode) -> NodeRef {
