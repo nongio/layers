@@ -113,7 +113,8 @@ impl LayersEngine {
     }
     /// Create a new animation from the given transition
     ///
-    /// If `autostart` is true, the animation start time will be the current engine time
+    /// # Arguments
+    /// * `autostart`: If `autostart` is true, the animation start time will be the current engine time
     pub fn new_animation(&self, transition: Transition, autostart: bool) -> AnimationRef {
         self.engine
             .add_animation_from_transition(transition, autostart)
@@ -124,7 +125,9 @@ impl LayersEngine {
     }
     /// Start an animation with a delay
     ///
-    /// The delay is in seconds
+    /// # Arguments
+    /// * `animation`: The animation to start
+    /// * `delay`: The delay before the animation starts in seconds
     pub fn start_animation(&self, animation: AnimationRef, delay: f32) {
         self.engine.start_animation(animation, delay);
     }
@@ -140,6 +143,8 @@ impl LayersEngine {
     }
     /// Tick the engine by the given delta time
     /// Returns true if the engine has changes that needs to be rendered
+    /// # Arguments
+    /// * `dt`: The delta time in seconds
     pub fn update(&self, dt: f32) -> bool {
         self.engine.update(dt)
     }
