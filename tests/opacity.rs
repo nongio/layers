@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use layers::engine::LayersEngine;
+    use lay_rs::engine::LayersEngine;
 
     #[test]
     pub fn layer_opacity() {

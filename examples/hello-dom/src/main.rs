@@ -4,8 +4,8 @@ use glutin::event::WindowEvent;
 use glutin::event_loop::{ControlFlow, EventLoop};
 use glutin::window::WindowBuilder;
 use glutin::GlProfile;
-use layers::{drawing::print_scene, types::Size};
-use layers::{prelude::*, skia::ColorType};
+use lay_rs::{drawing::print_scene, types::Size};
+use lay_rs::{prelude::*, skia::ColorType};
 
 use crate::{
     app_switcher::view_app_switcher,
@@ -67,13 +67,13 @@ async fn main() {
 
     env.windowed_context = unsafe { env.windowed_context.make_current().unwrap() };
 
-    let mut skia_renderer = layers::renderer::skia_fbo::SkiaFboRenderer::create(
+    let mut skia_renderer = lay_rs::renderer::skia_fbo::SkiaFboRenderer::create(
         size.width as i32,
         size.height as i32,
         sample_count,
         pixel_format,
         ColorType::RGBA8888,
-        layers::skia::gpu::SurfaceOrigin::BottomLeft,
+        lay_rs::skia::gpu::SurfaceOrigin::BottomLeft,
         0_u32,
     );
 
@@ -113,16 +113,16 @@ async fn main() {
     });
     engine.scene_set_root(root.clone());
     let data = std::fs::read("./assets/bg.jpg").unwrap();
-    let data = layers::skia::Data::new_copy(&data);
-    let image = layers::skia::Image::from_encoded(data).unwrap();
-    root.set_draw_content(move |canvas: &layers::skia::Canvas, w, h| {
-        let paint = layers::skia::Paint::new(layers::skia::Color4f::new(1.0, 1.0, 1.0, 1.0), None);
+    let data = lay_rs::skia::Data::new_copy(&data);
+    let image = lay_rs::skia::Image::from_encoded(data).unwrap();
+    root.set_draw_content(move |canvas: &lay_rs::skia::Canvas, w, h| {
+        let paint = lay_rs::skia::Paint::new(lay_rs::skia::Color4f::new(1.0, 1.0, 1.0, 1.0), None);
         // paint.set_stroke(true);
         // paint.set_stroke_width(10.0);
-        // let rect = layers::skia::Rect::new(0.0, 0.0, 100.0, 100.0);
+        // let rect = lay_rs::skia::Rect::new(0.0, 0.0, 100.0, 100.0);
         // canvas.draw_rect(rect, &paint);
         canvas.draw_image(&image, (0.0, 0.0), Some(&paint));
-        layers::skia::Rect::from_xywh(0.0, 0.0, w, h)
+        lay_rs::skia::Rect::from_xywh(0.0, 0.0, w, h)
     });
     let layer = engine.new_layer();
     engine.scene_add_layer_to(layer.clone(), root.id());
@@ -162,13 +162,13 @@ async fn main() {
                     env.windowed_context.resize(physical_size);
 
                     let size = env.windowed_context.window().inner_size();
-                    skia_renderer = layers::renderer::skia_fbo::SkiaFboRenderer::create(
+                    skia_renderer = lay_rs::renderer::skia_fbo::SkiaFboRenderer::create(
                         size.width as i32,
                         size.height as i32,
                         sample_count,
                         pixel_format,
                         ColorType::RGBA8888,
-                        layers::skia::gpu::SurfaceOrigin::BottomLeft,
+                        lay_rs::skia::gpu::SurfaceOrigin::BottomLeft,
                         0_u32,
                     );
                     root.set_size(Size::points(size.width as f32, size.height as f32), None);
@@ -284,8 +284,8 @@ async fn main() {
 
                         canvas.restore_to_count(save_point);
 
-                        // let mut paint = layers::skia::Paint::new(
-                        //     layers::skia::Color4f::new(1.0, 0.0, 0.0, 1.0),
+                        // let mut paint = lay_rs::skia::Paint::new(
+                        //     lay_rs::skia::Color4f::new(1.0, 0.0, 0.0, 1.0),
                         //     None,
                         // );
                         // paint.set_stroke(true);

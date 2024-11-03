@@ -23,7 +23,7 @@ use super::{
 /// Public API for the Layers Engine
 /// ## Usage: Setup a basic scene with a root layer
 /// ```rust
-/// use layers::prelude::*;
+/// use lay_rs::prelude::*;
 ///
 /// let engine = LayersEngine::new(800.0, 600.0);
 /// let layer = engine.new_layer();
@@ -50,7 +50,7 @@ use super::{
 /// ```
 /// ## Usage: Update the engine
 /// ```rust
-/// use layers::prelude::*;
+/// use lay_rs::prelude::*;
 ///
 /// let engine = LayersEngine::new(800.0, 600.0);
 /// // setup the scene...

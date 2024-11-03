@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use layers::{
+    use lay_rs::{
         drawing::{node_tree_list, node_tree_list_visible},
         engine::LayersEngine,
         types::*,
@@ -76,7 +76,7 @@ mod tests {
         let layer = engine.new_layer();
         layer.set_position((0.0, 0.0), None);
         layer.set_size(Size::points(150.0, 150.0), None);
-        layer.set_blend_mode(layers::prelude::BlendMode::BackgroundBlur);
+        layer.set_blend_mode(lay_rs::prelude::BlendMode::BackgroundBlur);
         engine.scene_add_layer(layer.clone());
 
         engine.update(0.016);
@@ -138,7 +138,7 @@ mod tests {
         let layer = engine.new_layer();
         layer.set_position((0.0, 0.0), None);
         layer.set_size(Size::points(150.0, 150.0), None);
-        layer.set_blend_mode(layers::prelude::BlendMode::BackgroundBlur);
+        layer.set_blend_mode(lay_rs::prelude::BlendMode::BackgroundBlur);
         layer.set_hidden(true);
         engine.scene_add_layer(layer.clone());
 

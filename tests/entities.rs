@@ -1,4 +1,4 @@
-use layers::{engine::LayersEngine, types::Point};
+use lay_rs::{engine::LayersEngine, types::Point};
 
 #[test]
 pub fn change_layer_position() {

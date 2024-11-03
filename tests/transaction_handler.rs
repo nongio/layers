@@ -1,8 +1,8 @@
-use layers::{
+use lay_rs::{
     engine::{animation::Transition, LayersEngine},
     prelude::{Layer, Spring},
 };
-use layers::{prelude::TimingFunction, types::Point};
+use lay_rs::{prelude::TimingFunction, types::Point};
 use std::sync::{Arc, RwLock};
 
 /// it should call the finish handler when the transaction is finished 1 time

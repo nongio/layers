@@ -1,8 +1,8 @@
 #![allow(dead_code)]
 use std::cell::RefCell;
 
-pub use layers::taffy;
-use layers::{
+pub use lay_rs::taffy;
+use lay_rs::{
     prelude::{LayerTree, LayerTreeBuilder},
     skia::{self, BlurStyle, ClipOp, MaskFilter},
 };
@@ -32,15 +32,15 @@ thread_local! {
 }
 
 pub fn popup_menu_item_view(state: &String, selected: bool) -> LayerTree {
-    let mut bg_color = layers::types::Color::new_rgba(0.8, 0.8, 0.8, 0.0);
+    let mut bg_color = lay_rs::types::Color::new_rgba(0.8, 0.8, 0.8, 0.0);
     if selected {
-        bg_color = layers::types::Color::new_hex("#0A82FF");
+        bg_color = lay_rs::types::Color::new_hex("#0A82FF");
     }
     let text = state.clone();
     let font_size = 26.0;
     let height = 44.0;
     let text_padding_left = 44.0;
-    let draw_text = move |canvas: &layers::skia::Canvas, w: f32, h: f32| -> layers::skia::Rect {
+    let draw_text = move |canvas: &lay_rs::skia::Canvas, w: f32, h: f32| -> lay_rs::skia::Rect {
         let mut text_style = skia::textlayout::TextStyle::new();
 
         text_style.set_font_size(font_size);
@@ -84,7 +84,7 @@ pub fn popup_menu_item_view(state: &String, selected: bool) -> LayerTree {
         let _bounding_box =
             skia::Rect::from_xywh(text_x, text_y, paragraph.max_width(), paragraph.height());
         let mut paint =
-            layers::skia::Paint::new(layers::skia::Color4f::new(0.0, 0.0, 0.0, 1.0), None);
+            lay_rs::skia::Paint::new(lay_rs::skia::Color4f::new(0.0, 0.0, 0.0, 1.0), None);
         paint.set_stroke(true);
         // canvas.draw_rect(bounding_box, &paint);
         paragraph.paint(canvas, (text_x, text_y));
@@ -93,12 +93,12 @@ pub fn popup_menu_item_view(state: &String, selected: bool) -> LayerTree {
     };
     LayerTreeBuilder::default()
         .key(format!("popup_menu_item_{}", state))
-        .size(layers::types::Size {
+        .size(lay_rs::types::Size {
             width: taffy::style::Dimension::Length(350.0),
             height: taffy::style::Dimension::Length(height),
         })
-        .background_color(layers::prelude::PaintColor::Solid { color: bg_color })
-        .border_corner_radius(layers::types::BorderRadius::new_single(10.0))
+        .background_color(lay_rs::prelude::PaintColor::Solid { color: bg_color })
+        .border_corner_radius(lay_rs::types::BorderRadius::new_single(10.0))
         .content(Some(draw_text))
         .build()
         .unwrap()
@@ -106,18 +106,18 @@ pub fn popup_menu_item_view(state: &String, selected: bool) -> LayerTree {
 pub fn popup_menu_view(state: &PopupMenuState) -> LayerTree {
     LayerTreeBuilder::default()
         .key("popup_menu")
-        .size(layers::types::Size {
+        .size(lay_rs::types::Size {
             width: taffy::style::Dimension::Auto,
             height: taffy::style::Dimension::Auto,
         })
-        // .blend_mode(layers::types::BlendMode::BackgroundBlur)
-        .background_color(layers::prelude::PaintColor::Solid {
-            color: layers::types::Color::new_rgba255(246, 246, 246, 153),
+        // .blend_mode(lay_rs::types::BlendMode::BackgroundBlur)
+        .background_color(lay_rs::prelude::PaintColor::Solid {
+            color: lay_rs::types::Color::new_rgba255(246, 246, 246, 153),
         })
-        .scale(layers::prelude::Point { x: 1.5, y: 1.5 })
-        .border_corner_radius(layers::types::BorderRadius::new_single(12.0))
-        .shadow_color((layers::types::Color::new_rgba(0.0, 0.0, 0.0, 0.25), None))
-        .shadow_offset((layers::types::Point { x: 0.0, y: 7.0 }, None))
+        .scale(lay_rs::prelude::Point { x: 1.5, y: 1.5 })
+        .border_corner_radius(lay_rs::types::BorderRadius::new_single(12.0))
+        .shadow_color((lay_rs::types::Color::new_rgba(0.0, 0.0, 0.0, 0.25), None))
+        .shadow_offset((lay_rs::types::Point { x: 0.0, y: 7.0 }, None))
         .shadow_radius((22.0, None))
         .layout_style(taffy::style::Style {
             display: taffy::style::Display::Flex,
@@ -133,11 +133,11 @@ pub fn popup_menu_view(state: &PopupMenuState) -> LayerTree {
             ..Default::default()
         })
         .content(Some(
-            |canvas: &layers::skia::Canvas, w: f32, h: f32| -> layers::skia::Rect {
+            |canvas: &lay_rs::skia::Canvas, w: f32, h: f32| -> lay_rs::skia::Rect {
                 let mut shadow_rrect =
                     skia::RRect::new_rect_xy(skia::Rect::from_xywh(0.0, 0.0, w, h), 12.0, 12.0);
                 let mut shadow_paint =
-                    layers::skia::Paint::new(layers::skia::Color4f::new(0.0, 0.0, 0.0, 0.25), None);
+                    lay_rs::skia::Paint::new(lay_rs::skia::Color4f::new(0.0, 0.0, 0.0, 0.25), None);
                 shadow_paint.set_mask_filter(MaskFilter::blur(BlurStyle::Normal, 3.0, false));
                 canvas.clip_rrect(shadow_rrect, Some(ClipOp::Difference), Some(true));
                 canvas.draw_rrect(shadow_rrect, &shadow_paint);
@@ -145,7 +145,7 @@ pub fn popup_menu_view(state: &PopupMenuState) -> LayerTree {
                 shadow_rrect =
                     skia::RRect::new_rect_xy(skia::Rect::from_xywh(0.0, 36.0, w, h), 12.0, 12.0);
                 shadow_paint.set_mask_filter(MaskFilter::blur(BlurStyle::Normal, 100.0, false));
-                shadow_paint.set_color4f(layers::skia::Color4f::new(0.0, 0.0, 0.0, 0.4), None);
+                shadow_paint.set_color4f(lay_rs::skia::Color4f::new(0.0, 0.0, 0.0, 0.4), None);
                 canvas.draw_rrect(shadow_rrect, &shadow_paint);
 
                 skia::Rect::from_xywh(0.0, 0.0, w, h)
