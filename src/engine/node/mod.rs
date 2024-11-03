@@ -1,13 +1,11 @@
 use bitflags::bitflags;
-use skia::gpu::DirectContextId;
-// use skia_safe::surface;
 
 use std::{
     cell::RefCell,
     collections::HashMap,
     fmt::Debug,
     sync::{
-        atomic::{AtomicBool, AtomicUsize, Ordering},
+        atomic::{AtomicBool, AtomicUsize},
         Arc, RwLock,
     },
 };
@@ -35,12 +33,9 @@ pub use draw_cache_management::DrawCacheManagement;
 
 #[derive(Clone, Debug)]
 pub struct DrawCache {
-    id: usize,
     picture: Picture,
     size: skia_safe::Size,
     offset: skia_safe::Point,
-    cache_to_image: bool,
-    context_id: Arc<RwLock<Option<DirectContextId>>>,
 }
 thread_local! {
     static ID_COUNTER: AtomicUsize = const { AtomicUsize::new(0) };
@@ -48,21 +43,11 @@ thread_local! {
 }
 
 impl DrawCache {
-    pub fn new(
-        picture: Picture,
-        size: skia_safe::Size,
-        offset: skia_safe::Point,
-        cache_to_image: bool,
-    ) -> Self {
-        let id = ID_COUNTER.with(|c| c.fetch_add(1, Ordering::SeqCst));
+    pub fn new(picture: Picture, size: skia_safe::Size, offset: skia_safe::Point) -> Self {
         Self {
-            id,
             picture,
             size,
-            // image: Arc::new(RwLock::new(None)),
             offset,
-            cache_to_image,
-            context_id: Arc::new(RwLock::new(None)),
         }
     }
     pub fn picture(&self) -> &Picture {
@@ -71,10 +56,6 @@ impl DrawCache {
     pub fn size(&self) -> &skia_safe::Size {
         &self.size
     }
-    pub fn draw_picture_to_canvas(&self, canvas: &skia_safe::Canvas, paint: &skia_safe::Paint) {
-        canvas.draw_picture(&self.picture, None, Some(paint));
-    }
-
     pub fn draw(&self, canvas: &skia_safe::Canvas, paint: &skia_safe::Paint) {
         if self.size.width == 0.0 || self.size.height == 0.0 {
             return;
@@ -96,14 +77,14 @@ bitflags! {
 pub struct SceneNode {
     pub layer: Layer,
     pub(crate) render_layer: Arc<RwLock<RenderLayer>>,
-    pub draw_cache: Arc<RwLock<Option<DrawCache>>>,
-    pub flags: Arc<RwLock<RenderableFlags>>,
-    pub layout_node_id: TaffyNodeId,
-    pub deleted: Arc<AtomicBool>,
+    pub(crate) draw_cache: Arc<RwLock<Option<DrawCache>>>,
+    pub(crate) flags: Arc<RwLock<RenderableFlags>>,
+    pub(crate) layout_node_id: TaffyNodeId,
+    pub(crate) deleted: Arc<AtomicBool>,
     pub(crate) pointer_hover: Arc<AtomicBool>,
-    pub debug_info: Arc<RwLock<Option<DrawDebugInfo>>>,
-    pub repaint_damage: Arc<RwLock<skia_safe::Rect>>,
-    pub frame: Arc<AtomicUsize>,
+    pub(crate) debug_info: Arc<RwLock<Option<DrawDebugInfo>>>,
+    pub(crate) repaint_damage: Arc<RwLock<skia_safe::Rect>>,
+    pub(crate) frame: Arc<AtomicUsize>,
 }
 
 impl SceneNode {
@@ -146,7 +127,6 @@ impl SceneNode {
         let render_layer = self.render_layer.read().unwrap();
         render_layer.bounds_with_children
     }
-
     pub fn transformed_bounds(&self) -> skia_safe::Rect {
         let render_layer = self.render_layer.read().unwrap();
         render_layer.global_transformed_bounds
@@ -163,23 +143,12 @@ impl SceneNode {
     pub fn transform(&self) -> Matrix {
         self.render_layer.read().unwrap().transform.to_m33()
     }
-    pub fn delete(&self) {
+    pub fn mark_for_deletion(&self) {
         self.deleted
             .store(true, std::sync::atomic::Ordering::Relaxed);
     }
     pub fn is_deleted(&self) -> bool {
         self.deleted.load(std::sync::atomic::Ordering::Relaxed)
-    }
-    pub(crate) fn change_hover(&self, value: bool) -> bool {
-        let hover = self
-            .pointer_hover
-            .load(std::sync::atomic::Ordering::Relaxed);
-        if hover != value {
-            self.pointer_hover
-                .store(value, std::sync::atomic::Ordering::SeqCst);
-            return true;
-        }
-        false
     }
     pub fn set_debug_info(&self, debug_info: bool) {
         let mut dbg_info = self.debug_info.write().unwrap();
@@ -201,7 +170,17 @@ impl SceneNode {
             .image_cache
             .load(std::sync::atomic::Ordering::Relaxed)
     }
-    pub fn increase_frame(&self) {
+    pub fn render_layer(&self) -> RenderLayer {
+        self.render_layer.read().unwrap().clone()
+    }
+    pub fn cached_picture(&self) -> Option<DrawCache> {
+        let draw_cache = self.draw_cache.read().unwrap();
+        if let Some(dc) = &*draw_cache {
+            return Some(dc.clone());
+        }
+        None
+    }
+    pub(crate) fn increase_frame(&self) {
         if self.is_image_cached() {
             // println!("{:?} increase  _frame", self.id());
             if self
@@ -213,8 +192,16 @@ impl SceneNode {
             }
         }
     }
-    pub fn render_layer(&self) -> RenderLayer {
-        self.render_layer.read().unwrap().clone()
+    pub(crate) fn change_hover(&self, value: bool) -> bool {
+        let hover = self
+            .pointer_hover
+            .load(std::sync::atomic::Ordering::Relaxed);
+        if hover != value {
+            self.pointer_hover
+                .store(value, std::sync::atomic::Ordering::SeqCst);
+            return true;
+        }
+        false
     }
 }
 
@@ -253,32 +240,31 @@ impl DrawCacheManagement for SceneNode {
                 render_layer.transform.to_m33().map_rect(layer_damage);
 
             damage.join(layer_damage_transformed);
-            if let Some(picture) = picture {
-                // update or create the draw cache
-                if let Some(dc) = &mut *draw_cache {
-                    dc.picture = picture;
-                    dc.size = render_layer.size;
-                } else {
-                    let size = render_layer.size;
+            if self.layer.is_picture_cache() {
+                if let Some(picture) = picture {
+                    // update or create the draw cache
+                    if let Some(dc) = &mut *draw_cache {
+                        dc.picture = picture;
+                        dc.size = render_layer.size;
+                    } else {
+                        let size = render_layer.size;
 
-                    let new_cache = DrawCache::new(
-                        picture,
-                        size,
-                        skia_safe::Point {
-                            x: render_layer.border_width * 2.0,
-                            y: render_layer.border_width * 2.0,
-                        },
-                        self.layer
-                            .image_cache
-                            .load(std::sync::atomic::Ordering::Relaxed),
-                    );
-                    *draw_cache = Some(new_cache);
+                        let new_cache = DrawCache::new(
+                            picture,
+                            size,
+                            skia_safe::Point {
+                                x: render_layer.border_width * 2.0,
+                                y: render_layer.border_width * 2.0,
+                            },
+                        );
+                        *draw_cache = Some(new_cache);
+                    }
+                    let mut repaint_damage = self.repaint_damage.write().unwrap();
+                    let previous_damage = *repaint_damage;
+                    *repaint_damage = damage;
+                    damage.join(previous_damage);
+                    self.set_need_repaint(false);
                 }
-                let mut repaint_damage = self.repaint_damage.write().unwrap();
-                let previous_damage = *repaint_damage;
-                *repaint_damage = damage;
-                damage.join(previous_damage);
-                self.set_need_repaint(false);
             }
         }
         damage
@@ -306,6 +292,7 @@ impl DrawCacheManagement for SceneNode {
                 layout,
                 matrix,
                 context_opacity,
+                self.is_content_cached(),
             );
 
             self.set_need_layout(false);
@@ -349,6 +336,11 @@ impl DrawCacheManagement for SceneNode {
             .read()
             .unwrap()
             .contains(RenderableFlags::NEEDS_LAYOUT)
+    }
+    fn is_content_cached(&self) -> bool {
+        self.layer
+            .picture_cache
+            .load(std::sync::atomic::Ordering::Relaxed)
     }
 }
 

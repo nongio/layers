@@ -23,6 +23,7 @@ use crate::engine::{Engine, NodeRef, TransactionRef};
 
 use crate::types::*;
 #[allow(private_interfaces)]
+#[repr(C)]
 #[derive(Clone)]
 pub struct Layer {
     pub engine: Arc<Engine>,
@@ -33,6 +34,7 @@ pub struct Layer {
     pub(crate) layout_node_id: NodeId,
     pub(crate) model: Arc<ModelLayer>,
     pub(crate) image_cache: Arc<AtomicBool>,
+    pub(crate) picture_cache: Arc<AtomicBool>,
     pub(crate) state: Arc<RwLock<LayerDataProps>>,
     pub(crate) effect: Arc<RwLock<Option<Arc<dyn Effect>>>>,
 }
@@ -66,6 +68,7 @@ impl Layer {
             hidden: Arc::new(AtomicBool::new(false)),
             pointer_events: Arc::new(AtomicBool::new(true)),
             image_cache: Arc::new(AtomicBool::new(false)),
+            picture_cache: Arc::new(AtomicBool::new(true)),
             state: Arc::new(RwLock::new(LayerDataProps::new())),
             effect: Arc::new(RwLock::new(None)),
         }
@@ -242,6 +245,14 @@ impl Layer {
     pub fn set_image_cache(&self, value: bool) {
         self.image_cache
             .store(value, std::sync::atomic::Ordering::Relaxed);
+    }
+    pub fn set_content_cache(&self, value: bool) {
+        self.picture_cache
+            .store(value, std::sync::atomic::Ordering::Relaxed);
+    }
+    pub fn is_picture_cache(&self) -> bool {
+        self.picture_cache
+            .load(std::sync::atomic::Ordering::Relaxed)
     }
     pub fn add_sublayer(&self, layer: Layer) -> NodeRef {
         self.engine.scene_add_layer(layer, self.id())
@@ -532,7 +543,6 @@ impl Layer {
             f,
             once,
         );
-        unimplemented!("on_change_size fixme");
     }
 }
 

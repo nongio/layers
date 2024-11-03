@@ -6,7 +6,7 @@ use super::render_layer::RenderLayer;
 
 impl Drawable for RenderLayer {
     fn draw(&self, canvas: &Canvas) -> skia_safe::Rect {
-        draw_layer(canvas, self)
+        draw_layer(canvas, self, 1.0)
     }
     fn bounds(&self) -> skia_safe::Rect {
         self.bounds
