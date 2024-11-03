@@ -17,6 +17,7 @@
 //! engine.render();
 //! ```
 pub use layers_engine::LayersEngine;
+pub use node::SceneNode;
 
 mod layers_engine;
 mod stages;
@@ -54,7 +55,7 @@ use std::{
 use self::{
     animation::{Animation, Transition},
     command::NoopChange,
-    node::{DrawCacheManagement, RenderableFlags, SceneNode},
+    node::{DrawCacheManagement, RenderableFlags},
     scene::Scene,
     stages::{
         cleanup_animations, cleanup_nodes, cleanup_transactions, execute_transactions,
@@ -394,9 +395,9 @@ impl Engine {
         });
         // detach the node from the scene
         {
-            let nodes = self.scene.nodes.data();
-            let mut arena = nodes.write().unwrap();
-            id.0.detach(&mut arena);
+            self.scene.with_arena_mut(|arena| {
+                id.0.detach(arena);
+            });
         }
 
         // set the new root
@@ -505,7 +506,7 @@ impl Engine {
     pub fn mark_for_delete(&self, layer: NodeRef) {
         let node = self.scene.get_node(layer).unwrap();
         let node = node.get();
-        node.delete();
+        node.mark_for_deletion();
     }
     pub(crate) fn scene_remove_layer(&self, layer: impl Into<Option<NodeRef>>) {
         let layer_id: Option<NodeRef> = layer.into();
@@ -660,7 +661,34 @@ impl Engine {
             }
         }
     }
-
+    pub fn schedule_changes(
+        &self,
+        animated_changes: &[AnimatedNodeChange],
+        animation: impl Into<Option<AnimationRef>>,
+    ) -> Vec<TransactionRef> {
+        let animation = animation.into();
+        let mut inserted_transactions = Vec::with_capacity(animated_changes.len());
+        for animated_node_change in animated_changes {
+            // let mut animated_node_change = animated_node_change.clone();
+            // if animation.is_some() {
+            //     animated_node_change.animation_id = animation;
+            // }
+            // let value_id = animated_node_change.change.value_id();
+            // let transaction_id = self.transactions.insert(animated_node_change.clone());
+            // let transaction = TransactionRef {
+            //     id: transaction_id,
+            //     value_id,
+            //     engine_id: self.id,
+            // };
+            let transaction = self.schedule_change(
+                animated_node_change.node_id,
+                animated_node_change.change.clone(),
+                animation,
+            );
+            inserted_transactions.push(transaction);
+        }
+        inserted_transactions
+    }
     pub fn attach_animation(&self, transaction: TransactionRef, animation: AnimationRef) {
         let transactions = self.transactions.data();
         let mut transactions = transactions.write().unwrap();

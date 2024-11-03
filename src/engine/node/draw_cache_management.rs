@@ -10,4 +10,5 @@ pub trait DrawCacheManagement {
     fn layout_if_needed(&self, layout: &Layout, matrix: Option<&M44>, context_opacity: f32)
         -> bool;
     fn set_need_layout(&self, value: bool);
+    fn is_content_cached(&self) -> bool;
 }
