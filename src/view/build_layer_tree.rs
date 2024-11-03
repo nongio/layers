@@ -53,7 +53,8 @@ pub trait BuildLayerTree {
         viewlayer_tree: &LayerTree,
         cache_viewlayer: &mut HashMap<String, VecDeque<NodeRef>>,
     );
-    fn build_layer_tree(&self, viewlayer_tree: &LayerTree) {
+    fn build_layer_tree(&self, viewlayer_tree: impl AsRef<LayerTree>) {
+        let viewlayer_tree = viewlayer_tree.as_ref();
         self.build_layer_tree_internal(viewlayer_tree, &mut HashMap::new());
     }
 }
