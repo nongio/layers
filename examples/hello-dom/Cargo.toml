@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-layers = { path = "../../", features = [
+lay-rs = { path = "../../", features = [
     "export-skia",
     "export-taffy",
     "debugger",

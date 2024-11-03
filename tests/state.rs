@@ -1,4 +1,4 @@
-use layers::engine::LayersEngine;
+use lay_rs::engine::LayersEngine;
 
 #[test]
 pub fn state_for_layer() {

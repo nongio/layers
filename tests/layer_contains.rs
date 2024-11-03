@@ -1,5 +1,5 @@
-use layers::types::Point;
-use layers::{engine::LayersEngine, types::Size};
+use lay_rs::types::Point;
+use lay_rs::{engine::LayersEngine, types::Size};
 
 #[test]
 pub fn layer_contains() {

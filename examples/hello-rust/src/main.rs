@@ -7,8 +7,8 @@ use glutin::event::WindowEvent;
 use glutin::event_loop::{ControlFlow, EventLoop};
 use glutin::window::WindowBuilder;
 use glutin::GlProfile;
-use layers::types::Size;
-use layers::{prelude::*, skia};
+use lay_rs::types::Size;
+use lay_rs::{prelude::*, skia};
 
 #[allow(unused_assignments)]
 #[tokio::main]
@@ -58,7 +58,7 @@ async fn main() {
 
     env.windowed_context = unsafe { env.windowed_context.make_current().unwrap() };
 
-    let mut skia_renderer = layers::renderer::skia_fbo::SkiaFboRenderer::create(
+    let mut skia_renderer = lay_rs::renderer::skia_fbo::SkiaFboRenderer::create(
         size.width as i32,
         size.height as i32,
         sample_count,
@@ -130,9 +130,9 @@ async fn main() {
     let animation_start = std::sync::Arc::new(AtomicBool::new(false));
     let animation_finished = std::sync::Arc::new(AtomicBool::new(false));
     let animation_progress = std::sync::Arc::new(AtomicI32::new(0));
-    let font_mgr = layers::skia::FontMgr::default();
+    let font_mgr = lay_rs::skia::FontMgr::default();
     let typeface = font_mgr
-        .match_family_style("Inter", layers::skia::FontStyle::default())
+        .match_family_style("Inter", lay_rs::skia::FontStyle::default())
         .unwrap();
 
     events_loop.run(move |event, _, control_flow| {
@@ -152,7 +152,7 @@ async fn main() {
                     if current_surface.width() != size.width as i32
                         || current_surface.height() != size.height as i32
                     {
-                        skia_renderer = layers::renderer::skia_fbo::SkiaFboRenderer::create(
+                        skia_renderer = lay_rs::renderer::skia_fbo::SkiaFboRenderer::create(
                             (size.width) as i32,
                             (size.height) as i32,
                             sample_count,

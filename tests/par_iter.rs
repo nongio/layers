@@ -5,7 +5,7 @@ mod tests {
         dpi::LogicalSize, event_loop::EventLoop, platform::unix::EventLoopBuilderExtUnix,
         window::WindowBuilder, GlProfile,
     };
-    use layers::{
+    use lay_rs::{
         engine::LayersEngine,
         prelude::{DrawScene, Layer, TimingFunction, Transition},
         types::*,
@@ -89,13 +89,13 @@ mod tests {
         let sample_count: usize = pixel_format.multisampling.map(|s| s.into()).unwrap_or(0);
         let pixel_format: usize = pixel_format.stencil_bits.into();
         let engine = LayersEngine::new(1000.0, 1000.0);
-        let mut skia_renderer = layers::renderer::skia_fbo::SkiaFboRenderer::create(
+        let mut skia_renderer = lay_rs::renderer::skia_fbo::SkiaFboRenderer::create(
             size.width as i32,
             size.height as i32,
             sample_count,
             pixel_format,
-            layers::skia::ColorType::RGBA8888,
-            layers::skia::gpu::SurfaceOrigin::BottomLeft,
+            lay_rs::skia::ColorType::RGBA8888,
+            lay_rs::skia::gpu::SurfaceOrigin::BottomLeft,
             0_u32,
         );
         let root = engine.new_layer();
