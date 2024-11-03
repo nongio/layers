@@ -88,6 +88,12 @@ pub struct LayerTree {
     #[builder(setter(custom))]
     pub children: Option<Vec<Arc<dyn RenderLayerTree>>>,
 }
+
+impl AsRef<LayerTree> for LayerTree {
+    fn as_ref(&self) -> &LayerTree {
+        self
+    }
+}
 /// A builder for the LayerTree struct
 ///
 impl LayerTreeBuilder {
