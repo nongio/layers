@@ -29,37 +29,41 @@ int main(int argc, char **argv) {
   struct window_context *win =
       create_window_with_egl_context(wl, "Nya", 1280, 720);
 
-  const struct Engine *engine = create_engine();
+  const struct LayersEngine *engine = create_engine(1280, 720);
 
   GLint drawFboId = 0;
   glGetIntegerv(GL_FRAMEBUFFER_BINDING, &drawFboId);
 
-  struct SkiaRenderer *renderer =
+  struct SkiaFboRenderer *renderer =
       create_skia_renderer(1280, 720, 1, 8, drawFboId);
 
-  struct ModelLayer *layers[100];
-  Easing ease_out = {.x1 = 0.0, .y1 = 0.0, .x2 = 0.0, .y2 = 1.0};
-  Transition_Easing timing = {
-      .duration = 10.0f,
-      .delay = 0.0f,
-      .timing = ease_out,
-  };
+  struct Layer *root_layer = engine_create_layer(engine);
+  engine_add_layer_to_scene(engine, root_layer);
+  
+  struct Layer *layers[100];
+  // Easing ease_out = {.x1 = 0.0, .y1 = 0.0, .x2 = 0.0, .y2 = 1.0};
+  // Transition_Easing timing = {
+  //     .duration = 10.0f,
+  //     .delay = 0.0f,
+  //     .timing = ease_out,
+  // };
   for (int i = 0; i < 100; i++) {
-    const struct ModelLayer *layer = create_layer();
-    engine_add_layer(engine, layer);
-    layers[i] = (struct ModelLayer *)layer;
+    // const struct Layer *layer = engine_create_layer(engine);
+    // engine_add_layer_to_scene(engine, layer);
+    // engine_add_layer(engine, layer);
+    // layers[i] = (struct Layer *)layer;
   }
 
   for (int i = 0; i < 100; i++) {
 
-    layer_size_to(layers[i], (rand() % 500) * 1.0f, (rand() % 500) * 1.0f,
-                  timing);
-    layer_backgroundcolor_to(layers[i], (rand() % 100) / 100.0,
-                             (rand() % 100) / 100.0, (rand() % 100) / 100.0,
-                             1.0, timing);
-    layer_position_to(layers[i], (rand() % 500) * 1.0f,
-                      (rand() % 500) * 1.0f - 250.0, timing);
-    layer_border_radius_to(layers[i], (rand() % 50) * 1.0f, timing);
+    // layer_size_to(layers[i], (rand() % 500) * 1.0f, (rand() % 500) * 1.0f,
+    // timing);
+    // layer_backgroundcolor_to(layers[i], (rand() % 100) / 100.0,
+    //  (rand() % 100) / 100.0, (rand() % 100) / 100.0,
+    //  1.0, timing);
+    // layer_position_to(layers[i], (rand() % 500) * 1.0f,
+    // (rand() % 500) * 1.0f - 250.0, timing);
+    // layer_border_radius_to(layers[i], (rand() % 50) * 1.0f, timing);
   }
 
   program_alive = true;
