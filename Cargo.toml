@@ -31,36 +31,37 @@ serde_json = { version = "1.0" }
 puffin_http = { version = "0.13", optional = true }
 profiling = { version = "1.0" }
 bezier_easing = "0.1.1"
+tokio = { version = "1", features = ["full"] }
+
 
 [dependencies.skia-safe]
-path = "../rust-skia/skia-safe"
-# version = "=0.70"
+git = "https://github.com/rust-skia/rust-skia"
+version = "=0.80"
+# rev = "c5faa8f99ea9cc4a0235e8aa8c28c970e301a436"
+# path = "../rust-skia/skia-safe"
 # this set of features is required for enabling to use the pre-built
 # binaries of skia-safe
 [dependencies.skia-bindings]
-# version = "=0.70"
-path = "../rust-skia/skia-bindings"
+git = "https://github.com/rust-skia/rust-skia"
+version = "=0.80"
+# rev = "c5faa8f99ea9cc4a0235e8aa8c28c970e301a436"
+# path = "../rust-skia/skia-bindings"
 
 [target.'cfg(target_os = "linux")'.dependencies.skia-safe]
+git = "https://github.com/rust-skia/rust-skia"
+# rev = "c5faa8f99ea9cc4a0235e8aa8c28c970e301a436"
+
 # path = "../rust-skia"
-path = "../rust-skia/skia-safe"
+# path = "../rust-skia/skia-safe"
 
 # version = "=0.70"
-features = [
-    "binary-cache",
-    "egl",
-    "gl",
-    "svg",
-    "textlayout",
-    "vulkan",
-    "wayland",
-    "webp",
-    "x11",
-]
+features = ["binary-cache", "all-linux"]
 
 [target.'cfg(target_os = "macos")'.dependencies.skia-safe]
-path = "../rust-skia/skia-safe"
-# version = "=0.70"
+git = "https://github.com/rust-skia/rust-skia"
+version = "=0.80"
+# rev = "c5faa8f99ea9cc4a0235e8aa8c28c970e301a436"
+# path = "../rust-skia/skia-safe"
 features = ["binary-cache", "gl", "metal", "svg", "textlayout", "webp"]
 
 [dev-dependencies]
@@ -100,4 +101,5 @@ members = [
     "examples/hello-dom",
     "examples/hello-content",
     "examples/hello-filters",
+    "examples/hello-portals",
 ]
