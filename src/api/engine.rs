@@ -27,10 +27,17 @@ pub extern "C" fn engine_add_layer_to_scene(
     layer: *const Layer,
 ) -> usize {
     let engine = unsafe { &*engine };
-    let layer = unsafe { Arc::from_raw(layer) };
+    let layer = unsafe { &*layer };
     let layer = (*layer).clone();
 
     engine.scene_add_layer(layer).0.into()
+}
+
+#[no_mangle]
+pub extern "C" fn engine_create_layer(engine: *const engine::LayersEngine) -> *const Layer {
+    let engine = unsafe { &*engine };
+    let layer = Arc::new(engine.new_layer());
+    Arc::into_raw(layer)
 }
 
 // #[no_mangle]

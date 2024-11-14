@@ -10,7 +10,7 @@ static void pointer_handle_button(void *data, struct wl_pointer *pointer,
   enum wl_pointer_button_state state = (enum wl_pointer_button_state)state_w;
 
   //   unsigned int eventFlags = wl->modifiers;
-  enum ButtonState button_state = ButtonState_Released;
+  // enum ButtonState button_state = ButtonState_Released;
   switch (state) {
   case WL_POINTER_BUTTON_STATE_PRESSED:
     LOG("wl button pressed\n");
@@ -23,7 +23,7 @@ static void pointer_handle_button(void *data, struct wl_pointer *pointer,
   default:
     break;
   }
-  engine_handle_pointer_button(wl->engine, ButtonState_Released);
+  // engine_handle_pointer_button(wl->engine, ButtonState_Released);
 }
 
 // triggered when the cursor is over a surface
