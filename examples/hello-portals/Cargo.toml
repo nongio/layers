@@ -1,0 +1,23 @@
+[package]
+name = "hello-portals"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+lay-rs = { path = "../../", features = [
+    "export-skia",
+    "export-taffy",
+    "debugger",
+    "profile-with-puffin",
+] }
+glutin = "0.29"
+winit = "0.28"
+gl-rs = { package = "gl", version = "0.14.0" }
+rand = "0.8.5"
+image = "0.24.5"
+mt-dom = "0.21.1"
+tokio = { version = "1", features = ["full"] }
+puffin_http = { version = "0.13" }
+profiling = { version = "1.0", features = ["profile-with-puffin"] }
