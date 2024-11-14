@@ -1,5 +1,6 @@
-use super::model::{ContentDrawFunction, ModelLayer};
-use crate::types::{BlendMode, Color, Point, *};
+use super::model::{ContentDrawFunctionInternal, ModelLayer};
+use crate::{engine::SceneNode, types::{BlendMode, Color, Point, *}};
+use indextree::Arena;
 use serde::{ser::SerializeStruct, Serialize};
 
 #[derive(Clone, Debug)]
@@ -28,7 +29,7 @@ pub struct RenderLayer {
     pub blend_mode: BlendMode,
     pub opacity: f32,
     pub premultiplied_opacity: f32,
-    pub content_draw_func: Option<ContentDrawFunction>,
+    pub content_draw_func: Option<ContentDrawFunctionInternal>,
     pub content: Option<Picture>,
     pub content_damage: skia_safe::Rect,
 }
@@ -42,6 +43,7 @@ impl RenderLayer {
         matrix: Option<&M44>,
         context_opacity: f32,
         cache_content: bool,
+        arena: &Arena<SceneNode>,
     ) {
         let key = model.key.read().unwrap().clone();
         let layout_position = layout.location;
@@ -134,7 +136,7 @@ impl RenderLayer {
                     .begin_recording(skia_safe::Rect::from_wh(size.width, size.height), None);
                 let draw_func = content_draw_func.unwrap();
                 let caller = draw_func.0.as_ref();
-                let content_damage = caller(canvas, size.width, size.height);
+                let content_damage = caller(canvas, size.width, size.height, arena);
                 self.content_damage = content_damage;
                 self.content = recorder.finish_recording_as_picture(None);
             }
@@ -177,6 +179,7 @@ impl RenderLayer {
         layout: &taffy::tree::Layout,
         matrix: Option<&M44>,
         context_opacity: f32,
+        arena: &Arena<SceneNode>,
     ) -> Self {
         let key = model.key.read().unwrap().clone();
         let layout_position = layout.location;
@@ -261,9 +264,9 @@ impl RenderLayer {
             let canvas =
                 recorder.begin_recording(skia_safe::Rect::from_wh(size.width, size.height), None);
             let caller = draw_func.0.clone();
-            caller(canvas, size.width, size.height);
+            caller(canvas, size.width, size.height, arena);
             content = recorder.finish_recording_as_picture(None);
-            content_draw_func = Some(draw_func.clone());
+            content_draw_func = Some(draw_func.clone().into());
         }
 
         let opacity = model.opacity.value();

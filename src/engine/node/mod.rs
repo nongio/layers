@@ -1,4 +1,5 @@
 use bitflags::bitflags;
+use indextree::Arena;
 
 use std::{
     cell::RefCell,
@@ -206,7 +207,7 @@ impl SceneNode {
 }
 
 impl DrawCacheManagement for SceneNode {
-    fn repaint_if_needed(&self) -> skia_safe::Rect {
+    fn repaint_if_needed(&self, arena: &Arena<SceneNode>) -> skia_safe::Rect {
         let mut damage = skia_safe::Rect::default();
         let render_layer = self.render_layer.read().unwrap();
 
@@ -235,7 +236,7 @@ impl DrawCacheManagement for SceneNode {
             needs_repaint = true;
         }
         if needs_repaint {
-            let (picture, layer_damage) = render_layer.draw_to_picture();
+            let (picture, layer_damage) = render_layer.draw_to_picture(arena);
             let (layer_damage_transformed, _) =
                 render_layer.transform.to_m33().map_rect(layer_damage);
 
@@ -275,6 +276,7 @@ impl DrawCacheManagement for SceneNode {
         layout: &Layout,
         matrix: Option<&M44>,
         context_opacity: f32,
+        arena: &Arena<SceneNode>,
     ) -> bool {
         if self.layer.hidden() {
             return false;
@@ -293,6 +295,7 @@ impl DrawCacheManagement for SceneNode {
                 matrix,
                 context_opacity,
                 self.is_content_cached(),
+                arena,
             );
 
             self.set_need_layout(false);
@@ -344,7 +347,7 @@ impl DrawCacheManagement for SceneNode {
     }
 }
 
-pub(crate) fn try_get_node(node: indextree::Node<SceneNode>) -> Option<SceneNode> {
+pub(crate) fn try_get_node(node: &indextree::Node<SceneNode>) -> Option<SceneNode> {
     if node.is_removed() {
         None
     } else {

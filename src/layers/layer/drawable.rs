@@ -1,12 +1,13 @@
+use indextree::Arena;
 use skia_safe::Canvas;
 
-use crate::{drawing::layer::draw_layer, engine::rendering::Drawable, types::*};
+use crate::{drawing::layer::draw_layer, engine::{rendering::Drawable, SceneNode}, types::*};
 
 use super::render_layer::RenderLayer;
 
 impl Drawable for RenderLayer {
-    fn draw(&self, canvas: &Canvas) -> skia_safe::Rect {
-        draw_layer(canvas, self, 1.0)
+    fn draw(&self, canvas: &Canvas, arena: &Arena<SceneNode>) -> skia_safe::Rect {
+        draw_layer(canvas, self, 1.0, arena)
     }
     fn bounds(&self) -> skia_safe::Rect {
         self.bounds
