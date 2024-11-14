@@ -27,14 +27,15 @@ pub trait DrawScene {
 
 /// Draw the scene to the given skia::Canvas
 pub fn draw_scene(canvas: &skia::Canvas, scene: &Scene, root_id: NodeRef) {
-    let arena = scene.nodes.data();
-    if let Some(root) = scene.get_node(root_id) {
-        let node = root.get();
-        let restore_point = canvas.save();
-        set_node_transform(node, canvas);
-        render_node_tree(root_id, &arena, canvas, 1.0);
-        canvas.restore_to_count(restore_point);
-    }
+    scene.with_arena(|arena| {
+        if let Some(root) = scene.get_node_sync(root_id) {
+            let node = root.get();
+            let restore_point = canvas.save();
+            set_node_transform(node, canvas);
+            render_node_tree(root_id, &arena, canvas, 1.0);
+            canvas.restore_to_count(restore_point);
+        }
+    });
 }
 
 pub fn node_tree_list(
@@ -136,7 +137,6 @@ pub fn surface_for_node(
                 if surface.direct_context().unwrap().id() == context.id() {
                     let size = surface_size_for_render_layer(render_layer);
                     if surface.width() >= size.x as i32 && surface.height() >= size.y as i32 {
-                        // println!("Surface found for node size {:?}", size);
                         return Some((*frame, surface.clone(), image.clone()));
                     } else {
                         // Surface size is not enough, remove the surface
@@ -216,6 +216,7 @@ pub fn paint_node_tree(
     if (offscreen) {
         context_opacity = render_layer.opacity;
     }
+    // TODO: clip bounds only if the layer is set to clip children
     // let bounds = skia_safe::Rect::from_wh(render_layer.size.x, render_layer.size.y);
     // canvas.clip_rect(bounds, None, None);
     node_id.children(arena).for_each(|child_id| {
@@ -473,18 +474,18 @@ pub(crate) fn paint_node(
         profiling::scope!("draw_cache");
         draw_cache.draw(canvas, &paint);
     } else {
-        draw_layer(canvas, &render_layer, context_opacity);
+        draw_layer(canvas, &render_layer, context_opacity, arena);
     }
 
     restore_transform
 }
 /// Print the node tree to the console
 pub fn print_scene(scene: &Scene, root_id: NodeRef) {
-    let arena = scene.nodes.data();
-    let arena = arena.read().unwrap();
-    if let Some(_root) = scene.get_node(root_id) {
-        debug_node_tree(root_id, &arena, 1.0, 0);
-    }
+    scene.with_arena(|arena| {
+        if let Some(_root) = scene.get_node_sync(root_id) {
+            debug_node_tree(root_id, &arena, 1.0, 0);
+        }
+    });
 }
 
 fn debug_node_tree(

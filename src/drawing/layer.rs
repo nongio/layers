@@ -1,14 +1,15 @@
+use indextree::Arena;
 use skia_safe::*;
 
-use crate::types::PaintColor;
+use crate::{engine::SceneNode, types::PaintColor};
 use crate::{engine::draw_to_picture::DrawDebugInfo, layers::layer::render_layer::RenderLayer};
 
 use super::scene::BACKGROUND_BLUR_SIGMA;
 
 /// Draw a layer into a skia::Canvas.
-pub fn draw_layer(canvas: &Canvas, layer: &RenderLayer) -> skia_safe::Rect {
+pub fn draw_layer(canvas: &Canvas, layer: &RenderLayer, context_opacity: f32, arena: &Arena<SceneNode>) -> skia_safe::Rect {
     let mut draw_damage = skia_safe::Rect::default();
-
+    let opacity = layer.opacity * context_opacity;
     // if the layer is completely transparent, we don't need to draw anything
     if layer.premultiplied_opacity <= 0.0 {
         return draw_damage;
@@ -38,17 +39,17 @@ pub fn draw_layer(canvas: &Canvas, layer: &RenderLayer) -> skia_safe::Rect {
     );
     let background_color = match layer.background_color {
         PaintColor::Solid { color } => Color4f::from(color),
-        _ => Color4f::new(1.0, 1.0, 1.0, layer.opacity),
+        _ => Color4f::new(1.0, 1.0, 1.0, opacity),
     };
     {
-        if (background_color.a * layer.opacity) > 0.0 {
+        if (background_color.a * opacity) > 0.0 {
             let save_count = canvas.save();
             canvas.clip_rrect(rrbounds, None, None);
 
             // Draw the background color.
 
             let mut background_paint = Paint::new(background_color, None);
-            // background_paint.set_anti_alias(true);
+            background_paint.set_anti_alias(true);
             background_paint.set_style(PaintStyle::Fill);
             if layer.blend_mode == crate::types::BlendMode::BackgroundBlur {
                 background_paint.set_blend_mode(skia_safe::BlendMode::Luminosity);
@@ -70,7 +71,6 @@ pub fn draw_layer(canvas: &Canvas, layer: &RenderLayer) -> skia_safe::Rect {
             layer.shadow_radius,
             false,
         ));
-        // shadow_paint.set_anti_alias(true);
 
         let shadow_rect = Rect::from_xywh(
             layer.shadow_offset.x,
@@ -82,7 +82,7 @@ pub fn draw_layer(canvas: &Canvas, layer: &RenderLayer) -> skia_safe::Rect {
         let shadow_rrect = RRect::new_rect_radii(shadow_rect, &layer.border_corner_radius.into());
         let save_count = canvas.save();
         canvas.clip_rrect(rrbounds, Some(ClipOp::Difference), Some(true));
-        shadow_paint.set_alpha_f(layer.opacity * layer.shadow_color.alpha);
+        shadow_paint.set_alpha_f(opacity * layer.shadow_color.alpha);
         canvas.draw_rrect(shadow_rrect, &shadow_paint);
         canvas.restore_to_count(save_count);
         let damage_rect = shadow_rect.with_outset((layer.shadow_radius, layer.shadow_radius));
@@ -95,18 +95,29 @@ pub fn draw_layer(canvas: &Canvas, layer: &RenderLayer) -> skia_safe::Rect {
         let save_count = canvas.save();
         canvas.clip_rrect(rrbounds, Some(ClipOp::Intersect), Some(true));
         content.playback(canvas);
-        draw_damage.join(layer.content_damage);
         canvas.restore_to_count(save_count);
+        draw_damage.join(layer.content_damage);
+    } else {
+        if let Some(draw_func) = layer.content_draw_func.as_ref() {
+            let save_count = canvas.save();
+            canvas.clip_rrect(rrbounds, Some(ClipOp::Intersect), Some(true));
+            let caller = draw_func.0.as_ref();
+            let content_damage = caller(canvas, layer.size.width, layer.size.height, arena);
+            draw_damage.join(content_damage);
+
+            canvas.restore_to_count(save_count);
+        }
     }
 
     // Draw border
     if layer.border_width > 0.0 {
         let mut border_color = match layer.border_color {
             PaintColor::Solid { color } => Color4f::from(color),
-            _ => Color4f::new(1.0, 1.0, 1.0, layer.opacity),
+            _ => Color4f::new(1.0, 1.0, 1.0, opacity),
         };
-        border_color.a *= layer.opacity;
+        border_color.a *= opacity;
         let mut border_paint = Paint::new(border_color, None);
+        border_paint.set_anti_alias(true);
         border_paint.set_style(PaintStyle::Stroke);
         border_paint.set_stroke_width(layer.border_width);
         canvas.draw_rrect(rrbounds, &border_paint);
