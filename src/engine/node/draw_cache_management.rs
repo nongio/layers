@@ -10,8 +10,13 @@ pub trait DrawCacheManagement {
     fn needs_repaint(&self) -> bool;
     fn needs_layout(&self) -> bool;
     fn set_need_repaint(&self, value: bool);
-    fn layout_if_needed(&self, layout: &Layout, matrix: Option<&M44>, context_opacity: f32, arena: &Arena<SceneNode>)
-        -> bool;
+    fn layout_if_needed(
+        &self,
+        layout: &Layout,
+        matrix: Option<&M44>,
+        context_opacity: f32,
+        arena: &Arena<SceneNode>,
+    ) -> bool;
     fn set_need_layout(&self, value: bool);
     fn is_content_cached(&self) -> bool;
 }

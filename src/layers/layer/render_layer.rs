@@ -1,5 +1,8 @@
 use super::model::{ContentDrawFunctionInternal, ModelLayer};
-use crate::{engine::SceneNode, types::{BlendMode, Color, Point, *}};
+use crate::{
+    engine::SceneNode,
+    types::{BlendMode, Color, Point, *},
+};
 use indextree::Arena;
 use serde::{ser::SerializeStruct, Serialize};
 
@@ -266,7 +269,7 @@ impl RenderLayer {
             let caller = draw_func.0.clone();
             caller(canvas, size.width, size.height, arena);
             content = recorder.finish_recording_as_picture(None);
-            content_draw_func = Some(draw_func.clone().into());
+            content_draw_func = Some(draw_func.clone());
         }
 
         let opacity = model.opacity.value();

@@ -11,7 +11,7 @@
 //! * `Transition::ease_in_out_quad(duration: f32) -> Transition`
 //! * `Transition::spring(duration: f32, bounce: f32) -> Transition`
 //! * `Transition::spring_with_velocity(duration: f32, bounce: f32, velocity: f32) -> Transition`
-//! ...
+//!   ...
 //!
 //! # Usage
 //! ```rust

@@ -152,7 +152,7 @@ impl BuildLayerTree for Layer {
             let mut current_scene_layers_children: HashSet<NodeId> = {
                 let children = engine
                     .scene
-                    .with_arena(|arena| layer_id.0.children(&arena).collect());
+                    .with_arena(|arena| layer_id.0.children(arena).collect());
                 children
             };
 
@@ -176,7 +176,8 @@ impl BuildLayerTree for Layer {
                     let (child_layer_id, child_scene_layer) = child_layer_id
                         .and_then(|child_layer_id| {
                             // try to use existing layer
-                            let child_scene_node = engine.scene.get_node_sync(child_layer_id).unwrap();
+                            let child_scene_node =
+                                engine.scene.get_node_sync(child_layer_id).unwrap();
                             if child_scene_node.is_removed() {
                                 return None;
                             }

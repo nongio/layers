@@ -116,7 +116,7 @@ impl Scene {
         let handle = Handle::current();
         let join = tokio::task::spawn_blocking(move || {
             let arena_guard = handle.block_on(arena_guard.read());
-            f(&*arena_guard)
+            f(&arena_guard)
         });
         join.await
     }
@@ -126,7 +126,7 @@ impl Scene {
         let handle = Handle::current();
         tokio::task::block_in_place(|| {
             let arena_guard = handle.block_on(arena_guard.read());
-            f(&*arena_guard)
+            f(&arena_guard)
         })
     }
 
@@ -135,7 +135,7 @@ impl Scene {
         let handle = Handle::current();
         tokio::task::block_in_place(|| {
             let mut arena_guard = handle.block_on(arena_guard.write());
-            f(&mut *arena_guard)
+            f(&mut arena_guard)
         })
     }
 }
