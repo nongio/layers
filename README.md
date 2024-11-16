@@ -21,7 +21,7 @@ Nodes of the scene graph are graphical layers like text or simple shapes like re
 
 ## Read the docs
 The api is getting documented, be aware that is also still in evolution.
-[documentation](https://nongio.github.io/layers/layers/)
+[documentation](https://nongio.github.io/layers/lay_rs/)
 
 
 ## Rendering
