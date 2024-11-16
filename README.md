@@ -1,6 +1,6 @@
 
-## Layers engine
-Layers is a rendering engine for animated user interfaces, mainly designed in support of the ScreenComposer [project](https://github.com/nongio/screencomposer).
+## Lay-rs engine
+Lay-rs is a rendering engine for animated user interfaces, mainly designed in support of the ScreenComposer [project](https://github.com/nongio/screencomposer).
 
 It uses a scene graph to render the nodes in retained mode, optmising the most common UI interpolations (opacity, 2d transformations, blending).
 Nodes of the scene graph are graphical layers like text or simple shapes like rectangles but can also be external textures.
