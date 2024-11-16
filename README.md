@@ -1,14 +1,14 @@
 
 <p align="center">
-  <img src="https://github.com/nongio/layers/blob/main/assets/LayersEngine.png?raw=true" alt="Layers Engine Logo" width="200" height="200">
+  <img src="https://github.com/nongio/layers/blob/main/assets/lay-rs.jpg?raw=true" alt="Layers Engine Logo" width="384" height="192">
 </p>
 
-## Lay-rs engine
+## lay-rs engine
 
 
 
 
-Lay-rs is a rendering engine for animated user interfaces, mainly designed in support of the ScreenComposer [project](https://github.com/nongio/screencomposer).
+lay-rs is a rendering engine for animated user interfaces, mainly designed in support of the ScreenComposer [project](https://github.com/nongio/screencomposer).
 
 It uses a scene graph to render the nodes in retained mode, optmising the most common UI interpolations (opacity, 2d transformations, blending).
 Nodes of the scene graph are graphical layers like text or simple shapes like rectangles but can also be external textures.
