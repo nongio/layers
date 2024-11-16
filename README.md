@@ -4,6 +4,7 @@
 </p>
 
 ## lay-rs engine
+![CI Status](https://github.com/nongio/layers/actions/workflows/ci.yml/badge.svg)
 
 
 
