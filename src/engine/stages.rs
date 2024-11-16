@@ -1,7 +1,10 @@
 use std::sync::{Arc, RwLock};
 
 use indextree::NodeId;
-use rayon::prelude::{IntoParallelRefIterator, IntoParallelRefMutIterator, ParallelIterator};
+use rayon::{
+    iter::IntoParallelRefIterator,
+    prelude::{IntoParallelRefMutIterator, ParallelIterator},
+};
 use taffy::{prelude::Size, style_helpers::length, TaffyTree};
 
 #[cfg(feature = "debugger")]
@@ -23,41 +26,41 @@ pub(crate) fn update_animations(
     let finished_animations = Arc::new(RwLock::new(Vec::<FlatStorageId>::new()));
     let started_animations = Arc::new(RwLock::new(Vec::<FlatStorageId>::new()));
 
-    let animations = engine.animations.data();
-    let mut animations = animations.write().unwrap();
-    if animations.len() > 0 {
-        animations.par_iter_mut().for_each_with(
-            (finished_animations.clone(), started_animations.clone()),
-            |(done_animations, started_animations),
-             (
-                id,
-                AnimationState {
-                    animation,
-                    progress,
-                    time,
-                    is_running,
-                    is_finished,
-                    is_started,
+    engine.animations.with_data_mut(|animations| {
+        if !animations.is_empty() {
+            animations.par_iter_mut().for_each_with(
+                (finished_animations.clone(), started_animations.clone()),
+                |(done_animations, started_animations),
+                 (
+                    id,
+                    AnimationState {
+                        animation,
+                        progress,
+                        time,
+                        is_running,
+                        is_finished,
+                        is_started,
+                    },
+                )| {
+                    if !*is_running {
+                        return;
+                    }
+                    let (animation_progress, time_progress) = animation.update_at(timestamp.0);
+                    if !(*is_started) && animation.start <= timestamp.0 {
+                        *is_started = true;
+                        started_animations.write().unwrap().push(*id);
+                    }
+                    *progress = animation_progress;
+                    *time = time_progress.clamp(0.0, time_progress);
+                    if animation.done(timestamp.0) {
+                        *is_running = false;
+                        *is_finished = true;
+                        done_animations.write().unwrap().push(*id);
+                    }
                 },
-            )| {
-                if !*is_running {
-                    return;
-                }
-                let (animation_progress, time_progress) = animation.update_at(timestamp.0);
-                if !(*is_started) && animation.start <= timestamp.0 {
-                    *is_started = true;
-                    started_animations.write().unwrap().push(*id);
-                }
-                *progress = animation_progress;
-                *time = time_progress.clamp(0.0, time_progress);
-                if animation.done(timestamp.0) {
-                    *is_running = false;
-                    *is_finished = true;
-                    done_animations.write().unwrap().push(*id);
-                }
-            },
-        );
-    }
+            );
+        }
+    });
 
     let finished = finished_animations.read().unwrap();
     let started = started_animations.read().unwrap();
@@ -72,16 +75,24 @@ pub(crate) fn execute_transactions(engine: &Engine) -> (Vec<NodeRef>, Vec<FlatSt
     let needs_redraw = engine.transactions.with_data_mut(|transactions| {
         let needs_redraw = !transactions.is_empty();
         if needs_redraw {
-            let animations = &engine.animations;
+            let animations = engine.animations.data();
+            let animations = &*animations.blocking_read();
+            let scene_nodes = engine.scene.nodes.data();
+            let scene_nodes = &*scene_nodes.blocking_read();
 
-            let scene = engine.scene.clone();
+            // iterate in parallel over all the changes to be applied
             transactions.par_iter().for_each_with(
-                transactions_finished.clone(),
-                |transactions_finished, (id, command)| {
+                (
+                    animations,
+                    updated_nodes.clone(),
+                    scene_nodes,
+                    transactions_finished.clone(),
+                ),
+                |(animations, updated_nodes, scene_nodes, transactions_finished), (id, command)| {
                     let animation_state = command
                         .animation_id
                         .as_ref()
-                        .and_then(|id| animations.get(&id.0))
+                        .and_then(|id| animations.get(&id.0).cloned())
                         .unwrap_or(AnimationState {
                             animation: Default::default(),
                             progress: 1.0,
@@ -94,7 +105,7 @@ pub(crate) fn execute_transactions(engine: &Engine) -> (Vec<NodeRef>, Vec<FlatSt
                     let flags = command.change.execute(animation_state.progress);
 
                     let node_id = command.node_id;
-                    if let Some(node) = scene.get_node(node_id.0) {
+                    if let Some(node) = scene_nodes.get(node_id.0) {
                         {
                             if let Some(node) = try_get_node(node) {
                                 updated_nodes.write().unwrap().push(node_id);
@@ -124,41 +135,40 @@ pub(crate) fn execute_transactions(engine: &Engine) -> (Vec<NodeRef>, Vec<FlatSt
 }
 #[profiling::function]
 pub(crate) fn nodes_for_layout(engine: &Engine) -> Vec<NodeRef> {
-    let arena = engine.scene.nodes.data();
-    let arena = arena.read().unwrap();
-    let updated_nodes = arena
-        .iter()
-        .filter_map(|node| {
-            if node.is_removed() {
-                return None;
-            }
-            let scene_node = node.get();
-            // let layout = self.get_node_layout_style(scene_node.layout_node_id);
-            // if
-            // if layout.position != Position::Absolute {
-            scene_node.insert_flags(RenderableFlags::NEEDS_LAYOUT);
-            scene_node.id()
-            // } else {
-            // None
-            // }
-        })
-        .collect();
-    updated_nodes
+    engine.scene.with_arena(|arena| {
+        arena
+            .iter()
+            .filter_map(|node| {
+                if node.is_removed() {
+                    return None;
+                }
+                let scene_node = node.get();
+                // let layout = self.get_node_layout_style(scene_node.layout_node_id);
+                // if
+                // if layout.position != Position::Absolute {
+                scene_node.insert_flags(RenderableFlags::NEEDS_LAYOUT);
+                scene_node.id()
+                // } else {
+                // None
+                // }
+            })
+            .collect()
+    })
 }
 #[profiling::function]
 pub(crate) fn update_layout_tree(engine: &Engine) {
     {
         profiling::scope!("update_nodes_size");
-        let arena = engine.scene.nodes.data();
-        let arena = arena.read().unwrap();
-        arena.iter().for_each(|node| {
-            if node.is_removed() {
-                return;
-            }
-            let scene_node = node.get();
-            let size = scene_node.layer.model.size.value();
-            let layout_node_id = scene_node.layout_node_id;
-            engine.set_node_layout_size(layout_node_id, size);
+        engine.scene.with_arena(|arena| {
+            arena.iter().for_each(|node| {
+                if node.is_removed() {
+                    return;
+                }
+                let scene_node = node.get();
+                let size = scene_node.layer.model.size.value();
+                let layout_node_id = scene_node.layout_node_id;
+                engine.set_node_layout_size(layout_node_id, size);
+            });
         });
     };
     let mut layout = engine.layout_tree.write().unwrap();
@@ -212,13 +222,14 @@ pub(crate) fn update_node(
     let context_opacity = parent.map(|p| p.premultiplied_opacity).unwrap_or(1.0);
 
     // update the layout of the node
-    let _new_layout = node.layout_if_needed(node_layout, cumulative_transform, context_opacity);
+    let _new_layout =
+        node.layout_if_needed(node_layout, cumulative_transform, context_opacity, arena);
 
     let render_layer = node.render_layer();
     let new_transformed_bounds = render_layer.global_transformed_bounds;
 
     // update the picture of the node
-    let mut node_damage = node.repaint_if_needed();
+    let mut node_damage = node.repaint_if_needed(arena);
 
     let repainted = !node_damage.is_empty();
 
@@ -302,67 +313,56 @@ pub(crate) fn update_node(
 
 #[profiling::function]
 pub(crate) fn trigger_callbacks(engine: &Engine, started_animations: &[FlatStorageId]) {
-    let transactions = engine.transactions.data();
-    let transactions = transactions.read().unwrap().clone();
-    let animations = engine.animations.data();
-    let animations = animations.read().unwrap().clone();
-    let scene = engine.scene.clone();
-    transactions.iter().for_each(|(id, command)| {
-        let animation_state = command
-            .animation_id
-            .as_ref()
-            .and_then(|id| animations.get(&id.0).cloned())
-            .unwrap_or(AnimationState {
-                animation: Default::default(),
-                progress: 1.0,
-                time: 0.0,
-                is_running: false,
-                is_finished: true,
-                is_started: false,
-            });
-        if let Some(node) = scene.get_node(command.node_id.0) {
-            let tcallbacks = {
-                let transaction_handlers = engine.transaction_handlers.data();
-                let transaction_handlers = transaction_handlers.read().unwrap();
-
-                transaction_handlers.get(id).cloned()
-            };
-            let node = node.get();
-            let started = command
+    engine.transactions.with_data(|transactions| {
+        let scene = engine.scene.clone();
+        transactions.iter().for_each(|(id, command)| {
+            let animation_state = command
                 .animation_id
-                .map(|a| started_animations.contains(&a.0))
-                .unwrap_or(false);
-            let vcallbacks = {
-                let value_handlers = engine.value_handlers.data();
-                let value_handlers = value_handlers.read().unwrap();
-                value_handlers.get(&command.change.value_id()).cloned()
-            };
-            let (tcallback_to_remove, vcallback_to_remove) = transaction_callbacks(
-                &animation_state,
-                tcallbacks.as_ref(),
-                vcallbacks.as_ref(),
-                &node.layer,
-                started,
-            );
-            {
-                engine
-                    .transaction_handlers
-                    .with_data_mut(|transatction_handlers| {
-                        if let Some(handler) = transatction_handlers.get_mut(id) {
-                            tcallback_to_remove.iter().for_each(|tr_callback| {
-                                handler.remove(tr_callback);
+                .as_ref()
+                .and_then(|id| engine.animations.get(&id.0))
+                .unwrap_or(AnimationState {
+                    animation: Default::default(),
+                    progress: 1.0,
+                    time: 0.0,
+                    is_running: false,
+                    is_finished: true,
+                    is_started: false,
+                });
+            if let Some(node) = scene.get_node_sync(command.node_id.0) {
+                let tcallbacks = { engine.transaction_handlers.get(id) };
+                let node = node.get();
+                let started = command
+                    .animation_id
+                    .map(|a| started_animations.contains(&a.0))
+                    .unwrap_or(false);
+                let vcallbacks = { engine.value_handlers.get(&command.change.value_id()) };
+                let (tcallback_to_remove, vcallback_to_remove) = transaction_callbacks(
+                    &animation_state,
+                    tcallbacks.as_ref(),
+                    vcallbacks.as_ref(),
+                    &node.layer,
+                    started,
+                );
+                {
+                    engine
+                        .transaction_handlers
+                        .with_data_mut(|transatction_handlers| {
+                            if let Some(handler) = transatction_handlers.get_mut(id) {
+                                tcallback_to_remove.iter().for_each(|tr_callback| {
+                                    handler.remove(tr_callback);
+                                });
+                            }
+                        });
+                    engine.value_handlers.with_data_mut(|values_handlers| {
+                        if let Some(handler) = values_handlers.get_mut(&command.change.value_id()) {
+                            vcallback_to_remove.iter().for_each(|v_callback| {
+                                handler.remove(v_callback);
                             });
                         }
                     });
-                engine.value_handlers.with_data_mut(|values_handlers| {
-                    if let Some(handler) = values_handlers.get_mut(&command.change.value_id()) {
-                        vcallback_to_remove.iter().for_each(|v_callback| {
-                            handler.remove(v_callback);
-                        });
-                    }
-                });
+                }
             }
-        }
+        });
     });
 }
 #[profiling::function]
@@ -378,7 +378,7 @@ fn transaction_callbacks(
 
     if animation_state.is_running {
         if on_start {
-            tr_handler.map(|tr_handler| {
+            if let Some(tr_handler) = tr_handler {
                 let callbacks = &tr_handler.on_start;
                 callbacks.iter().for_each(|tr_callback| {
                     let callback = &tr_callback.callback;
@@ -387,8 +387,8 @@ fn transaction_callbacks(
                         tr_to_remove.push(tr_callback.clone());
                     }
                 });
-            });
-            v_handler.map(|v_handler| {
+            }
+            if let Some(v_handler) = v_handler {
                 let callbacks = &v_handler.on_start;
                 callbacks.iter().for_each(|tr_callback| {
                     let callback = &tr_callback.callback;
@@ -397,9 +397,9 @@ fn transaction_callbacks(
                         v_to_remove.push(tr_callback.clone());
                     }
                 });
-            });
+            }
         }
-        tr_handler.map(|tr_handler| {
+        if let Some(tr_handler) = tr_handler {
             let callbacks = &tr_handler.on_update;
             callbacks.iter().for_each(|tr_callback| {
                 let callback = &tr_callback.callback;
@@ -408,8 +408,8 @@ fn transaction_callbacks(
                     tr_to_remove.push(tr_callback.clone());
                 }
             });
-        });
-        v_handler.map(|v_handler| {
+        }
+        if let Some(v_handler) = v_handler {
             let callbacks = &v_handler.on_update;
             callbacks.iter().for_each(|tr_callback| {
                 let callback = &tr_callback.callback;
@@ -418,9 +418,9 @@ fn transaction_callbacks(
                     v_to_remove.push(tr_callback.clone());
                 }
             });
-        });
+        }
     } else if animation_state.is_finished {
-        tr_handler.map(|tr_handler| {
+        if let Some(tr_handler) = tr_handler {
             let callbacks = &tr_handler.on_update;
             callbacks.iter().for_each(|tr_callback| {
                 let callback = &tr_callback.callback;
@@ -429,8 +429,8 @@ fn transaction_callbacks(
                     tr_to_remove.push(tr_callback.clone());
                 }
             });
-        });
-        v_handler.map(|v_handler| {
+        }
+        if let Some(v_handler) = v_handler {
             let callbacks = &v_handler.on_update;
             callbacks.iter().for_each(|tr_callback| {
                 let callback = &tr_callback.callback;
@@ -439,8 +439,8 @@ fn transaction_callbacks(
                     v_to_remove.push(tr_callback.clone());
                 }
             });
-        });
-        tr_handler.map(|tr_handler| {
+        }
+        if let Some(tr_handler) = tr_handler {
             let callbacks = &tr_handler.on_finish;
             callbacks.iter().for_each(|tr_callback| {
                 let callback = &tr_callback.callback;
@@ -449,8 +449,8 @@ fn transaction_callbacks(
                 }
                 callback(layer, 1.0);
             });
-        });
-        v_handler.map(|v_handler| {
+        }
+        if let Some(v_handler) = v_handler {
             let callbacks = &v_handler.on_finish;
             callbacks.iter().for_each(|tr_callback| {
                 let callback = &tr_callback.callback;
@@ -459,71 +459,69 @@ fn transaction_callbacks(
                     v_to_remove.push(tr_callback.clone());
                 }
             });
-        });
+        }
     }
     (tr_to_remove, v_to_remove)
 }
 #[profiling::function]
 pub(crate) fn cleanup_animations(engine: &Engine, finished_animations: Vec<FlatStorageId>) {
-    let animations = engine.animations.data();
-    let mut animations = animations.write().unwrap();
-
-    let animations_finished_to_remove = finished_animations;
-    for animation_id in animations_finished_to_remove.iter() {
-        animations.remove(animation_id);
-    }
+    engine.animations.with_data_mut(|animations| {
+        let animations_finished_to_remove = finished_animations;
+        for animation_id in animations_finished_to_remove.iter() {
+            animations.remove(animation_id);
+        }
+    });
 }
 #[profiling::function]
 pub(crate) fn cleanup_transactions(engine: &Engine, finished_transations: Vec<FlatStorageId>) {
-    let transactions = engine.transactions.data();
-    let mut transactions = transactions.write().unwrap();
-    let handlers = engine.transaction_handlers.data();
-    let mut handlers = handlers.write().unwrap();
-
-    for tid in finished_transations.iter() {
-        if let Some(tr) = transactions.get(tid) {
-            let vid = tr.change.value_id();
-            transactions.remove(tid);
-            let mut values_transactions = engine.values_transactions.write().unwrap();
-            if let Some(existing_tid) = values_transactions.get(&vid) {
-                if (*existing_tid) == *tid {
-                    values_transactions.remove(&vid);
+    engine.transactions.with_data_mut(|transactions| {
+        for tid in finished_transations.iter() {
+            if let Some(tr) = transactions.get(tid) {
+                let vid = tr.change.value_id();
+                transactions.remove(tid);
+                let mut values_transactions = engine.values_transactions.write().unwrap();
+                if let Some(existing_tid) = values_transactions.get(&vid) {
+                    if (*existing_tid) == *tid {
+                        values_transactions.remove(&vid);
+                    }
                 }
+                engine.value_handlers.with_data_mut(|handlers| {
+                    if let Some(handler) = handlers.get_mut(&vid) {
+                        handler.cleanup_once_callbacks();
+                    }
+                });
             }
-            let handlers = engine.value_handlers.data();
-            let mut handlers = handlers.write().unwrap();
-            if let Some(handler) = handlers.get_mut(&vid) {
-                handler.cleanup_once_callbacks();
-            }
+            engine.transaction_handlers.with_data_mut(|handlers| {
+                if let Some(handler) = handlers.get_mut(tid) {
+                    handler.cleanup_once_callbacks();
+                }
+            });
         }
-        if let Some(handler) = handlers.get_mut(tid) {
-            handler.cleanup_once_callbacks();
-        }
-    }
+    });
 }
 #[profiling::function]
 pub(crate) fn cleanup_nodes(engine: &Engine) -> skia_safe::Rect {
     let mut damage = skia_safe::Rect::default();
     let deleted = {
-        let nodes = engine.scene.nodes.data();
-        let nodes = nodes.read().unwrap();
-        nodes
-            .iter()
-            .filter_map(|scene_node| {
-                if scene_node.is_removed() {
-                    return None;
-                }
-                let node = scene_node.get();
+        engine.scene.with_arena(|arena| {
+            arena
+                .iter()
+                .filter_map(|scene_node| {
+                    if scene_node.is_removed() {
+                        return None;
+                    }
+                    let node = scene_node.get();
 
-                if node.is_deleted() {
-                    let bounds = node.transformed_bounds_with_effects();
-                    damage.join(bounds);
-                    Some(node.id())
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<_>>()
+                    if node.is_deleted() {
+                        let bounds = node.transformed_bounds_with_effects();
+                        damage.join(bounds);
+                        Some(node.id())
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>()
+        })
     };
     for id in deleted {
         engine.scene_remove_layer(id);

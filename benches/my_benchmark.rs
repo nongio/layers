@@ -9,7 +9,7 @@ use glutin::{
     dpi::LogicalSize, event_loop::EventLoop, platform::unix::EventLoopBuilderExtUnix,
     window::WindowBuilder, GlProfile,
 };
-use layers::{engine::LayersEngine, prelude::*, types::*};
+use lay_rs::{engine::LayersEngine, prelude::*, types::*};
 
 #[allow(dead_code)]
 fn criterion_benchmark_update(c: &mut Criterion) {
@@ -106,13 +106,13 @@ fn criterion_benchmark_draw(c: &mut Criterion) {
         let sample_count: usize = pixel_format.multisampling.map(|s| s.into()).unwrap_or(0);
         let pixel_format: usize = pixel_format.stencil_bits.into();
 
-        let mut skia_renderer = layers::renderer::skia_fbo::SkiaFboRenderer::create(
+        let mut skia_renderer = lay_rs::renderer::skia_fbo::SkiaFboRenderer::create(
             size.width as i32,
             size.height as i32,
             sample_count,
             pixel_format,
-            layers::skia::ColorType::RGBA8888,
-            layers::skia::gpu::SurfaceOrigin::BottomLeft,
+            lay_rs::skia::ColorType::RGBA8888,
+            lay_rs::skia::gpu::SurfaceOrigin::BottomLeft,
             0_u32,
         );
         for &count in &child_counts {
@@ -127,7 +127,7 @@ fn criterion_benchmark_draw(c: &mut Criterion) {
                 let mut layers = Vec::<Layer>::new();
                 for _i in 0..count {
                     let layer = engine.new_layer();
-                    layer.set_layout_style(layers::taffy::Style {
+                    layer.set_layout_style(lay_rs::taffy::Style {
                         position: taffy::Position::Absolute,
                         ..Default::default()
                     });
@@ -184,13 +184,13 @@ fn criterion_benchmark_draw_shadow(c: &mut Criterion) {
         let sample_count: usize = pixel_format.multisampling.map(|s| s.into()).unwrap_or(0);
         let pixel_format: usize = pixel_format.stencil_bits.into();
 
-        let mut skia_renderer = layers::renderer::skia_fbo::SkiaFboRenderer::create(
+        let mut skia_renderer = lay_rs::renderer::skia_fbo::SkiaFboRenderer::create(
             size.width as i32,
             size.height as i32,
             sample_count,
             pixel_format,
-            layers::skia::ColorType::RGBA8888,
-            layers::skia::gpu::SurfaceOrigin::BottomLeft,
+            lay_rs::skia::ColorType::RGBA8888,
+            lay_rs::skia::gpu::SurfaceOrigin::BottomLeft,
             0_u32,
         );
         for &count in &child_counts {
@@ -206,7 +206,7 @@ fn criterion_benchmark_draw_shadow(c: &mut Criterion) {
                 let mut layers = Vec::<Layer>::new();
                 for _i in 0..count {
                     let layer = engine.new_layer();
-                    layer.set_layout_style(layers::taffy::Style {
+                    layer.set_layout_style(lay_rs::taffy::Style {
                         position: taffy::Position::Absolute,
                         ..Default::default()
                     });

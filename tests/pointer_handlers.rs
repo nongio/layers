@@ -1,7 +1,7 @@
 use std::sync::{Arc, RwLock};
 
-use layers::engine::LayersEngine;
-use layers::types::Size;
+use lay_rs::engine::LayersEngine;
+use lay_rs::types::Size;
 
 /// it should call the pointer move handler
 #[test]

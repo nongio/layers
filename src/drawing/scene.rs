@@ -27,11 +27,15 @@ pub trait DrawScene {
 
 /// Draw the scene to the given skia::Canvas
 pub fn draw_scene(canvas: &skia::Canvas, scene: &Scene, root_id: NodeRef) {
-    let arena = scene.nodes.data();
-    let arena = arena.read().unwrap();
-    if let Some(_root) = scene.get_node(root_id) {
-        render_node_tree(root_id, &arena, canvas, 1.0);
-    }
+    scene.with_arena(|arena| {
+        if let Some(root) = scene.get_node_sync(root_id) {
+            let node = root.get();
+            let restore_point = canvas.save();
+            set_node_transform(node, canvas);
+            render_node_tree(root_id, &arena, canvas, 1.0);
+            canvas.restore_to_count(restore_point);
+        }
+    });
 }
 
 pub fn node_tree_list(
@@ -133,7 +137,6 @@ pub fn surface_for_node(
                 if surface.direct_context().unwrap().id() == context.id() {
                     let size = surface_size_for_render_layer(render_layer);
                     if surface.width() >= size.x as i32 && surface.height() >= size.y as i32 {
-                        // println!("Surface found for node size {:?}", size);
                         return Some((*frame, surface.clone(), image.clone()));
                     } else {
                         // Surface size is not enough, remove the surface
@@ -194,7 +197,7 @@ pub fn create_surface_for_node(
 
 #[profiling::function]
 /// paint a node and his subtree in the provided canvas
-fn paint_node_tree(
+pub fn paint_node_tree(
     node_ref: NodeRef,
     arena: &Arena<SceneNode>,
     render_canvas: &skia_safe::Canvas,
@@ -213,17 +216,27 @@ fn paint_node_tree(
     if (offscreen) {
         context_opacity = render_layer.opacity;
     }
+    // TODO: clip bounds only if the layer is set to clip children
     // let bounds = skia_safe::Rect::from_wh(render_layer.size.x, render_layer.size.y);
     // canvas.clip_rect(bounds, None, None);
     node_id.children(arena).for_each(|child_id| {
         let child_ref = NodeRef(child_id);
+        let restore_point = render_canvas.save();
+        let child = arena.get(child_id).unwrap().get();
+        set_node_transform(child, render_canvas);
         render_node_tree(child_ref, arena, render_canvas, context_opacity);
+        render_canvas.restore_to_count(restore_point);
     });
 }
+pub fn set_node_transform(node: &SceneNode, canvas: &Canvas) {
+    let render_layer = node.render_layer.read().unwrap();
+    let transform = render_layer.local_transform.to_m33();
+    canvas.concat(&transform);
+}
 
-#[profiling::function]
 /// Render a node and his subtree in the provided canvas
 /// taking care of the image caching if needed
+#[profiling::function]
 pub fn render_node_tree(
     node_ref: NodeRef,
     arena: &Arena<SceneNode>,
@@ -237,9 +250,8 @@ pub fn render_node_tree(
         return;
     }
     let render_layer = scene_node.render_layer.read().unwrap();
-    let restore_transform = render_canvas.save();
-
-    render_canvas.concat(&render_layer.local_transform.to_m33());
+    let restore_point = render_canvas.save();
+    // render_canvas.concat(&render_layer.local_transform.to_m33());
     let dbg_info = scene_node.debug_info.read().unwrap();
     let dbg_info = dbg_info.as_ref();
     if scene_node.is_image_cached() {
@@ -315,15 +327,6 @@ pub fn render_node_tree(
 
                         recording_canvas.restore();
 
-                        // if let Some(mut context) = recording_ctx.as_direct_context() {
-                        //     context.flush_and_submit_surface(
-                        //         &mut recording_surface,
-                        //         Some(sb::GrSyncCpu::No),
-                        //     );
-                        // } else {
-                        //     println!("Failed to get the direct context");
-                        // }
-
                         image = recording_surface.image_snapshot();
                         set_surface_for_node(
                             &node_ref,
@@ -332,8 +335,6 @@ pub fn render_node_tree(
                             current_frame,
                         );
                     } // end draw into the offscreen surface
-
-                    let image = recording_surface.image_snapshot();
 
                     let image_filter = scene_node.layer.model.image_filter.read().unwrap();
                     let mut paint = skia_safe::Paint::default();
@@ -367,7 +368,7 @@ pub fn render_node_tree(
 
                     render_canvas.draw_image(&image, (x, y), Some(&paint));
 
-                    render_canvas.restore_to_count(restore_transform);
+                    render_canvas.restore_to_count(restore_point);
                     return;
                 }
             }
@@ -386,7 +387,7 @@ pub fn render_node_tree(
         dbg_info,
     );
 
-    render_canvas.restore_to_count(restore_transform);
+    render_canvas.restore_to_count(restore_point);
 }
 pub(crate) const BACKGROUND_BLUR_SIGMA: f32 = 25.0;
 
@@ -472,26 +473,19 @@ pub(crate) fn paint_node(
     if let Some(draw_cache) = &*draw_cache {
         profiling::scope!("draw_cache");
         draw_cache.draw(canvas, &paint);
+    } else {
+        draw_layer(canvas, &render_layer, context_opacity, arena);
     }
-
-    // FIXME if the cache is not present we could draw directly yhe layer, but we need to
-    // handle the opacity
-    // unimplemented!("Handle the case when the draw cache is not present");
-    // println!("{} cache missing", node_ref.0);
-    //  else {
-    // node.set_need_repaint(true);
-    // draw_layer(canvas, &render_layer);
-    // }
 
     restore_transform
 }
 /// Print the node tree to the console
 pub fn print_scene(scene: &Scene, root_id: NodeRef) {
-    let arena = scene.nodes.data();
-    let arena = arena.read().unwrap();
-    if let Some(_root) = scene.get_node(root_id) {
-        debug_node_tree(root_id, &arena, 1.0, 0);
-    }
+    scene.with_arena(|arena| {
+        if let Some(_root) = scene.get_node_sync(root_id) {
+            debug_node_tree(root_id, &arena, 1.0, 0);
+        }
+    });
 }
 
 fn debug_node_tree(

@@ -6,6 +6,7 @@ pub(crate) mod state;
 pub(crate) use self::model::ModelLayer;
 use self::model::{ContentDrawFunction, PointerHandlerFunction};
 
+use model::ContentDrawFunctionInternal;
 use skia::{ColorFilter, Contains, ImageFilter};
 use state::LayerDataProps;
 use std::{fmt, sync::Arc};
@@ -23,6 +24,7 @@ use crate::engine::{Engine, NodeRef, TransactionRef};
 
 use crate::types::*;
 #[allow(private_interfaces)]
+#[repr(C)]
 #[derive(Clone)]
 pub struct Layer {
     pub engine: Arc<Engine>,
@@ -33,6 +35,7 @@ pub struct Layer {
     pub(crate) layout_node_id: NodeId,
     pub(crate) model: Arc<ModelLayer>,
     pub(crate) image_cache: Arc<AtomicBool>,
+    pub(crate) picture_cache: Arc<AtomicBool>,
     pub(crate) state: Arc<RwLock<LayerDataProps>>,
     pub(crate) effect: Arc<RwLock<Option<Arc<dyn Effect>>>>,
 }
@@ -66,6 +69,7 @@ impl Layer {
             hidden: Arc::new(AtomicBool::new(false)),
             pointer_events: Arc::new(AtomicBool::new(true)),
             image_cache: Arc::new(AtomicBool::new(false)),
+            picture_cache: Arc::new(AtomicBool::new(true)),
             state: Arc::new(RwLock::new(LayerDataProps::new())),
             effect: Arc::new(RwLock::new(None)),
         }
@@ -86,42 +90,43 @@ impl Layer {
         let key = self.key.read().unwrap();
         key.clone()
     }
-    pub fn set_hidden(&self, hidden: bool) {
-        self.hidden
-            .store(hidden, std::sync::atomic::Ordering::Relaxed);
+    pub fn set_hidden(&self, _hidden: bool) {
+        unimplemented!("set_hidden")
+        // self.hidden
+        //     .store(hidden, std::sync::atomic::Ordering::Relaxed);
 
-        // when hidden we set display to none so that the layout engine
-        // doesn't layout the node
-        let mut display = Display::None;
+        // // when hidden we set display to none so that the layout engine
+        // // doesn't layout the node
+        // let mut display = Display::None;
 
-        if !hidden {
-            display = self.model.display.value();
-        }
-        let mut style = self.engine.get_node_layout_style(self.layout_node_id);
-        style.display = display;
-        self.engine
-            .set_node_layout_style(self.layout_node_id, style);
+        // if !hidden {
+        //     display = self.model.display.value();
+        // }
+        // let mut style = self.engine.get_node_layout_style(self.layout_node_id);
+        // style.display = display;
+        // self.engine
+        //     .set_node_layout_style(self.layout_node_id, style);
 
-        if let Some(id) = self.id() {
-            // let node = self.engine.scene.get_node(id.0);
-            let arena = self.engine.scene.nodes.data();
-            let arena = arena.read().unwrap();
-            let mut iter = id.ancestors(&arena);
-            if let Some(node) = self.engine.scene.get_node(id) {
-                let node = node.get();
-                node.insert_flags(RenderableFlags::NEEDS_LAYOUT | RenderableFlags::NEEDS_PAINT);
-            }
+        // if let Some(id) = self.id() {
+        //     // let node = self.engine.scene.get_node(id.0);
+        //     let arena = self.engine.scene.nodes.data();
+        //     let arena = arena.blocking_read();
+        //     let mut iter = id.ancestors(&arena);
+        //     if let Some(node) = self.engine.scene.get_node(id) {
+        //         let node = node.get();
+        //         node.insert_flags(RenderableFlags::NEEDS_LAYOUT | RenderableFlags::NEEDS_PAINT);
+        //     }
 
-            iter.next(); // skip self
-            if let Some(parent_id) = iter.next() {
-                drop(arena);
-                if let Some(parent) = self.engine.scene.get_node(NodeRef(parent_id)) {
-                    let parent = parent.get();
-                    parent
-                        .insert_flags(RenderableFlags::NEEDS_LAYOUT | RenderableFlags::NEEDS_PAINT);
-                }
-            }
-        }
+        //     iter.next(); // skip self
+        //     if let Some(parent_id) = iter.next() {
+        //         drop(arena);
+        //         if let Some(parent) = self.engine.scene.get_node(NodeRef(parent_id)) {
+        //             let parent = parent.get();
+        //             parent
+        //                 .insert_flags(RenderableFlags::NEEDS_LAYOUT | RenderableFlags::NEEDS_PAINT);
+        //         }
+        //     }
+        // }
     }
     pub fn hidden(&self) -> bool {
         self.hidden.load(std::sync::atomic::Ordering::Relaxed)
@@ -223,9 +228,22 @@ impl Layer {
 
     pub fn set_draw_content<F: Into<ContentDrawFunction>>(&self, content_handler: F) {
         let mut model_content = self.model.draw_content.write().unwrap();
+        let draw: ContentDrawFunction = content_handler.into();
+        *model_content = Some(draw.into());
+        if let Some(id) = self.id() {
+            let mut node = self.engine.scene.get_node_sync(id).unwrap();
+            let node = node.get_mut();
+            node.insert_flags(RenderableFlags::NEEDS_PAINT);
+        }
+    }
+    pub(crate) fn set_draw_content_internal<F: Into<ContentDrawFunctionInternal>>(
+        &self,
+        content_handler: F,
+    ) {
+        let mut model_content = self.model.draw_content.write().unwrap();
         *model_content = Some(content_handler.into());
         if let Some(id) = self.id() {
-            let mut node = self.engine.scene.get_node(id).unwrap();
+            let mut node = self.engine.scene.get_node_sync(id).unwrap();
             let node = node.get_mut();
             node.insert_flags(RenderableFlags::NEEDS_PAINT);
         }
@@ -234,7 +252,7 @@ impl Layer {
         let mut model_content = self.model.draw_content.write().unwrap();
         *model_content = None;
         if let Some(id) = self.id() {
-            let mut node = self.engine.scene.get_node(id).unwrap();
+            let mut node = self.engine.scene.get_node_sync(id).unwrap();
             let node = node.get_mut();
             node.insert_flags(RenderableFlags::NEEDS_PAINT);
         }
@@ -242,6 +260,14 @@ impl Layer {
     pub fn set_image_cache(&self, value: bool) {
         self.image_cache
             .store(value, std::sync::atomic::Ordering::Relaxed);
+    }
+    pub fn set_content_cache(&self, value: bool) {
+        self.picture_cache
+            .store(value, std::sync::atomic::Ordering::Relaxed);
+    }
+    pub fn is_picture_cache(&self) -> bool {
+        self.picture_cache
+            .load(std::sync::atomic::Ordering::Relaxed)
     }
     pub fn add_sublayer(&self, layer: Layer) -> NodeRef {
         self.engine.scene_add_layer(layer, self.id())
@@ -357,7 +383,7 @@ impl Layer {
     pub fn render_position(&self) -> Point {
         let id = self.id();
         if let Some(id) = id {
-            if let Some(node) = self.engine.scene.get_node(id) {
+            if let Some(node) = self.engine.scene.get_node_sync(id) {
                 let render_layer = node.get().render_layer.clone();
                 let rl = render_layer.read().unwrap();
 
@@ -372,7 +398,7 @@ impl Layer {
     pub fn render_size(&self) -> Point {
         let id = self.id();
         if let Some(id) = id {
-            if let Some(node) = self.engine.scene.get_node(id) {
+            if let Some(node) = self.engine.scene.get_node_sync(id) {
                 let render_layer = node.get().render_layer.clone();
                 let rl = render_layer.read().unwrap();
 
@@ -387,7 +413,7 @@ impl Layer {
     pub fn render_bounds_transformed(&self) -> skia_safe::Rect {
         let id = self.id();
         if let Some(id) = id {
-            if let Some(node) = self.engine.scene.get_node(id) {
+            if let Some(node) = self.engine.scene.get_node_sync(id) {
                 let render_layer = node.get().render_layer.clone();
                 let rl = render_layer.read().unwrap();
                 return rl.global_transformed_bounds;
@@ -398,7 +424,7 @@ impl Layer {
     pub fn render_bounds_with_children_transformed(&self) -> skia_safe::Rect {
         let id = self.id();
         if let Some(id) = id {
-            if let Some(node) = self.engine.scene.get_node(id) {
+            if let Some(node) = self.engine.scene.get_node_sync(id) {
                 let render_layer = node.get().render_layer.clone();
                 let rl = render_layer.read().unwrap();
 
@@ -410,7 +436,7 @@ impl Layer {
     pub fn render_bounds_with_children(&self) -> skia_safe::Rect {
         let id = self.id();
         if let Some(id) = id {
-            if let Some(node) = self.engine.scene.get_node(id) {
+            if let Some(node) = self.engine.scene.get_node_sync(id) {
                 let render_layer = node.get().render_layer.clone();
                 let rl = render_layer.read().unwrap();
 
@@ -427,9 +453,9 @@ impl Layer {
         if let Some(node_ref) = self.id() {
             let node_id: TreeStorageId = node_ref.into();
             return {
-                let arena = self.engine.scene.nodes.data();
-                let arena = arena.read().unwrap();
-                node_id.children(&arena).map(NodeRef).collect()
+                self.engine
+                    .scene
+                    .with_arena(|arena| node_id.children(arena).map(NodeRef).collect())
             };
         }
         vec![]
@@ -438,15 +464,15 @@ impl Layer {
         if let Some(node_ref) = self.id() {
             let node_id: TreeStorageId = node_ref.into();
             return {
-                let arena = self.engine.scene.nodes.data();
-                let arena = arena.read().unwrap();
-                node_id
-                    .children(&arena)
-                    .map(|cid| {
-                        let c = arena.get(cid).unwrap();
-                        c.get().layer.clone()
-                    })
-                    .collect()
+                self.engine.scene.with_arena(|arena| {
+                    node_id
+                        .children(arena)
+                        .map(|cid| {
+                            let c = arena.get(cid).unwrap();
+                            c.get().layer.clone()
+                        })
+                        .collect()
+                })
             };
         }
         vec![]
@@ -532,7 +558,6 @@ impl Layer {
             f,
             once,
         );
-        unimplemented!("on_change_size fixme");
     }
 }
 

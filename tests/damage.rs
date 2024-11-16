@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use layers::{
+    use lay_rs::{
         drawing::draw_layer,
         engine::LayersEngine,
         renderer::skia_image::SkiaImageRenderer,
@@ -25,27 +25,31 @@ mod tests {
         let renderer = SkiaImageRenderer::new(1000, 1000, "damage.png");
         let mut surface = renderer.surface();
         let canvas = surface.canvas();
-        let damage = draw_layer(canvas, &render_layer);
+        engine.scene().with_arena(|arena| {
+            let damage = draw_layer(canvas, &render_layer, 1.0, arena);
 
-        // test empty layer
-        assert_eq!(damage, skia_safe::Rect::from_xywh(0.0, 0.0, 0.0, 0.0));
+            // test empty layer
+            assert_eq!(damage, skia_safe::Rect::from_xywh(0.0, 0.0, 0.0, 0.0));
+        });
 
         // test layer with background damage
         layer.set_background_color(Color::new_hex("#ff0000ff"), None);
         engine.update(0.016);
         let render_layer = scene_node.render_layer();
-        let damage = draw_layer(canvas, &render_layer);
-
-        assert_eq!(damage, skia_safe::Rect::from_xywh(0.0, 0.0, 100.0, 100.0));
+        engine.scene().with_arena(|arena| {
+            let damage = draw_layer(canvas, &render_layer, 1.0, arena);
+            assert_eq!(damage, skia_safe::Rect::from_xywh(0.0, 0.0, 100.0, 100.0));
+        });
 
         // test layer with border damage
         layer.set_border_color(Color::new_hex("#ff0000ff"), None);
         layer.set_border_width(10.0, None);
         engine.update(0.016);
         let render_layer = scene_node.render_layer();
-        let damage = draw_layer(canvas, &render_layer);
-
-        assert_eq!(damage, skia_safe::Rect::from_xywh(-5.0, -5.0, 110.0, 110.0));
+        engine.scene().with_arena(|arena| {
+            let damage = draw_layer(canvas, &render_layer, 1.0, arena);
+            assert_eq!(damage, skia_safe::Rect::from_xywh(-5.0, -5.0, 110.0, 110.0));
+        });
 
         // test layer with shadow
         layer.set_shadow_color(Color::new_hex("#ff0000ff"), None);
@@ -54,24 +58,27 @@ mod tests {
         layer.set_shadow_spread(20.0, None);
         engine.update(0.016);
         let render_layer = scene_node.render_layer();
-        let damage = draw_layer(canvas, &render_layer);
-
-        assert_eq!(
-            damage,
-            skia_safe::Rect::from_xywh(-50.0, -50.0, 180.0, 180.0)
-        );
+        engine.scene().with_arena(|arena| {
+            let damage = draw_layer(canvas, &render_layer, 1.0, arena);
+            assert_eq!(
+                damage,
+                skia_safe::Rect::from_xywh(-50.0, -50.0, 180.0, 180.0)
+            );
+        });
 
         // test layer with blend blur
-        layer.set_blend_mode(layers::types::BlendMode::BackgroundBlur);
+        layer.set_blend_mode(lay_rs::types::BlendMode::BackgroundBlur);
 
         engine.update(0.016);
         let render_layer = scene_node.render_layer();
-        let damage = draw_layer(canvas, &render_layer);
+        engine.scene().with_arena(|arena| {
+            let damage = draw_layer(canvas, &render_layer, 1.0, arena);
 
-        assert_eq!(
-            damage,
-            skia_safe::Rect::from_xywh(-75.0, -75.0, 230.0, 230.0)
-        );
+            assert_eq!(
+                damage,
+                skia_safe::Rect::from_xywh(-75.0, -75.0, 230.0, 230.0)
+            );
+        })
     }
 
     #[test]
@@ -258,8 +265,8 @@ mod tests {
         wrap.set_size(Size::percent(1.0, 1.0), None);
         engine.scene_add_layer(wrap.clone());
         let layer = engine.new_layer();
-        layer.set_layout_style(layers::taffy::Style {
-            position: layers::taffy::Position::Absolute,
+        layer.set_layout_style(lay_rs::taffy::Style {
+            position: lay_rs::taffy::Position::Absolute,
             ..Default::default()
         });
         layer.set_position((100.0, 100.0), None);
@@ -295,7 +302,7 @@ mod tests {
         );
 
         engine.clear_damage();
-        layer.set_blend_mode(layers::types::BlendMode::BackgroundBlur);
+        layer.set_blend_mode(lay_rs::types::BlendMode::BackgroundBlur);
         layer.set_opacity(0.1, None);
 
         engine.update(0.016);
@@ -316,8 +323,8 @@ mod tests {
         engine.scene_add_layer(wrap.clone());
 
         let layer = engine.new_layer();
-        layer.set_layout_style(layers::taffy::Style {
-            position: layers::taffy::Position::Absolute,
+        layer.set_layout_style(lay_rs::taffy::Style {
+            position: lay_rs::taffy::Position::Absolute,
             ..Default::default()
         });
         layer.set_position((100.0, 100.0), None);
@@ -342,7 +349,7 @@ mod tests {
         assert_eq!(scene_damage, skia_safe::Rect::from_xywh(0.0, 0.0, 0.0, 0.0));
 
         engine.clear_damage();
-        layer.set_blend_mode(layers::types::BlendMode::BackgroundBlur);
+        layer.set_blend_mode(lay_rs::types::BlendMode::BackgroundBlur);
         wrap.set_opacity(1.0, None);
 
         engine.update(0.016);
@@ -367,8 +374,8 @@ mod tests {
         engine.scene_add_layer(wrap.clone());
 
         let layer = engine.new_layer();
-        layer.set_layout_style(layers::taffy::Style {
-            position: layers::taffy::Position::Absolute,
+        layer.set_layout_style(lay_rs::taffy::Style {
+            position: lay_rs::taffy::Position::Absolute,
             ..Default::default()
         });
         layer.set_position((-50.0, -50.0), None);
@@ -403,8 +410,8 @@ mod tests {
         engine.scene_add_layer(wrap.clone());
         engine.scene_add_layer_to(layer.clone(), wrap.clone());
 
-        let draw_shadow = move |_: &layers::skia::Canvas, w: f32, h: f32| {
-            layers::skia::Rect::from_xywh(0.0, 0.0, w, h)
+        let draw_shadow = move |_: &lay_rs::skia::Canvas, w: f32, h: f32| {
+            lay_rs::skia::Rect::from_xywh(0.0, 0.0, w, h)
         };
         let tree = LayerTreeBuilder::default()
             .key("a")

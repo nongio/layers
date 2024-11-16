@@ -53,7 +53,8 @@ pub trait BuildLayerTree {
         viewlayer_tree: &LayerTree,
         cache_viewlayer: &mut HashMap<String, VecDeque<NodeRef>>,
     );
-    fn build_layer_tree(&self, viewlayer_tree: &LayerTree) {
+    fn build_layer_tree(&self, viewlayer_tree: impl AsRef<LayerTree>) {
+        let viewlayer_tree = viewlayer_tree.as_ref();
         self.build_layer_tree_internal(viewlayer_tree, &mut HashMap::new());
     }
 }
@@ -149,9 +150,10 @@ impl BuildLayerTree for Layer {
         let engine = scene_layer.engine;
         if let Some(layer_id) = layer_id {
             let mut current_scene_layers_children: HashSet<NodeId> = {
-                let arena = engine.scene.nodes.data();
-                let arena = arena.read().unwrap();
-                layer_id.0.children(&arena).collect()
+                let children = engine
+                    .scene
+                    .with_arena(|arena| layer_id.0.children(arena).collect());
+                children
             };
 
             let mut layer_view_map: HashMap<NodeRef, String> = HashMap::new();
@@ -174,7 +176,8 @@ impl BuildLayerTree for Layer {
                     let (child_layer_id, child_scene_layer) = child_layer_id
                         .and_then(|child_layer_id| {
                             // try to use existing layer
-                            let child_scene_node = engine.scene.get_node(child_layer_id).unwrap();
+                            let child_scene_node =
+                                engine.scene.get_node_sync(child_layer_id).unwrap();
                             if child_scene_node.is_removed() {
                                 return None;
                             }
@@ -191,7 +194,7 @@ impl BuildLayerTree for Layer {
                             // the child layer does not exist, or is removed
                             let layer = Layer::with_engine(engine.clone());
                             let id = engine.scene_add_layer(layer, Some(layer_id));
-                            let node = engine.scene.get_node(id).unwrap();
+                            let node = engine.scene.get_node_sync(id).unwrap();
 
                             (id, node.get().clone())
                         });
@@ -224,9 +227,7 @@ impl BuildLayerTree for Layer {
                 let scene_layer_ref = NodeRef(scene_layer_id);
 
                 let scene_layer = {
-                    let arena = engine.scene.nodes.data();
-                    let arena = arena.read().unwrap();
-                    let scene_node = arena.get(scene_layer_id).unwrap();
+                    let scene_node = engine.scene.get_node_sync(scene_layer_id).unwrap();
                     scene_node.get().clone()
                 };
                 // let transition = scene_layer.layer.set_size(
@@ -248,7 +249,7 @@ impl BuildLayerTree for Layer {
                 // let scene_layer_clone = scene_layer.clone();
                 // scene_layer.layer.on_finish(transition, move |_| {
 
-                scene_layer.delete();
+                scene_layer.mark_for_deletion();
                 // });
             }
         }

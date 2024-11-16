@@ -11,10 +11,13 @@ use skia_safe::{
 };
 use std::{cell::Cell, io::Write};
 
-use crate::engine::{
-    node::{DrawCacheManagement, SceneNode},
-    scene::Scene,
-    NodeRef,
+use crate::{
+    drawing::scene::set_node_transform,
+    engine::{
+        node::{DrawCacheManagement, SceneNode},
+        scene::Scene,
+        NodeRef,
+    },
 };
 use crate::{drawing::scene::DrawScene, layers::layer::render_layer, prelude::render_node_tree};
 
@@ -105,6 +108,7 @@ impl SkiaFboRenderer {
 }
 
 impl DrawScene for SkiaFboRenderer {
+    #[profiling::function]
     fn draw_scene(&self, scene: &Scene, root_id: NodeRef, damage: Option<skia_safe::Rect>) {
         let mut surface = self.surface();
         let mut canvas = surface.canvas();
@@ -112,11 +116,13 @@ impl DrawScene for SkiaFboRenderer {
         if let Some(damage) = damage {
             canvas.clip_rect(damage, None, None);
         }
-        let arena = scene.nodes.data();
-        let arena = &*arena.read().unwrap();
-        if let Some(_root) = scene.get_node(root_id) {
-            render_node_tree(root_id, arena, &mut canvas, 1.0);
-        }
+        scene.with_arena(|arena| {
+            if let Some(root) = scene.get_node_sync(root_id) {
+                let root = root.get();
+                set_node_transform(root, canvas);
+                render_node_tree(root_id, arena, &mut canvas, 1.0);
+            }
+        });
         canvas.restore_to_count(save_point);
         // surface.flush_and_submit();
 

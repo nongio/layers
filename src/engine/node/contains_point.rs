@@ -1,4 +1,5 @@
-use skia_safe::{Contains, Point as SkiaPoint};
+use skia_safe::Contains;
+use skia_safe::Point as SkiaPoint;
 
 use crate::types::*;
 

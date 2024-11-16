@@ -8,7 +8,7 @@ use glutin::{
     GlProfile,
 };
 
-use layers::{
+use lay_rs::{
     prelude::*,
     skia::{self, Color4f, ColorType},
     types::Size,
@@ -77,13 +77,13 @@ fn main() {
         .unwrap_or(0);
     let pixel_format: usize = pixel_format.stencil_bits.try_into().unwrap();
 
-    let mut skia_renderer = layers::renderer::skia_fbo::SkiaFboRenderer::create(
+    let mut skia_renderer = lay_rs::renderer::skia_fbo::SkiaFboRenderer::create(
         window_size.width as i32,
         window_size.height as i32,
         sample_count,
         pixel_format,
         ColorType::RGBA8888,
-        layers::skia::gpu::SurfaceOrigin::BottomLeft,
+        lay_rs::skia::gpu::SurfaceOrigin::BottomLeft,
         0_u32,
     );
 
@@ -95,7 +95,7 @@ fn main() {
     let root_layer = engine.new_layer();
 
     root_layer.set_size(
-        layers::types::Size::points(window_width as f32 * 2.0, window_height as f32 * 2.0),
+        lay_rs::types::Size::points(window_width as f32 * 2.0, window_height as f32 * 2.0),
         None,
     );
     root_layer.set_background_color(
@@ -115,7 +115,7 @@ fn main() {
     engine.scene_add_layer(root_layer.clone());
 
     let other = engine.new_layer();
-    other.set_size(layers::types::Size::points(100.0, 100.0), None);
+    other.set_size(lay_rs::types::Size::points(100.0, 100.0), None);
     other.set_background_color(
         PaintColor::Solid {
             color: Color::new_rgba255(255, 0, 0, 255),
@@ -137,7 +137,7 @@ fn main() {
         },
         None,
     );
-    inner_content_layer.set_size(layers::types::Size::points(600.0, 600.0), None);
+    inner_content_layer.set_size(lay_rs::types::Size::points(600.0, 600.0), None);
     inner_content_layer.set_background_color(
         PaintColor::Solid {
             color: Color::new_rgba255(255, 255, 0, 100),
@@ -145,7 +145,7 @@ fn main() {
         None,
     );
     inner_content_layer.set_border_corner_radius(BorderRadius::new_single(1.0), None);
-    content_layer.set_size(layers::types::Size::points(620.0, 620.0), None);
+    content_layer.set_size(lay_rs::types::Size::points(620.0, 620.0), None);
     content_layer.set_background_color(
         PaintColor::Solid {
             color: Color::new_rgba255(255, 255, 255, 255),
@@ -161,9 +161,9 @@ fn main() {
     engine.scene_add_layer(content_layer.clone());
     engine.scene_add_layer_to(inner_content_layer.clone(), content_layer.id());
     inner_content_layer.set_draw_content(
-        |canvas: &layers::skia::Canvas, width, height| -> layers::skia::Rect {
+        |canvas: &lay_rs::skia::Canvas, width, height| -> lay_rs::skia::Rect {
             draw(canvas, width, height);
-            layers::skia::Rect::from_wh(width, height)
+            lay_rs::skia::Rect::from_wh(width, height)
         },
     );
 
@@ -187,13 +187,13 @@ fn main() {
                     env.windowed_context.resize(physical_size);
 
                     let size = env.windowed_context.window().inner_size();
-                    skia_renderer = layers::renderer::skia_fbo::SkiaFboRenderer::create(
+                    skia_renderer = lay_rs::renderer::skia_fbo::SkiaFboRenderer::create(
                         size.width as i32,
                         size.height as i32,
                         sample_count,
                         pixel_format,
                         ColorType::RGBA8888,
-                        layers::skia::gpu::SurfaceOrigin::BottomLeft,
+                        lay_rs::skia::gpu::SurfaceOrigin::BottomLeft,
                         0_u32,
                     );
                     let _transition = root_layer
@@ -251,9 +251,9 @@ fn main() {
                                     Some(Transition::ease_in_quad(2.0)),
                                 );
                                 inner_content_layer.set_draw_content(
-                                    move |canvas: &layers::skia::Canvas, width, height| -> layers::skia::Rect {
+                                    move |canvas: &lay_rs::skia::Canvas, width, height| -> lay_rs::skia::Rect {
                                         draw(canvas, width, height);
-                                        layers::skia::Rect::from_wh(w, h)
+                                        lay_rs::skia::Rect::from_wh(w, h)
                                     },
                                 );
                             }

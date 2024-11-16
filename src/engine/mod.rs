@@ -7,6 +7,7 @@
 //! - The *draw* step generates a displaylist
 //! - The *render* step uses the displaylist to generate a texture of the node
 //! - The *compose* step generates the final image using the textures
+//!
 //! The `LayersEngine` is the main engine responsible for managing layers and rendering.
 //!
 //! # Usage:
@@ -17,6 +18,7 @@
 //! engine.render();
 //! ```
 pub use layers_engine::LayersEngine;
+pub use node::SceneNode;
 
 mod layers_engine;
 mod stages;
@@ -54,7 +56,7 @@ use std::{
 use self::{
     animation::{Animation, Transition},
     command::NoopChange,
-    node::{DrawCacheManagement, RenderableFlags, SceneNode},
+    node::{DrawCacheManagement, RenderableFlags},
     scene::Scene,
     stages::{
         cleanup_animations, cleanup_nodes, cleanup_transactions, execute_transactions,
@@ -394,9 +396,9 @@ impl Engine {
         });
         // detach the node from the scene
         {
-            let nodes = self.scene.nodes.data();
-            let mut arena = nodes.write().unwrap();
-            id.0.detach(&mut arena);
+            self.scene.with_arena_mut(|arena| {
+                id.0.detach(arena);
+            });
         }
 
         // set the new root
@@ -438,7 +440,7 @@ impl Engine {
                 id
             });
 
-            let new_parent_node = self.scene.get_node(new_parent).unwrap();
+            let new_parent_node = self.scene.get_node_sync(new_parent).unwrap();
             let new_parent_node = new_parent_node.get();
             new_parent_node.set_need_layout(true);
 
@@ -503,20 +505,20 @@ impl Engine {
         node
     }
     pub fn mark_for_delete(&self, layer: NodeRef) {
-        let node = self.scene.get_node(layer).unwrap();
+        let node = self.scene.get_node_sync(layer).unwrap();
         let node = node.get();
-        node.delete();
+        node.mark_for_deletion();
     }
     pub(crate) fn scene_remove_layer(&self, layer: impl Into<Option<NodeRef>>) {
         let layer_id: Option<NodeRef> = layer.into();
         if let Some(layer_id) = layer_id {
             {
-                if let Some(node) = self.scene.get_node(layer_id) {
+                if let Some(node) = self.scene.get_node_sync(layer_id) {
                     let parent = node.parent();
                     let node = node.get();
                     self.scene.remove(layer_id);
                     if let Some(parent) = parent {
-                        if let Some(parent) = self.scene.get_node(parent) {
+                        if let Some(parent) = self.scene.get_node_sync(parent) {
                             let parent = parent.get();
                             parent.set_need_layout(true);
 
@@ -535,10 +537,10 @@ impl Engine {
         }
     }
     pub fn scene_get_node(&self, node: &NodeRef) -> Option<TreeStorageNode<SceneNode>> {
-        self.scene.get_node(*node)
+        self.scene.get_node_sync(*node)
     }
     pub fn scene_get_node_parent(&self, node: &NodeRef) -> Option<NodeRef> {
-        let node = self.scene.get_node(*node)?;
+        let node = self.scene.get_node_sync(*node)?;
         let parent = node.parent();
         parent.map(NodeRef)
     }
@@ -552,7 +554,6 @@ impl Engine {
         autostart: bool,
     ) -> AnimationRef {
         let start = self.now() + transition.delay;
-
         self.add_animation(
             Animation {
                 start,
@@ -564,48 +565,25 @@ impl Engine {
     }
 
     pub fn add_animation(&self, animation: Animation, autostart: bool) -> AnimationRef {
-        AnimationRef(self.animations.insert(AnimationState {
+        let aid = self.animations.insert(AnimationState {
             animation,
             progress: 0.0,
             time: 0.0,
             is_running: autostart,
             is_finished: false,
             is_started: false,
-        }))
+        });
+        AnimationRef(aid)
     }
     pub fn start_animation(&self, animation: AnimationRef, delay: f32) {
-        let animations = self.animations.data();
-        let mut animations = animations.write().unwrap();
-        if let Some(animation_state) = animations.get_mut(&animation.0) {
-            animation_state.animation.start = self.timestamp.read().unwrap().0 + delay;
-            animation_state.is_running = true;
-            animation_state.is_finished = false;
-            animation_state.progress = 0.0;
-        }
-    }
-
-    pub fn schedule_changes(
-        &self,
-        animated_changes: &[AnimatedNodeChange],
-        animation: impl Into<Option<AnimationRef>>,
-    ) -> Vec<TransactionRef> {
-        let animation = animation.into();
-        let mut inserted_transactions = Vec::with_capacity(animated_changes.len());
-        for animated_node_change in animated_changes {
-            let mut animated_node_change = animated_node_change.clone();
-            if animation.is_some() {
-                animated_node_change.animation_id = animation;
+        self.animations.with_data_mut(|animations| {
+            if let Some(animation_state) = animations.get_mut(&animation.0) {
+                animation_state.animation.start = self.timestamp.read().unwrap().0 + delay;
+                animation_state.is_running = true;
+                animation_state.is_finished = false;
+                animation_state.progress = 0.0;
             }
-            let value_id = animated_node_change.change.value_id();
-            let transaction_id = self.transactions.insert(animated_node_change.clone());
-            let transaction = TransactionRef {
-                id: transaction_id,
-                value_id,
-                engine_id: self.id,
-            };
-            inserted_transactions.push(transaction);
-        }
-        inserted_transactions
+        });
     }
 
     pub fn get_transaction_for_value(&self, value_id: usize) -> Option<AnimatedNodeChange> {
@@ -624,7 +602,7 @@ impl Engine {
         change: Arc<dyn SyncCommand>,
         animation_id: Option<AnimationRef>,
     ) -> TransactionRef {
-        let node = self.scene.nodes.get(target_id.0);
+        let node = self.scene.get_node_sync(target_id.0);
         if node.is_some() {
             let value_id: usize = change.value_id();
 
@@ -660,14 +638,41 @@ impl Engine {
             }
         }
     }
-
-    pub fn attach_animation(&self, transaction: TransactionRef, animation: AnimationRef) {
-        let transactions = self.transactions.data();
-        let mut transactions = transactions.write().unwrap();
-        if let Some(transaction) = transactions.get_mut(&transaction.value_id) {
-            transaction.animation_id = Some(animation);
-            // FIXME should cancel existing animation?
+    pub fn schedule_changes(
+        &self,
+        animated_changes: &[AnimatedNodeChange],
+        animation: impl Into<Option<AnimationRef>>,
+    ) -> Vec<TransactionRef> {
+        let animation = animation.into();
+        let mut inserted_transactions = Vec::with_capacity(animated_changes.len());
+        for animated_node_change in animated_changes {
+            // let mut animated_node_change = animated_node_change.clone();
+            // if animation.is_some() {
+            //     animated_node_change.animation_id = animation;
+            // }
+            // let value_id = animated_node_change.change.value_id();
+            // let transaction_id = self.transactions.insert(animated_node_change.clone());
+            // let transaction = TransactionRef {
+            //     id: transaction_id,
+            //     value_id,
+            //     engine_id: self.id,
+            // };
+            let transaction = self.schedule_change(
+                animated_node_change.node_id,
+                animated_node_change.change.clone(),
+                animation,
+            );
+            inserted_transactions.push(transaction);
         }
+        inserted_transactions
+    }
+    pub fn attach_animation(&self, transaction: TransactionRef, animation: AnimationRef) {
+        self.transactions.with_data_mut(|transactions| {
+            if let Some(transaction) = transactions.get_mut(&transaction.value_id) {
+                transaction.animation_id = Some(animation);
+                // FIXME should cancel existing animation?
+            }
+        });
     }
     pub fn cancel_animation(&self, animation: AnimationRef) {
         self.animations.with_data_mut(|d| {
@@ -739,17 +744,14 @@ impl Engine {
         // iterate in parallel over the nodes and
         // repaint if necessary
         let layout = self.layout_tree.read().unwrap();
-        let arena = self.scene.nodes.data();
-        let arena = arena.read().unwrap();
-
         let mut damage = skia_safe::Rect::default();
-
-        let node = self.scene_root.read().unwrap();
-
-        if let Some(root_id) = *node {
-            let (_, _, d) = update_node(&arena, &layout, root_id.0, None, false);
-            damage = d;
-        }
+        self.scene.with_arena(|arena| {
+            let node = self.scene_root.read().unwrap();
+            if let Some(root_id) = *node {
+                let (_, _, d) = update_node(arena, &layout, root_id.0, None, false);
+                damage = d;
+            }
+        });
 
         damage
     }
@@ -779,16 +781,16 @@ impl Engine {
     }
 
     pub fn layer_at(&self, point: Point) -> Option<NodeRef> {
-        let arena = self.scene.nodes.data();
-        let arena = arena.read().unwrap();
         let mut result = None;
-        for node in arena.iter() {
-            let scene_node = node.get();
-            if scene_node.contains(point) {
-                let nodeid = arena.get_node_id(node).map(NodeRef);
-                result = nodeid;
+        self.scene.with_arena(|arena| {
+            for node in arena.iter() {
+                let scene_node = node.get();
+                if scene_node.contains(point) {
+                    let nodeid = arena.get_node_id(node).map(NodeRef);
+                    result = nodeid;
+                }
             }
-        }
+        });
         result
     }
     #[allow(clippy::unwrap_or_default)]
@@ -961,7 +963,7 @@ impl Engine {
         }
     }
     fn bubble_up_event(&self, node_id: NodeRef, event_type: &PointerEventType) {
-        if let Some(node) = self.scene.get_node(node_id.0) {
+        if let Some(node) = self.scene.get_node_sync(node_id.0) {
             if node.is_removed() {
                 return;
             }
@@ -1051,7 +1053,7 @@ impl Engine {
                         hover_children = true;
                     }
                 } else {
-                    let node = self.scene.get_node(node_id).unwrap().get().clone();
+                    let node = self.scene.get_node_sync(node_id).unwrap().get().clone();
                     if node.change_hover(false) {
                         if let Some(pointer_handler) = self.pointer_handlers.get(&node_id.into()) {
                             for handler in pointer_handler.on_out.values() {

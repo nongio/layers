@@ -1,8 +1,9 @@
 [package]
-name = "layers"
+name = "lay-rs"
 version = "0.4.0"
 edition = "2021"
 build = "build.rs"
+rust-version = "1.82.0"
 
 [lib]
 crate-type = ["lib", "cdylib"] # Creates dynamic lib
@@ -31,36 +32,28 @@ serde_json = { version = "1.0" }
 puffin_http = { version = "0.13", optional = true }
 profiling = { version = "1.0" }
 bezier_easing = "0.1.1"
+tokio = { version = "1", features = ["full"] }
+
 
 [dependencies.skia-safe]
-path = "../rust-skia/skia-safe"
-# version = "=0.70"
-# this set of features is required for enabling to use the pre-built
-# binaries of skia-safe
+# git = "https://github.com/rust-skia/rust-skia"
+version = "=0.80"
+# path = "../rust-skia/skia-safe"
 [dependencies.skia-bindings]
-# version = "=0.70"
-path = "../rust-skia/skia-bindings"
+# git = "https://github.com/rust-skia/rust-skia"
+version = "=0.80"
+# path = "../rust-skia/skia-bindings"
 
 [target.'cfg(target_os = "linux")'.dependencies.skia-safe]
-# path = "../rust-skia"
-path = "../rust-skia/skia-safe"
-
-# version = "=0.70"
-features = [
-    "binary-cache",
-    "egl",
-    "gl",
-    "svg",
-    "textlayout",
-    "vulkan",
-    "wayland",
-    "webp",
-    "x11",
-]
+# git = "https://github.com/rust-skia/rust-skia"
+# path = "../rust-skia/skia-safe"
+version = "=0.80"
+features = ["binary-cache", "all-linux"]
 
 [target.'cfg(target_os = "macos")'.dependencies.skia-safe]
-path = "../rust-skia/skia-safe"
-# version = "=0.70"
+# git = "https://github.com/rust-skia/rust-skia"
+version = "=0.80"
+# path = "../rust-skia/skia-safe"
 features = ["binary-cache", "gl", "metal", "svg", "textlayout", "webp"]
 
 [dev-dependencies]
@@ -100,4 +93,5 @@ members = [
     "examples/hello-dom",
     "examples/hello-content",
     "examples/hello-filters",
+    "examples/hello-portals",
 ]

@@ -7,8 +7,8 @@ use glutin::event::WindowEvent;
 use glutin::event_loop::{ControlFlow, EventLoop};
 use glutin::window::WindowBuilder;
 use glutin::GlProfile;
-use layers::types::Size;
-use layers::{prelude::*, skia::ColorType};
+use lay_rs::types::Size;
+use lay_rs::{prelude::*, skia::ColorType};
 
 #[allow(unused_assignments)]
 #[tokio::main]
@@ -58,13 +58,13 @@ async fn main() {
 
     env.windowed_context = unsafe { env.windowed_context.make_current().unwrap() };
 
-    let mut skia_renderer = layers::renderer::skia_fbo::SkiaFboRenderer::create(
+    let mut skia_renderer = lay_rs::renderer::skia_fbo::SkiaFboRenderer::create(
         size.width as i32,
         size.height as i32,
         sample_count,
         pixel_format,
         ColorType::RGBA8888,
-        layers::skia::gpu::SurfaceOrigin::BottomLeft,
+        lay_rs::skia::gpu::SurfaceOrigin::BottomLeft,
         0_u32,
     );
 
@@ -136,14 +136,14 @@ async fn main() {
     );
 
     let data = std::fs::read("./assets/grid.jpg").unwrap();
-    let data = layers::skia::Data::new_copy(&data);
-    let image = layers::skia::Image::from_encoded(data).unwrap();
+    let data = lay_rs::skia::Data::new_copy(&data);
+    let image = lay_rs::skia::Image::from_encoded(data).unwrap();
 
-    test_layer.set_draw_content(move |canvas: &layers::skia::Canvas, w, h| {
-        let paint = layers::skia::Paint::new(layers::skia::Color4f::new(1.0, 1.0, 1.0, 1.0), None);
+    test_layer.set_draw_content(move |canvas: &lay_rs::skia::Canvas, w, h| {
+        let paint = lay_rs::skia::Paint::new(lay_rs::skia::Color4f::new(1.0, 1.0, 1.0, 1.0), None);
 
         canvas.draw_image(&image, (6.0, 6.0), Some(&paint));
-        layers::skia::Rect::from_xywh(0.0, 0.0, w, h)
+        lay_rs::skia::Rect::from_xywh(0.0, 0.0, w, h)
     });
 
     test_layer.set_border_width(5.0, None);
@@ -153,8 +153,8 @@ async fn main() {
     const SHADERFILE: &str = "./assets/genie.sksl";
     let sksl = read_to_string(SHADERFILE).expect("Failed to read SKSL file");
 
-    let runtime_effect = layers::skia::RuntimeEffect::make_for_shader(sksl, None).unwrap();
-    let mut builder = layers::skia::runtime_effect::RuntimeShaderBuilder::new(runtime_effect);
+    let runtime_effect = lay_rs::skia::RuntimeEffect::make_for_shader(sksl, None).unwrap();
+    let mut builder = lay_rs::skia::runtime_effect::RuntimeShaderBuilder::new(runtime_effect);
 
     let mut target_x = 300.0;
     let mut target_y = 1000.0;
@@ -175,9 +175,9 @@ async fn main() {
 
     const ANIMATION_STEP: f32 = 0.01;
 
-    let font_mgr = layers::skia::FontMgr::default();
+    let font_mgr = lay_rs::skia::FontMgr::default();
     let typeface = font_mgr
-        .match_family_style("Inter", layers::skia::FontStyle::default())
+        .match_family_style("Inter", lay_rs::skia::FontStyle::default())
         .unwrap();
     let mut forward = true;
     events_loop.run(move |event, _, control_flow| {
@@ -197,13 +197,13 @@ async fn main() {
                     if current_surface.width() != size.width as i32
                         || current_surface.height() != size.height as i32
                     {
-                        skia_renderer = layers::renderer::skia_fbo::SkiaFboRenderer::create(
+                        skia_renderer = lay_rs::renderer::skia_fbo::SkiaFboRenderer::create(
                             (size.width) as i32,
                             (size.height) as i32,
                             sample_count,
                             pixel_format,
                             ColorType::RGBA8888,
-                            layers::skia::gpu::SurfaceOrigin::BottomLeft,
+                            lay_rs::skia::gpu::SurfaceOrigin::BottomLeft,
                             0_u32,
                         );
                         root.set_size(Size::points(size.width as f32, size.height as f32), None);
@@ -264,10 +264,10 @@ async fn main() {
                                         .expect("Failed to read SKSL file");
 
                                     let runtime_effect =
-                                        layers::skia::RuntimeEffect::make_for_shader(sksl, None)
+                                        lay_rs::skia::RuntimeEffect::make_for_shader(sksl, None)
                                             .unwrap();
                                     builder =
-                                        layers::skia::runtime_effect::RuntimeShaderBuilder::new(
+                                        lay_rs::skia::runtime_effect::RuntimeShaderBuilder::new(
                                             runtime_effect,
                                         );
                                     progress = 0.0;
@@ -340,17 +340,17 @@ async fn main() {
                 let _ = builder
                     .set_uniform_float("dst_bounds", &[target_x, target_y, target_w, target_h]);
 
-                filter_shader = layers::skia::image_filters::runtime_shader(&builder, "", None);
+                filter_shader = lay_rs::skia::image_filters::runtime_shader(&builder, "", None);
 
                 test_layer.set_image_filter(filter_shader.clone());
-                let bounds = layers::skia::Rect::join2(
-                    layers::skia::Rect::from_xywh(
+                let bounds = lay_rs::skia::Rect::join2(
+                    lay_rs::skia::Rect::from_xywh(
                         0.0,
                         0.0,
                         render_layer.width(),
                         render_layer.height(),
                     ),
-                    layers::skia::Rect::from_xywh(
+                    lay_rs::skia::Rect::from_xywh(
                         target_x - render_layer.x(),
                         target_y - render_layer.y(),
                         target_w,
@@ -375,14 +375,14 @@ async fn main() {
 
                         let mut surface = skia_renderer.surface();
 
-                        let bounds = layers::skia::Rect::from_wh(
+                        let bounds = lay_rs::skia::Rect::from_wh(
                             surface.width() as f32,
                             surface.height() as f32,
                         );
                         let canvas = surface.canvas();
 
-                        let paint = layers::skia::Paint::new(
-                            layers::skia::Color4f::new(1.0, 1.0, 1.0, 1.0),
+                        let paint = lay_rs::skia::Paint::new(
+                            lay_rs::skia::Color4f::new(1.0, 1.0, 1.0, 1.0),
                             None,
                         );
                         // // draw background white
@@ -392,13 +392,13 @@ async fn main() {
                         skia_renderer.draw_scene(engine.scene(), root, None);
 
                         // draw debug text
-                        let mut paint = layers::skia::Paint::new(
-                            layers::skia::Color4f::new(1.0, 1.0, 1.0, 1.0),
+                        let mut paint = lay_rs::skia::Paint::new(
+                            lay_rs::skia::Color4f::new(1.0, 1.0, 1.0, 1.0),
                             None,
                         );
-                        paint.set_color4f(layers::skia::Color4f::new(0.0, 0.0, 0.0, 1.0), None);
+                        paint.set_color4f(lay_rs::skia::Color4f::new(0.0, 0.0, 0.0, 1.0), None);
 
-                        let font = layers::skia::Font::from_typeface_with_params(
+                        let font = lay_rs::skia::Font::from_typeface_with_params(
                             typeface.clone(),
                             40.0,
                             1.0,
@@ -415,14 +415,14 @@ async fn main() {
                         canvas.draw_str(format!("y:{}", target_y), (60.0, 140.0), &font, &paint);
 
                         // // draw target position
-                        let mut paint = layers::skia::Paint::default();
+                        let mut paint = lay_rs::skia::Paint::default();
 
                         paint.set_stroke(true);
                         paint.set_stroke_width(3.0);
-                        paint.set_color4f(layers::skia::Color4f::new(0.0, 0.0, 0.0, 1.0), None);
+                        paint.set_color4f(lay_rs::skia::Color4f::new(0.0, 0.0, 0.0, 1.0), None);
 
                         canvas.draw_rect(
-                            layers::skia::Rect::from_xywh(target_x, target_y, target_w, target_h),
+                            lay_rs::skia::Rect::from_xywh(target_x, target_y, target_w, target_h),
                             &paint,
                         );
 

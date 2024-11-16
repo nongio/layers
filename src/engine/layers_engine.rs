@@ -6,7 +6,7 @@ use std::{
     },
 };
 
-use indextree::NodeId;
+use indextree::{Arena, NodeId};
 
 use crate::{
     layers::layer::{state::LayerDataProps, ModelLayer},
@@ -23,7 +23,7 @@ use super::{
 /// Public API for the Layers Engine
 /// ## Usage: Setup a basic scene with a root layer
 /// ```rust
-/// use layers::prelude::*;
+/// use lay_rs::prelude::*;
 ///
 /// let engine = LayersEngine::new(800.0, 600.0);
 /// let layer = engine.new_layer();
@@ -50,7 +50,7 @@ use super::{
 /// ```
 /// ## Usage: Update the engine
 /// ```rust
-/// use layers::prelude::*;
+/// use lay_rs::prelude::*;
 ///
 /// let engine = LayersEngine::new(800.0, 600.0);
 /// // setup the scene...
@@ -107,6 +107,7 @@ impl LayersEngine {
             hidden: Arc::new(AtomicBool::new(false)),
             pointer_events: Arc::new(AtomicBool::new(true)),
             image_cache: Arc::new(AtomicBool::new(false)),
+            picture_cache: Arc::new(AtomicBool::new(true)),
             state: Arc::new(RwLock::new(LayerDataProps::default())),
             effect: Arc::new(RwLock::new(None)),
         }
@@ -316,5 +317,32 @@ impl LayersEngine {
     /// Can be accessed at `http://localhost:8000/client/index.html`
     pub fn start_debugger(&self) {
         layers_debug_server::start_debugger_server(self.engine.clone());
+    }
+
+    pub fn layer_as_content(&self, layer: &Layer) -> ContentDrawFunction {
+        let layer_ref = layer.clone();
+        let engine_ref = self.clone();
+        let draw_function = move |c: &skia::Canvas, w: f32, h: f32| {
+            let id = layer_ref.id().unwrap();
+            let scene = engine_ref.scene();
+            scene.with_arena(|arena| {
+                render_node_tree(id, arena, c, 1.0);
+            });
+            skia::Rect::from_xywh(0.0, 0.0, w, h)
+        };
+        ContentDrawFunction::from(draw_function)
+    }
+    pub fn replicate_layer(&self, layer: &Layer) -> Layer {
+        let new_layer = self.new_layer();
+        new_layer.set_content_cache(false);
+        let layer_ref = layer.clone();
+
+        let draw_function = move |c: &skia::Canvas, w: f32, h: f32, arena: &Arena<SceneNode>| {
+            let id = layer_ref.id().unwrap();
+            render_node_tree(id, arena, c, 1.0);
+            skia::Rect::from_xywh(0.0, 0.0, w, h)
+        };
+        new_layer.set_draw_content_internal(draw_function);
+        new_layer
     }
 }

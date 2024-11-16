@@ -7,8 +7,8 @@ use glutin::event::WindowEvent;
 use glutin::event_loop::{ControlFlow, EventLoop};
 use glutin::window::WindowBuilder;
 use glutin::GlProfile;
-use lay_rs::types::Size;
-use lay_rs::{prelude::*, skia};
+use lay_rs::{drawing::paint_node_tree, layer_trees, prelude::*, skia};
+use lay_rs::{skia::Canvas, types::Size};
 
 #[allow(unused_assignments)]
 #[tokio::main]
@@ -67,6 +67,9 @@ async fn main() {
         skia::gpu::SurfaceOrigin::BottomLeft,
         0_u32,
     );
+    profiling::register_thread!("Main Thread");
+    let _server = puffin_http::Server::new(&format!("0.0.0.0:{}", puffin_http::DEFAULT_PORT)); //.unwrap();
+    profiling::puffin::set_scopes_on(true);
 
     let mut _mouse_x = 0.0;
     let mut _mouse_y = 0.0;
@@ -75,26 +78,20 @@ async fn main() {
     let window_height = window_height as f32;
     let engine = LayersEngine::new(window_width * 6.0, window_height * 6.0);
     let root = engine.new_layer();
-    root.set_size(
-        Size {
-            width: taffy::Dimension::Length(window_width * 2.0),
-            height: taffy::Dimension::Length(window_height * 2.0),
-        },
-        None,
-    );
-    root.set_background_color(
-        PaintColor::Solid {
-            color: Color::new_rgba255(180, 180, 180, 0),
-        },
-        None,
-    );
-    root.set_border_corner_radius(10.0, None);
-    root.set_layout_style(taffy::Style {
-        position: taffy::Position::Absolute,
-        ..Default::default()
-    });
-    root.set_key("root");
     engine.scene_set_root(root.clone());
+
+    let root_tree = LayerTreeBuilder::default()
+        .key("root")
+        .size(Size::points(window_width * 2.0, window_height * 2.0))
+        .background_color(Color::new_rgba255(180, 180, 180, 0))
+        .border_corner_radius(BorderRadius::new_single(10.0))
+        .layout_style(taffy::Style {
+            position: taffy::Position::Absolute,
+            ..Default::default()
+        })
+        .build()
+        .unwrap();
+    root.build_layer_tree(&root_tree);
 
     let instant = std::time::Instant::now();
     let mut update_frame = 0;
@@ -103,25 +100,82 @@ async fn main() {
 
     let layer = engine.new_layer();
     layer.set_anchor_point((0.5, 0.5), None);
-    layer.set_key("test_layer");
-    layer.set_position((100.0, 0.0), None);
-    layer.set_size(Size::points(100.0, 100.0), None);
-    layer.set_background_color(
-        PaintColor::Solid {
-            color: Color::new_rgba255(255, 0, 0, 255),
-        },
-        None,
-    );
-    layer.set_border_width(5.0, None);
-    layer.set_border_color(
-        PaintColor::Solid {
-            color: Color::new_rgba255(0, 0, 0, 255),
-        },
-        None,
-    );
-    layer.set_border_corner_radius(BorderRadius::new_single(50.0), None);
-
     engine.scene_add_layer(layer.clone());
+
+    layer.build_layer_tree(
+        LayerTreeBuilder::default()
+            .key("test_layer")
+            .position(Point::new(600.0, 500.0))
+            .size(Size::points(500.0, 300.0))
+            .background_color(Color::new_hex("#7FCCFF"))
+            .border_width((5.0, None))
+            .border_color(Color::new_rgba255(0, 0, 0, 100))
+            .border_corner_radius(BorderRadius::new_single(50.0))
+            .image_cache(true)
+            .content(Some(move |c: &Canvas, w: f32, h: f32| {
+                let mut text_style = skia::textlayout::TextStyle::new();
+                text_style.set_font_size(60.0);
+                let foreground_paint =
+                    skia::Paint::new(skia::Color4f::new(0.0, 0.0, 0.0, 1.0), None);
+                text_style.set_foreground_paint(&foreground_paint);
+                text_style.set_font_families(&["Inter"]);
+
+                let font_mgr = skia::FontMgr::new();
+                let type_face_font_provider = skia::textlayout::TypefaceFontProvider::new();
+                let mut font_collection = skia::textlayout::FontCollection::new();
+                font_collection
+                    .set_asset_font_manager(Some(type_face_font_provider.clone().into()));
+                font_collection.set_dynamic_font_manager(font_mgr.clone());
+
+                let mut paragraph_style = skia::textlayout::ParagraphStyle::new();
+
+                paragraph_style.set_text_style(&text_style);
+                paragraph_style.set_max_lines(2);
+                paragraph_style.set_text_align(skia::textlayout::TextAlign::Center);
+                paragraph_style.set_text_direction(skia::textlayout::TextDirection::LTR);
+                paragraph_style.set_ellipsis("…");
+                let mut paragraph =
+                    skia::textlayout::ParagraphBuilder::new(&paragraph_style, font_collection)
+                        .add_text("Hello portal!\n👋 🚪")
+                        .build();
+
+                paragraph.layout(w);
+                paragraph.paint(c, (0.0, 20.0));
+
+                skia::Rect::from_xywh(0.0, 0.0, w, h)
+            }))
+            .build()
+            .unwrap(),
+    );
+    let layer3 = engine.new_layer();
+    layer.add_sublayer(layer3.clone());
+    layer3.build_layer_tree(
+        LayerTreeBuilder::default()
+            .key("circle")
+            .position((Point { x: 0.0, y: 0.0 }, None))
+            .size((
+                Size {
+                    width: taffy::Dimension::Length(50.0),
+                    height: taffy::Dimension::Length(50.0),
+                },
+                None,
+            ))
+            .background_color(Color::new_hex("#ff0000"))
+            .border_corner_radius(BorderRadius::new_single(25.0))
+            .build()
+            .unwrap(),
+    );
+
+    let layer2 = engine.new_layer();
+    layer2.set_key("test_layer2");
+    layer2.set_position((500.0, 600.0), None);
+    layer2.set_size(Size::points(500.0, 300.0), None);
+    layer2.set_background_color(Color::new_hex("#DC9CFF"), None);
+    layer2.set_scale((1.2, 1.2), None);
+    layer2.set_content_cache(false);
+    layer2.set_draw_content(engine.layer_as_content(&layer));
+
+    engine.scene_add_layer(layer2.clone());
 
     // engine.start_debugger();
     let mut mass = 1.0;
@@ -185,43 +239,62 @@ async fn main() {
                         let animation_finished = animation_finished.clone();
                         let animation_progress = animation_progress.clone();
 
-                        layer
-                            .set_position(
-                                (_mouse_x as f32, _mouse_y as f32),
-                                Transition {
-                                    delay: 0.0,
-                                    timing: TimingFunction::Spring(
-                                        Spring::with_duration_and_bounce(1.0, 0.4),
-                                    ),
-                                },
-                            )
-                            .on_start(
-                                move |_l: &Layer, _p| {
-                                    // println!("[{}] animation start", run);
+                        layer.set_position(
+                            (_mouse_x as f32, _mouse_y as f32),
+                            Transition {
+                                delay: 0.0,
+                                timing: TimingFunction::Spring(Spring::with_duration_and_bounce(
+                                    1.0, 0.4,
+                                )),
+                            },
+                        );
+                        // .on_start(
+                        //     move |_l: &Layer, _p| {
+                        //         // println!("[{}] animation start", run);
 
-                                    animation_start
-                                        .store(true, std::sync::atomic::Ordering::SeqCst);
-                                },
-                                true,
-                            )
-                            .on_update(
-                                move |_l: &Layer, p| {
-                                    // println!("[{}] animation update: {}", run2, p);
-                                    animation_progress.store(
-                                        (p * 100.0) as i32,
-                                        std::sync::atomic::Ordering::SeqCst,
-                                    );
-                                },
-                                false,
-                            )
-                            .on_finish(
-                                move |_l: &Layer, _p| {
-                                    // println!("[{}], animation finished: {}", run3, p);
-                                    animation_finished
-                                        .store(true, std::sync::atomic::Ordering::SeqCst);
-                                },
-                                true,
-                            );
+                        //         animation_start
+                        //             .store(true, std::sync::atomic::Ordering::SeqCst);
+                        //     },
+                        //     true,
+                        // )
+                        // .on_update(
+                        //     move |_l: &Layer, p| {
+                        //         // println!("[{}] animation update: {}", run2, p);
+                        //         animation_progress.store(
+                        //             (p * 100.0) as i32,
+                        //             std::sync::atomic::Ordering::SeqCst,
+                        //         );
+                        //     },
+                        //     false,
+                        // )
+                        // .on_finish(
+                        //     move |_l: &Layer, _p| {
+                        //         // println!("[{}], animation finished: {}", run3, p);
+                        //         animation_finished
+                        //             .store(true, std::sync::atomic::Ordering::SeqCst);
+                        //     },
+                        //     true,
+                        // );
+
+                        layer3.set_scale(
+                            (1.0, 1.0),
+                            Transition {
+                                delay: 0.0,
+                                timing: TimingFunction::Spring(Spring::with_duration_and_bounce(
+                                    0.5, 0.4,
+                                )),
+                            },
+                        );
+                    } else {
+                        layer3.set_scale(
+                            (2.0, 2.0),
+                            Transition {
+                                delay: 0.0,
+                                timing: TimingFunction::Spring(Spring::with_duration_and_bounce(
+                                    0.5, 0.4,
+                                )),
+                            },
+                        );
                     }
                 }
                 WindowEvent::KeyboardInput {
@@ -238,6 +311,16 @@ async fn main() {
                                     let dt = 0.016;
                                     engine.update(dt);
                                     env.windowed_context.window().request_redraw();
+
+                                    layer2.set_scale(
+                                        (2.0, 2.0),
+                                        Transition {
+                                            delay: 0.0,
+                                            timing: TimingFunction::Spring(
+                                                Spring::with_duration_and_bounce(1.0, 0.4),
+                                            ),
+                                        },
+                                    );
                                 }
                             }
 
@@ -297,7 +380,9 @@ async fn main() {
             }
             glutin::event::Event::RedrawRequested(_) => {
                 if draw_frame != update_frame {
+                    profiling::puffin::GlobalProfiler::lock().new_frame();
                     if let Some(root) = engine.scene_root() {
+                        profiling::puffin::profile_scope!("draw_frame");
                         let skia_renderer = skia_renderer.get_mut();
                         // let damage_rect = engine.damage();
 
@@ -374,6 +459,7 @@ async fn main() {
                     env.windowed_context.swap_buffers().unwrap();
                     draw_frame = update_frame;
                 }
+                profiling::finish_frame!();
             }
             _ => {}
         }

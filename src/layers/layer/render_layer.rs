@@ -1,5 +1,9 @@
-use super::model::{ContentDrawFunction, ModelLayer};
-use crate::types::{BlendMode, Color, Point, *};
+use super::model::{ContentDrawFunctionInternal, ModelLayer};
+use crate::{
+    engine::SceneNode,
+    types::{BlendMode, Color, Point, *},
+};
+use indextree::Arena;
 use serde::{ser::SerializeStruct, Serialize};
 
 #[derive(Clone, Debug)]
@@ -28,9 +32,9 @@ pub struct RenderLayer {
     pub blend_mode: BlendMode,
     pub opacity: f32,
     pub premultiplied_opacity: f32,
-    content_draw_func: Option<ContentDrawFunction>,
-    pub content_damage: skia_safe::Rect,
+    pub content_draw_func: Option<ContentDrawFunctionInternal>,
     pub content: Option<Picture>,
+    pub content_damage: skia_safe::Rect,
 }
 
 impl RenderLayer {
@@ -41,6 +45,8 @@ impl RenderLayer {
         layout: &taffy::tree::Layout,
         matrix: Option<&M44>,
         context_opacity: f32,
+        cache_content: bool,
+        arena: &Arena<SceneNode>,
     ) {
         let key = model.key.read().unwrap().clone();
         let layout_position = layout.location;
@@ -123,18 +129,28 @@ impl RenderLayer {
 
         let content_draw_func = model.draw_content.read().unwrap();
         let content_draw_func = content_draw_func.as_ref();
-        if self.size != size || self.content_draw_func.as_ref() != content_draw_func {
-            if let Some(draw_func) = content_draw_func {
+
+        if cache_content {
+            if content_draw_func.is_some()
+                && ((self.size != size) || (self.content_draw_func.as_ref() != content_draw_func))
+            {
                 let mut recorder = skia_safe::PictureRecorder::new();
                 let canvas = recorder
                     .begin_recording(skia_safe::Rect::from_wh(size.width, size.height), None);
-                let caller = draw_func.0.clone();
-                let content_damage = caller(canvas, size.width, size.height);
+                let draw_func = content_draw_func.unwrap();
+                let caller = draw_func.0.as_ref();
+                let content_damage = caller(canvas, size.width, size.height, arena);
                 self.content_damage = content_damage;
                 self.content = recorder.finish_recording_as_picture(None);
+            }
+        } else {
+            self.content = None;
+            if let Some(draw_func) = content_draw_func {
+                let caller = draw_func.0.as_ref();
                 self.content_draw_func = Some(draw_func.clone());
             }
         }
+
         self.key = key;
         self.size = size;
         self.background_color = background_color;
@@ -166,6 +182,7 @@ impl RenderLayer {
         layout: &taffy::tree::Layout,
         matrix: Option<&M44>,
         context_opacity: f32,
+        arena: &Arena<SceneNode>,
     ) -> Self {
         let key = model.key.read().unwrap().clone();
         let layout_position = layout.location;
@@ -250,7 +267,7 @@ impl RenderLayer {
             let canvas =
                 recorder.begin_recording(skia_safe::Rect::from_wh(size.width, size.height), None);
             let caller = draw_func.0.clone();
-            caller(canvas, size.width, size.height);
+            caller(canvas, size.width, size.height, arena);
             content = recorder.finish_recording_as_picture(None);
             content_draw_func = Some(draw_func.clone());
         }

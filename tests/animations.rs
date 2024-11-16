@@ -1,4 +1,4 @@
-use layers::{
+use lay_rs::{
     engine::{animation::Transition, LayersEngine},
     prelude::{Layer, Spring, TimingFunction},
 };

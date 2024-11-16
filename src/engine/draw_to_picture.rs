@@ -1,8 +1,9 @@
+use indextree::Arena;
 use skia_safe::{Picture, PictureRecorder};
 
 use crate::layers::layer::render_layer::RenderLayer;
 
-use super::rendering::Drawable;
+use super::{rendering::Drawable, SceneNode};
 
 #[derive(Clone)]
 pub struct DrawDebugInfo {
@@ -12,14 +13,14 @@ pub struct DrawDebugInfo {
 }
 /// A trait for objects that can be drawn to a PictureRecorder.
 pub trait DrawToPicture {
-    fn draw_to_picture(&self) -> (Option<Picture>, skia_safe::Rect);
+    fn draw_to_picture(&self, arena: &Arena<SceneNode>) -> (Option<Picture>, skia_safe::Rect);
 }
 /// Drawable can be drawn to a picture.
 impl<T> DrawToPicture for T
 where
     T: Drawable,
 {
-    fn draw_to_picture(&self) -> (Option<Picture>, skia_safe::Rect) {
+    fn draw_to_picture(&self, arena: &Arena<SceneNode>) -> (Option<Picture>, skia_safe::Rect) {
         let mut recorder = PictureRecorder::new();
 
         // FIXME - this is a hack to make sure we don't clip the edges of the picture
@@ -30,7 +31,7 @@ where
             .with_outset((SAFE_MARGIN, SAFE_MARGIN));
 
         let canvas = recorder.begin_recording(bounds_safe, None);
-        let damage = self.draw(canvas);
+        let damage = self.draw(canvas, arena);
 
         (recorder.finish_recording_as_picture(None), damage)
     }

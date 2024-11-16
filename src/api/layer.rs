@@ -14,7 +14,7 @@
 
 // #[no_mangle]
 // pub extern "C" fn layer_backgroundcolor_to(
-//     layer: *const ModelLayer,
+//     layer: *const Layer,
 //     r: f64,
 //     g: f64,
 //     b: f64,
@@ -28,13 +28,7 @@
 //     layer.set_background_color(bg, Some(t));
 // }
 // #[no_mangle]
-// pub extern "C" fn layer_backgroundcolor_set(
-//     layer: *const ModelLayer,
-//     r: f64,
-//     g: f64,
-//     b: f64,
-//     a: f64,
-// ) {
+// pub extern "C" fn layer_backgroundcolor_set(layer: *const Layer, r: f64, g: f64, b: f64, a: f64) {
 //     let layer = unsafe { &*layer };
 //     let bg = types::PaintColor::Solid {
 //         color: types::Color::new_rgba(r, g, b, a),
@@ -42,7 +36,7 @@
 //     layer.set_background_color(bg, None);
 // }
 // #[no_mangle]
-// pub extern "C" fn layer_size_to(layer: *const ModelLayer, x: f64, y: f64, t: Transition<Easing>) {
+// pub extern "C" fn layer_size_to(layer: *const Layer, x: f64, y: f64, t: Transition<Easing>) {
 //     let layer = unsafe { &*layer };
 //     let size = types::Point { x, y };
 //     layer.set_size(size, Some(t));

@@ -1,11 +1,11 @@
 #![allow(dead_code)]
 use std::hash::Hash;
 
-use layers::{
+use lay_rs::{
     prelude::*,
     skia::{Color4f, Font},
 };
-use layers::{skia, types::Size};
+use lay_rs::{skia, types::Size};
 
 #[derive(Clone, Hash, Debug)]
 pub struct AppSwitcherState {
@@ -41,7 +41,7 @@ pub fn view_app_icon(state: &AppIconState, view: &View<AppIconState>) -> LayerTr
     let index = state.index;
     let val = layer.with_state(|state| state.get::<i32>("notification").unwrap_or_default());
     let id: usize = layer.id().unwrap().0.into();
-    let draw_picture = move |canvas: &layers::skia::Canvas, w: f32, h: f32| -> layers::skia::Rect {
+    let draw_picture = move |canvas: &lay_rs::skia::Canvas, w: f32, h: f32| -> lay_rs::skia::Rect {
         let paint = skia::Paint::new(Color4f::new(1.0, 1.0, 0.0, 1.0), None);
         let width = (w - PADDING * 2.0).max(0.0);
         canvas.draw_rect(
@@ -128,7 +128,7 @@ impl AppIconView {
         });
     }
 }
-impl layers::prelude::RenderLayerTree for AppIconView {
+impl lay_rs::prelude::RenderLayerTree for AppIconView {
     fn key(&self) -> String {
         self.view.key()
     }

@@ -7,6 +7,7 @@
 use indextree::Arena;
 use std::sync::{Arc, RwLock};
 use taffy::prelude::NodeId as TaffyNode;
+use tokio::{runtime::Handle, task::JoinError};
 
 use crate::prelude::{Layer, Point};
 
@@ -16,7 +17,7 @@ use super::{
     NodeRef,
 };
 pub struct Scene {
-    pub nodes: TreeStorage<SceneNode>,
+    pub(crate) nodes: TreeStorage<SceneNode>,
     pub size: RwLock<Point>,
 }
 
@@ -47,27 +48,41 @@ impl Scene {
     /// The child node is first detached from the scene and then appended the new parent.
     /// After appending, the child node is marked as needing paint (NEEDS_PAINT).
     pub(crate) fn append_node_to(&self, child: NodeRef, parent: NodeRef) {
-        let nodes = self.nodes.data();
-        let mut nodes = nodes.write().unwrap();
-
-        let child = *child;
-        child.detach(&mut nodes);
-        parent.append(child, &mut nodes);
-        let scene_node = nodes.get(child).unwrap().get();
-        scene_node.insert_flags(RenderableFlags::NEEDS_PAINT);
+        self.with_arena_mut(|nodes| {
+            let child = *child;
+            child.detach(nodes);
+            parent.append(child, nodes);
+            let scene_node = nodes.get(child).unwrap().get();
+            scene_node.insert_flags(RenderableFlags::NEEDS_PAINT);
+        });
     }
     /// Add a new node to the scene
     fn insert_node(&self, node: &SceneNode, parent: Option<NodeRef>) -> NodeRef {
-        let id = self.nodes.insert(node.clone());
+        let handle = Handle::current();
+        let id = tokio::task::block_in_place(|| handle.block_on(self.nodes.insert(node.clone())));
         if let Some(parent) = parent {
             self.append_node_to(NodeRef(id), parent);
         }
         NodeRef(id)
     }
 
-    pub fn get_node(&self, id: impl Into<TreeStorageId>) -> Option<TreeStorageNode<SceneNode>> {
+    pub async fn get_node(
+        &self,
+        id: impl Into<TreeStorageId>,
+    ) -> Option<TreeStorageNode<SceneNode>> {
         let id = id.into();
-        let scene_node = self.nodes.get(id);
+        let scene_node = self.nodes.get(id).await;
+        scene_node.filter(|node| !node.is_removed())
+    }
+
+    pub fn get_node_sync(
+        &self,
+        id: impl Into<TreeStorageId>,
+    ) -> Option<TreeStorageNode<SceneNode>> {
+        let id = id.into();
+        let handle = Handle::current();
+        let _ = handle.enter();
+        let scene_node = tokio::task::block_in_place(|| handle.block_on(self.nodes.get(id)));
         scene_node.filter(|node| !node.is_removed())
     }
 
@@ -88,20 +103,39 @@ impl Scene {
     }
     pub(crate) fn remove(&self, id: impl Into<TreeStorageId>) {
         let id = id.into();
-        self.nodes.remove_at(&id);
+        let handle = Handle::current();
+        tokio::task::block_in_place(|| handle.block_on(self.nodes.remove_at(&id)));
     }
 
-    pub(crate) fn with_arena<T>(&self, f: impl FnOnce(&Arena<SceneNode>) -> T) -> T {
+    pub async fn with_arena_async<T, F>(&self, f: F) -> Result<T, JoinError>
+    where
+        T: Send + Sync + 'static,
+        F: FnOnce(&Arena<SceneNode>) -> T + Send + 'static,
+    {
         let arena_guard = self.nodes.data();
-        let arena_guard = arena_guard.read();
-        let arena = &*arena_guard.unwrap();
-        f(arena)
+        let handle = Handle::current();
+        let join = tokio::task::spawn_blocking(move || {
+            let arena_guard = handle.block_on(arena_guard.read());
+            f(&arena_guard)
+        });
+        join.await
+    }
+
+    pub fn with_arena<T: Send + Sync>(&self, f: impl FnOnce(&Arena<SceneNode>) -> T) -> T {
+        let arena_guard = self.nodes.data();
+        let handle = Handle::current();
+        tokio::task::block_in_place(|| {
+            let arena_guard = handle.block_on(arena_guard.read());
+            f(&arena_guard)
+        })
     }
 
     pub(crate) fn with_arena_mut<T>(&self, f: impl FnOnce(&mut Arena<SceneNode>) -> T) -> T {
         let arena_guard = self.nodes.data();
-        let arena_guard = arena_guard.write();
-        let arena = &mut *arena_guard.unwrap();
-        f(arena)
+        let handle = Handle::current();
+        tokio::task::block_in_place(|| {
+            let mut arena_guard = handle.block_on(arena_guard.write());
+            f(&mut arena_guard)
+        })
     }
 }

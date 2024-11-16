@@ -3,11 +3,12 @@ use std::{
     sync::{Arc, RwLock},
 };
 
+use indextree::Arena;
 use skia::{ColorFilter, ImageFilter};
 use taffy::style::Display;
 
 use crate::{
-    engine::command::Attribute,
+    engine::{command::Attribute, SceneNode},
     types::{BlendMode, Color, Point, *},
 };
 
@@ -19,6 +20,17 @@ pub struct ContentDrawFunction(
     pub Arc<dyn 'static + Send + Sync + Fn(&skia_safe::Canvas, f32, f32) -> skia_safe::Rect>,
 );
 
+#[allow(clippy::type_complexity)]
+#[derive(Clone)]
+pub struct ContentDrawFunctionInternal(
+    pub  Arc<
+        dyn 'static
+            + Send
+            + Sync
+            + Fn(&skia_safe::Canvas, f32, f32, &Arena<SceneNode>) -> skia_safe::Rect,
+    >,
+);
+
 impl<F: Fn(&skia_safe::Canvas, f32, f32) -> skia_safe::Rect + Send + Sync + 'static> From<F>
     for ContentDrawFunction
 {
@@ -27,12 +39,31 @@ impl<F: Fn(&skia_safe::Canvas, f32, f32) -> skia_safe::Rect + Send + Sync + 'sta
     }
 }
 
-impl std::fmt::Debug for ContentDrawFunction {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ContentDrawFunction").finish()
+impl<F> From<F> for ContentDrawFunctionInternal
+where
+    F: Fn(&skia_safe::Canvas, f32, f32, &Arena<SceneNode>) -> skia_safe::Rect
+        + Send
+        + Sync
+        + 'static,
+{
+    fn from(f: F) -> Self {
+        ContentDrawFunctionInternal(Arc::new(f))
     }
 }
-impl PartialEq for ContentDrawFunction {
+
+impl From<ContentDrawFunction> for ContentDrawFunctionInternal {
+    fn from(value: ContentDrawFunction) -> Self {
+        ContentDrawFunctionInternal(Arc::new(move |canvas, x, y, _| (value.0)(canvas, x, y)))
+    }
+}
+
+impl std::fmt::Debug for ContentDrawFunctionInternal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ContentDrawFunctionInternal").finish()
+    }
+}
+
+impl PartialEq for ContentDrawFunctionInternal {
     fn eq(&self, other: &Self) -> bool {
         Arc::ptr_eq(&self.0, &other.0)
     }
@@ -80,7 +111,7 @@ pub(crate) struct ModelLayer {
     pub shadow_radius: Attribute<f32>,
     pub shadow_spread: Attribute<f32>,
     pub shadow_color: Attribute<Color>,
-    pub draw_content: Arc<RwLock<Option<ContentDrawFunction>>>,
+    pub draw_content: Arc<RwLock<Option<ContentDrawFunctionInternal>>>,
     pub blend_mode: Attribute<BlendMode>,
     pub opacity: Attribute<f32>,
     pub image_filter: Arc<RwLock<Option<ImageFilter>>>,
