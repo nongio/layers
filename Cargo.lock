@@ -230,7 +230,7 @@ dependencies = [
  "bitflags 2.6.0",
  "cexpr",
  "clang-sys",
- "itertools 0.10.5",
+ "itertools 0.13.0",
  "log",
  "prettyplease",
  "proc-macro2",
@@ -442,9 +442,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.1.31"
+version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c2e7962b54006dcfcc61cb72735f4d89bb97061dd6a7ed882ec6b8ee53714c6f"
+checksum = "1aeb932158bd710538c73702db6945cb68a8fb08c519e6e12706b94263b36db8"
 dependencies = [
  "jobserver",
  "libc",
@@ -1186,7 +1186,7 @@ version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "330c60081dcc4c72131f8eb70510f1ac07223e5d4163db481a04a0befcffa412"
 dependencies = [
- "libloading 0.7.4",
+ "libloading 0.8.5",
 ]
 
 [[package]]
@@ -2736,7 +2736,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4979f22fdb869068da03c9f7528f8297c6fd2606bc3a4affe42e6a823fdb8da4"
 dependencies = [
  "cfg-if 1.0.0",
- "windows-targets 0.48.5",
+ "windows-targets 0.52.6",
 ]
 
 [[package]]
@@ -4616,7 +4616,8 @@ checksum = "38b58827f4464d87d377d175e90bf58eb00fd8716ff0a62f80356b5e61555d0d"
 [[package]]
 name = "skia-bindings"
 version = "0.80.0"
-source = "git+https://github.com/rust-skia/rust-skia#ed89d22ebcd9b49b7f14d64262375c04ba81a851"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "179ebe08aee2634b22ef4d2a1a9370aaa39dfe619a702fc0793d491a26c05cbb"
 dependencies = [
  "bindgen",
  "cc",
@@ -4632,7 +4633,8 @@ dependencies = [
 [[package]]
 name = "skia-safe"
 version = "0.80.0"
-source = "git+https://github.com/rust-skia/rust-skia#ed89d22ebcd9b49b7f14d64262375c04ba81a851"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e50bb65f6f94afb003ee5c0b949966fa1f29499fb95e5e9e9da62664e178d9ba"
 dependencies = [
  "base64 0.22.1",
  "bitflags 2.6.0",
@@ -4645,7 +4647,8 @@ dependencies = [
 [[package]]
 name = "skia-svg-macros"
 version = "0.1.0"
-source = "git+https://github.com/rust-skia/rust-skia#ed89d22ebcd9b49b7f14d64262375c04ba81a851"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "044dd2233c9717a74f75197f3e7f0a966db2127c0ffb5e05013b480a9b75b2c7"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -6140,7 +6143,7 @@ version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf221c93e13a30d793f7645a0e7762c55d169dbb0a49671918a2319d289b10bb"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
