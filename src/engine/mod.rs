@@ -7,6 +7,7 @@
 //! - The *draw* step generates a displaylist
 //! - The *render* step uses the displaylist to generate a texture of the node
 //! - The *compose* step generates the final image using the textures
+//!
 //! The `LayersEngine` is the main engine responsible for managing layers and rendering.
 //!
 //! # Usage:
@@ -747,7 +748,7 @@ impl Engine {
         self.scene.with_arena(|arena| {
             let node = self.scene_root.read().unwrap();
             if let Some(root_id) = *node {
-                let (_, _, d) = update_node(&arena, &layout, root_id.0, None, false);
+                let (_, _, d) = update_node(arena, &layout, root_id.0, None, false);
                 damage = d;
             }
         });

@@ -27,7 +27,7 @@ pub(crate) fn update_animations(
     let started_animations = Arc::new(RwLock::new(Vec::<FlatStorageId>::new()));
 
     engine.animations.with_data_mut(|animations| {
-        if animations.len() > 0 {
+        if !animations.is_empty() {
             animations.par_iter_mut().for_each_with(
                 (finished_animations.clone(), started_animations.clone()),
                 |(done_animations, started_animations),
@@ -378,7 +378,7 @@ fn transaction_callbacks(
 
     if animation_state.is_running {
         if on_start {
-            tr_handler.map(|tr_handler| {
+            if let Some(tr_handler) = tr_handler {
                 let callbacks = &tr_handler.on_start;
                 callbacks.iter().for_each(|tr_callback| {
                     let callback = &tr_callback.callback;
@@ -387,8 +387,8 @@ fn transaction_callbacks(
                         tr_to_remove.push(tr_callback.clone());
                     }
                 });
-            });
-            v_handler.map(|v_handler| {
+            }
+            if let Some(v_handler) = v_handler {
                 let callbacks = &v_handler.on_start;
                 callbacks.iter().for_each(|tr_callback| {
                     let callback = &tr_callback.callback;
@@ -397,9 +397,9 @@ fn transaction_callbacks(
                         v_to_remove.push(tr_callback.clone());
                     }
                 });
-            });
+            }
         }
-        tr_handler.map(|tr_handler| {
+        if let Some(tr_handler) = tr_handler {
             let callbacks = &tr_handler.on_update;
             callbacks.iter().for_each(|tr_callback| {
                 let callback = &tr_callback.callback;
@@ -408,8 +408,8 @@ fn transaction_callbacks(
                     tr_to_remove.push(tr_callback.clone());
                 }
             });
-        });
-        v_handler.map(|v_handler| {
+        }
+        if let Some(v_handler) = v_handler {
             let callbacks = &v_handler.on_update;
             callbacks.iter().for_each(|tr_callback| {
                 let callback = &tr_callback.callback;
@@ -418,9 +418,9 @@ fn transaction_callbacks(
                     v_to_remove.push(tr_callback.clone());
                 }
             });
-        });
+        }
     } else if animation_state.is_finished {
-        tr_handler.map(|tr_handler| {
+        if let Some(tr_handler) = tr_handler {
             let callbacks = &tr_handler.on_update;
             callbacks.iter().for_each(|tr_callback| {
                 let callback = &tr_callback.callback;
@@ -429,8 +429,8 @@ fn transaction_callbacks(
                     tr_to_remove.push(tr_callback.clone());
                 }
             });
-        });
-        v_handler.map(|v_handler| {
+        }
+        if let Some(v_handler) = v_handler {
             let callbacks = &v_handler.on_update;
             callbacks.iter().for_each(|tr_callback| {
                 let callback = &tr_callback.callback;
@@ -439,8 +439,8 @@ fn transaction_callbacks(
                     v_to_remove.push(tr_callback.clone());
                 }
             });
-        });
-        tr_handler.map(|tr_handler| {
+        }
+        if let Some(tr_handler) = tr_handler {
             let callbacks = &tr_handler.on_finish;
             callbacks.iter().for_each(|tr_callback| {
                 let callback = &tr_callback.callback;
@@ -449,8 +449,8 @@ fn transaction_callbacks(
                 }
                 callback(layer, 1.0);
             });
-        });
-        v_handler.map(|v_handler| {
+        }
+        if let Some(v_handler) = v_handler {
             let callbacks = &v_handler.on_finish;
             callbacks.iter().for_each(|tr_callback| {
                 let callback = &tr_callback.callback;
@@ -459,7 +459,7 @@ fn transaction_callbacks(
                     v_to_remove.push(tr_callback.clone());
                 }
             });
-        });
+        }
     }
     (tr_to_remove, v_to_remove)
 }

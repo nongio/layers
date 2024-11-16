@@ -228,7 +228,7 @@ impl Layer {
 
     pub fn set_draw_content<F: Into<ContentDrawFunction>>(&self, content_handler: F) {
         let mut model_content = self.model.draw_content.write().unwrap();
-        let draw:ContentDrawFunction = content_handler.into();
+        let draw: ContentDrawFunction = content_handler.into();
         *model_content = Some(draw.into());
         if let Some(id) = self.id() {
             let mut node = self.engine.scene.get_node_sync(id).unwrap();
@@ -236,7 +236,10 @@ impl Layer {
             node.insert_flags(RenderableFlags::NEEDS_PAINT);
         }
     }
-    pub(crate) fn set_draw_content_internal<F: Into<ContentDrawFunctionInternal>>(&self, content_handler: F) {
+    pub(crate) fn set_draw_content_internal<F: Into<ContentDrawFunctionInternal>>(
+        &self,
+        content_handler: F,
+    ) {
         let mut model_content = self.model.draw_content.write().unwrap();
         *model_content = Some(content_handler.into());
         if let Some(id) = self.id() {
@@ -452,7 +455,7 @@ impl Layer {
             return {
                 self.engine
                     .scene
-                    .with_arena(|arena| node_id.children(&arena).map(NodeRef).collect())
+                    .with_arena(|arena| node_id.children(arena).map(NodeRef).collect())
             };
         }
         vec![]
@@ -463,7 +466,7 @@ impl Layer {
             return {
                 self.engine.scene.with_arena(|arena| {
                     node_id
-                        .children(&arena)
+                        .children(arena)
                         .map(|cid| {
                             let c = arena.get(cid).unwrap();
                             c.get().layer.clone()
