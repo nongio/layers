@@ -3,6 +3,7 @@ name = "lay-rs"
 version = "0.4.0"
 edition = "2021"
 build = "build.rs"
+rust-version = "1.82.0"
 
 [lib]
 crate-type = ["lib", "cdylib"] # Creates dynamic lib
@@ -35,32 +36,23 @@ tokio = { version = "1", features = ["full"] }
 
 
 [dependencies.skia-safe]
-git = "https://github.com/rust-skia/rust-skia"
+# git = "https://github.com/rust-skia/rust-skia"
 version = "=0.80"
-# rev = "c5faa8f99ea9cc4a0235e8aa8c28c970e301a436"
 # path = "../rust-skia/skia-safe"
-# this set of features is required for enabling to use the pre-built
-# binaries of skia-safe
 [dependencies.skia-bindings]
-git = "https://github.com/rust-skia/rust-skia"
+# git = "https://github.com/rust-skia/rust-skia"
 version = "=0.80"
-# rev = "c5faa8f99ea9cc4a0235e8aa8c28c970e301a436"
 # path = "../rust-skia/skia-bindings"
 
 [target.'cfg(target_os = "linux")'.dependencies.skia-safe]
-git = "https://github.com/rust-skia/rust-skia"
-# rev = "c5faa8f99ea9cc4a0235e8aa8c28c970e301a436"
-
-# path = "../rust-skia"
+# git = "https://github.com/rust-skia/rust-skia"
 # path = "../rust-skia/skia-safe"
-
-# version = "=0.70"
+version = "=0.80"
 features = ["binary-cache", "all-linux"]
 
 [target.'cfg(target_os = "macos")'.dependencies.skia-safe]
-git = "https://github.com/rust-skia/rust-skia"
+# git = "https://github.com/rust-skia/rust-skia"
 version = "=0.80"
-# rev = "c5faa8f99ea9cc4a0235e8aa8c28c970e301a436"
 # path = "../rust-skia/skia-safe"
 features = ["binary-cache", "gl", "metal", "svg", "textlayout", "webp"]
 
