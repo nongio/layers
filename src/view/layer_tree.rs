@@ -103,10 +103,8 @@ impl AsRef<LayerTree> for LayerTree {
 ///
 impl LayerTreeBuilder {
     pub fn with_key(key: impl Into<String>) -> Self {
-        let key =  key.into();
-        LayerTreeBuilder::default()
-            .key(&key)
-            .clone()
+        let key = key.into();
+        LayerTreeBuilder::default().key(&key).clone()
     }
     pub fn children(&mut self, children: Vec<impl RenderLayerTree + 'static>) -> &mut Self {
         let children = children

@@ -11,7 +11,7 @@ pub struct Spring {
     pub(crate) last_update: f32,
 }
 
-const TOLERANCE: f32 = 0.005;
+const TOLERANCE: f32 = 0.00025;
 
 impl Spring {
     pub fn new(mass: f32, stiffness: f32, damping: f32) -> Self {
