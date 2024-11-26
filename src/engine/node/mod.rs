@@ -13,8 +13,7 @@ use std::{
 use taffy::prelude::{Layout, NodeId as TaffyNodeId};
 
 use crate::{
-    layers::layer::{render_layer::RenderLayer, Layer},
-    types::*,
+    drawing::render_node_tree, layers::layer::{render_layer::RenderLayer, Layer}, types::*
     // utils::save_image,
 };
 
@@ -86,6 +85,7 @@ pub struct SceneNode {
     pub(crate) debug_info: Arc<RwLock<Option<DrawDebugInfo>>>,
     pub(crate) repaint_damage: Arc<RwLock<skia_safe::Rect>>,
     pub(crate) frame: Arc<AtomicUsize>,
+    pub(crate) _follow_node: Arc<RwLock<Option<NodeRef>>>,
 }
 
 impl SceneNode {
@@ -109,6 +109,7 @@ impl SceneNode {
             repaint_damage: Arc::new(RwLock::new(skia_safe::Rect::default())),
             debug_info: Arc::new(RwLock::new(None)),
             frame: Arc::new(AtomicUsize::new(0)),
+            _follow_node: Arc::new(RwLock::new(None)),
         }
     }
     pub fn insert_flags(&self, flags: RenderableFlags) {
@@ -203,6 +204,24 @@ impl SceneNode {
             return true;
         }
         false
+    }
+    pub(crate) fn follow_node(&self, nodeid: &Option<NodeRef>) {
+        let mut _follow_node = self._follow_node.write().unwrap();
+        *_follow_node = nodeid.clone();
+    }
+
+    pub fn replicate_node(&self, nodeid: &Option<NodeRef>) {
+        if let Some(nodeid) = nodeid {
+            let nodeid = nodeid.clone();
+            let draw_function = move |c: &skia::Canvas, w: f32, h: f32, arena: &Arena<SceneNode>| {
+                render_node_tree(nodeid, arena, c, 1.0);
+                skia::Rect::from_xywh(0.0, 0.0, w, h)
+            };
+    
+            self.layer.set_draw_content_internal(draw_function);
+        }
+
+        self.follow_node(&nodeid);
     }
 }
 

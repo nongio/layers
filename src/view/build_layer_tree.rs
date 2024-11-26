@@ -147,11 +147,15 @@ impl BuildLayerTree for Layer {
         if let Some(on_pointer_release) = viewlayer_tree.on_pointer_release.clone() {
             scene_layer.add_on_pointer_release(on_pointer_release);
         }
-
-        // Children
         let layer_id = scene_layer.id();
         let engine = scene_layer.engine;
         if let Some(layer_id) = layer_id {
+            if let Some(scene_node) = self.engine.scene_get_node(&layer_id) {
+                let scene_node = scene_node.get();
+                scene_node.replicate_node(&viewlayer_tree.replicate_node);
+            }
+
+            // Children
             let mut current_scene_layers_children: HashSet<NodeId> = {
                 let children = engine
                     .scene

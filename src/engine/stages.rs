@@ -147,6 +147,15 @@ pub(crate) fn nodes_for_layout(engine: &Engine) -> Vec<NodeRef> {
                 // if
                 // if layout.position != Position::Absolute {
                 scene_node.insert_flags(RenderableFlags::NEEDS_LAYOUT);
+
+                // follow a replicated node
+                // it will paint continuosly
+                if let Some(follow) = &*scene_node._follow_node.read().unwrap() {
+                    if let Some(_follow_node) = arena.get(follow.0) {
+                        scene_node.insert_flags(RenderableFlags::NEEDS_PAINT);
+                    }
+                }
+
                 scene_node.id()
                 // } else {
                 // None

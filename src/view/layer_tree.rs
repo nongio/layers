@@ -89,6 +89,9 @@ pub struct LayerTree {
     /// The children of the layer tree are elements that can render a layertree
     #[builder(setter(custom))]
     pub children: Option<Vec<Arc<dyn RenderLayerTree>>>,
+
+    #[builder(setter(into), default)]
+    pub replicate_node: Option<NodeRef>,
 }
 
 impl AsRef<LayerTree> for LayerTree {
