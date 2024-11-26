@@ -1,6 +1,5 @@
 use std::{
-    error::Error,
-    sync::{Arc, RwLock},
+    error::Error, hash::{Hash, Hasher}, sync::{Arc, RwLock}
 };
 
 use indextree::Arena;
@@ -19,7 +18,17 @@ use crate::{
 pub struct ContentDrawFunction(
     pub Arc<dyn 'static + Send + Sync + Fn(&skia_safe::Canvas, f32, f32) -> skia_safe::Rect>,
 );
-
+impl Hash for ContentDrawFunction {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        let ptr = Arc::as_ptr(&self.0) as *const ();
+        ptr.hash(state);
+    }
+}
+impl fmt::Debug for ContentDrawFunction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ContentDrawFunction").finish()
+    }
+}
 #[allow(clippy::type_complexity)]
 #[derive(Clone)]
 pub struct ContentDrawFunctionInternal(

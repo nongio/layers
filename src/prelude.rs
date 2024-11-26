@@ -4,7 +4,7 @@ pub use super::{
     easing::Interpolate,
     engine::{animation::*, scene::Scene, LayersEngine, NodeRef},
     layers::{
-        layer::model::{ContentDrawError, ContentDrawFunction},
+        layer::model::{ContentDrawError, ContentDrawFunction, PointerHandlerFunction},
         layer::Effect,
         layer::Layer,
     },

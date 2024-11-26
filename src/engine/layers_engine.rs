@@ -6,7 +6,7 @@ use std::{
     },
 };
 
-use indextree::{Arena, NodeId};
+use indextree::NodeId;
 
 use crate::{
     layers::layer::{state::LayerDataProps, ModelLayer},
@@ -331,18 +331,5 @@ impl LayersEngine {
             skia::Rect::from_xywh(0.0, 0.0, w, h)
         };
         ContentDrawFunction::from(draw_function)
-    }
-    pub fn replicate_layer(&self, layer: &Layer) -> Layer {
-        let new_layer = self.new_layer();
-        new_layer.set_content_cache(false);
-        let layer_ref = layer.clone();
-
-        let draw_function = move |c: &skia::Canvas, w: f32, h: f32, arena: &Arena<SceneNode>| {
-            let id = layer_ref.id().unwrap();
-            render_node_tree(id, arena, c, 1.0);
-            skia::Rect::from_xywh(0.0, 0.0, w, h)
-        };
-        new_layer.set_draw_content_internal(draw_function);
-        new_layer
     }
 }
