@@ -1,5 +1,7 @@
 use std::{
-    error::Error, hash::{Hash, Hasher}, sync::{Arc, RwLock}
+    error::Error,
+    hash::{Hash, Hasher},
+    sync::{Arc, RwLock},
 };
 
 use indextree::Arena;

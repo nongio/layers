@@ -13,8 +13,9 @@ use std::{
 use taffy::prelude::{Layout, NodeId as TaffyNodeId};
 
 use crate::{
-    drawing::render_node_tree, layers::layer::{render_layer::RenderLayer, Layer}, types::*
-    // utils::save_image,
+    drawing::render_node_tree,
+    layers::layer::{render_layer::RenderLayer, Layer},
+    types::*, // utils::save_image,
 };
 
 use super::{draw_to_picture::DrawDebugInfo, NodeRef};
@@ -207,21 +208,22 @@ impl SceneNode {
     }
     pub(crate) fn follow_node(&self, nodeid: &Option<NodeRef>) {
         let mut _follow_node = self._follow_node.write().unwrap();
-        *_follow_node = nodeid.clone();
+        *_follow_node = *nodeid;
     }
 
     pub fn replicate_node(&self, nodeid: &Option<NodeRef>) {
         if let Some(nodeid) = nodeid {
-            let nodeid = nodeid.clone();
-            let draw_function = move |c: &skia::Canvas, w: f32, h: f32, arena: &Arena<SceneNode>| {
-                render_node_tree(nodeid, arena, c, 1.0);
-                skia::Rect::from_xywh(0.0, 0.0, w, h)
-            };
-    
+            let nodeid = *nodeid;
+            let draw_function =
+                move |c: &skia::Canvas, w: f32, h: f32, arena: &Arena<SceneNode>| {
+                    render_node_tree(nodeid, arena, c, 1.0);
+                    skia::Rect::from_xywh(0.0, 0.0, w, h)
+                };
+
             self.layer.set_draw_content_internal(draw_function);
         }
 
-        self.follow_node(&nodeid);
+        self.follow_node(nodeid);
     }
 }
 

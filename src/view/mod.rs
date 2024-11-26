@@ -140,18 +140,18 @@ impl<S: Hash + Clone> View<S> {
                 None
             })
     }
-    pub fn hover_layer(&self, id:&str, location: &Point) -> bool {
+    pub fn hover_layer(&self, id: &str, location: &Point) -> bool {
         if let Some(layer) = self.layer_by_key(id) {
             let rect = layer.render_bounds_transformed();
-            if rect.x() < location.x as f32
-                    && rect.x() + rect.width() > location.x as f32
-                    && rect.y() < location.y as f32
-                    && rect.y() + rect.height() > location.y as f32
-                {
-                    return true;
-                }
+            if rect.x() < location.x
+                && rect.x() + rect.width() > location.x
+                && rect.y() < location.y
+                && rect.y() + rect.height() > location.y
+            {
+                return true;
+            }
         }
-        return false;
+        false
     }
 }
 
