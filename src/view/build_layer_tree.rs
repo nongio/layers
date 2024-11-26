@@ -75,6 +75,9 @@ impl BuildLayerTree for Layer {
         if let Some((position, transition)) = viewlayer_tree.position {
             scene_layer.set_position(position, transition);
         }
+        if let Some((anchor_point, transition)) = viewlayer_tree.anchor_point {
+            scene_layer.set_anchor_point(anchor_point, transition);
+        }
         if let Some((scale, transition)) = viewlayer_tree.scale {
             scene_layer.set_scale(scale, transition);
         }

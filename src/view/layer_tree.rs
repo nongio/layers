@@ -51,6 +51,8 @@ pub struct LayerTree {
     pub size: Option<(Size, Option<Transition>)>,
     #[builder(setter(into, strip_option), default)]
     pub position: Option<(Point, Option<Transition>)>,
+    #[builder(setter(into, strip_option), default)]
+    pub anchor_point: Option<(Point, Option<Transition>)>,
     #[builder(setter(into, strip_option))]
     pub scale: Option<(Point, Option<Transition>)>,
     #[builder(setter(into, strip_option), default)]
@@ -97,6 +99,12 @@ impl AsRef<LayerTree> for LayerTree {
 /// A builder for the LayerTree struct
 ///
 impl LayerTreeBuilder {
+    pub fn with_key(key: impl Into<String>) -> Self {
+        let key =  key.into();
+        LayerTreeBuilder::default()
+            .key(&key)
+            .clone()
+    }
     pub fn children(&mut self, children: Vec<impl RenderLayerTree + 'static>) -> &mut Self {
         let children = children
             .into_iter()
