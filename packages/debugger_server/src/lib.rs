@@ -1,8 +1,10 @@
 mod handler;
 
-use std::sync::{Arc, OnceLock};
+use std::{
+    path::PathBuf,
+    sync::{Arc, OnceLock},
+};
 
-use static_dir::static_dir;
 use tokio::sync::{mpsc, RwLock};
 use warp::{filters::ws::Message, reject::Rejection, Filter};
 
@@ -85,8 +87,9 @@ async fn start_debugger(debug_server: Arc<dyn DebugServer>) {
         .and(warp::path::param())
         // .and(with_clients())
         .and_then(handler::ws_handler);
+    let package_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("client/build");
+    let client_files = warp::path("client").and(warp::fs::dir(package_dir));
 
-    let client_files = warp::path("client").and(static_dir!("client/build/"));
     let cors = warp::cors()
         .allow_origins(vec![
             "http://localhost:3000",
