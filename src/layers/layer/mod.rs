@@ -160,6 +160,7 @@ impl Layer {
     change_model!(shadow_spread, f32, RenderableFlags::NEEDS_PAINT);
     change_model!(shadow_color, Color, RenderableFlags::NEEDS_PAINT);
     change_model!(image_filter_progress, f32, RenderableFlags::NEEDS_PAINT);
+    change_model!(clip_content, bool, RenderableFlags::NEEDS_PAINT);
 
     pub fn change_size(&self, value: Size) -> AnimatedNodeChange {
         let flags = RenderableFlags::NEEDS_LAYOUT;

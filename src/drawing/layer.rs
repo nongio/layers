@@ -98,13 +98,17 @@ pub fn draw_layer(
     // Draw content if any
     if let Some(content) = &layer.content {
         let save_count = canvas.save();
-        canvas.clip_rrect(rrbounds, Some(ClipOp::Intersect), Some(true));
+        if layer.clip_content {
+            canvas.clip_rrect(rrbounds, Some(ClipOp::Intersect), Some(true));
+        }
         content.playback(canvas);
         canvas.restore_to_count(save_count);
         draw_damage.join(layer.content_damage);
     } else if let Some(draw_func) = layer.content_draw_func.as_ref() {
         let save_count = canvas.save();
-        canvas.clip_rrect(rrbounds, Some(ClipOp::Intersect), Some(true));
+        if layer.clip_content {
+            canvas.clip_rrect(rrbounds, Some(ClipOp::Intersect), Some(true));
+        }
         let caller = draw_func.0.as_ref();
         let content_damage = caller(canvas, layer.size.width, layer.size.height, arena);
         draw_damage.join(content_damage);
