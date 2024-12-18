@@ -505,9 +505,10 @@ impl Engine {
         node
     }
     pub fn mark_for_delete(&self, layer: NodeRef) {
-        let node = self.scene.get_node_sync(layer).unwrap();
-        let node = node.get();
-        node.mark_for_deletion();
+        if let Some(node) = self.scene.get_node_sync(layer) {
+            let node = node.get();
+            node.mark_for_deletion();
+        }
     }
     pub(crate) fn scene_remove_layer(&self, layer: impl Into<Option<NodeRef>>) {
         let layer_id: Option<NodeRef> = layer.into();
