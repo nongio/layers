@@ -322,7 +322,7 @@ pub(crate) fn update_node(
 
 #[profiling::function]
 pub(crate) fn trigger_callbacks(engine: &Engine, started_animations: &[FlatStorageId]) {
-    engine.transactions.with_data(|transactions| {
+    engine.transactions.with_data_cloned(|transactions| {
         let scene = engine.scene.clone();
         transactions.iter().for_each(|(id, command)| {
             let animation_state = command

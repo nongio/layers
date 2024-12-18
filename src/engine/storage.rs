@@ -121,6 +121,11 @@ impl<V: Clone + Send + Sync> FlatStorage<V> {
         })
     }
 
+    pub fn with_data_cloned<T>(&self, f: impl FnOnce(&FlatStorageData<V>) -> T) -> T {
+        let data = self.with_data(|data| data.clone());
+        f(&data)
+    }
+
     pub fn with_data_mut<T>(&self, f: impl FnOnce(&mut FlatStorageData<V>) -> T) -> T {
         let handle = Handle::current();
         tokio::task::block_in_place(|| {
