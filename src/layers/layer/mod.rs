@@ -90,43 +90,43 @@ impl Layer {
         let key = self.key.read().unwrap();
         key.clone()
     }
-    pub fn set_hidden(&self, _hidden: bool) {
-        unimplemented!("set_hidden")
-        // self.hidden
-        //     .store(hidden, std::sync::atomic::Ordering::Relaxed);
+    pub fn set_hidden(&self, hidden: bool) {
+        self.hidden
+            .store(hidden, std::sync::atomic::Ordering::Relaxed);
 
-        // // when hidden we set display to none so that the layout engine
-        // // doesn't layout the node
-        // let mut display = Display::None;
+        // when hidden we set display to none so that the layout engine
+        // doesn't layout the node
+        let mut display = Display::None;
 
-        // if !hidden {
-        //     display = self.model.display.value();
-        // }
-        // let mut style = self.engine.get_node_layout_style(self.layout_node_id);
-        // style.display = display;
-        // self.engine
-        //     .set_node_layout_style(self.layout_node_id, style);
+        if !hidden {
+            display = self.model.display.value();
+        }
 
-        // if let Some(id) = self.id() {
-        //     // let node = self.engine.scene.get_node(id.0);
-        //     let arena = self.engine.scene.nodes.data();
-        //     let arena = arena.blocking_read();
-        //     let mut iter = id.ancestors(&arena);
-        //     if let Some(node) = self.engine.scene.get_node(id) {
-        //         let node = node.get();
-        //         node.insert_flags(RenderableFlags::NEEDS_LAYOUT | RenderableFlags::NEEDS_PAINT);
-        //     }
+        let mut style = self.engine.get_node_layout_style(self.layout_node_id);
+        style.display = display;
+        
+        // self.engine.set_node_layout_style(self.layout_node_id, style);
 
-        //     iter.next(); // skip self
-        //     if let Some(parent_id) = iter.next() {
-        //         drop(arena);
-        //         if let Some(parent) = self.engine.scene.get_node(NodeRef(parent_id)) {
-        //             let parent = parent.get();
-        //             parent
-        //                 .insert_flags(RenderableFlags::NEEDS_LAYOUT | RenderableFlags::NEEDS_PAINT);
-        //         }
-        //     }
-        // }
+        if let Some(id) = self.id() {
+            self.engine.scene.with_arena(|arena| {
+                let node = arena.get(id.0);
+                if let Some(node) = node {
+                    let node = node.get();
+                    node.insert_flags(RenderableFlags::NEEDS_LAYOUT | RenderableFlags::NEEDS_PAINT);
+                }
+                let mut iter = id.ancestors(&arena);
+                iter.next(); // skip self
+                if let Some(parent_id) = iter.next() {
+                    if let Some(parent) = arena.get(parent_id) {
+                        let parent = parent.get();
+                        parent
+                            .insert_flags(RenderableFlags::NEEDS_LAYOUT | RenderableFlags::NEEDS_PAINT);
+                    }
+                }
+
+            });
+
+        }
     }
     pub fn hidden(&self) -> bool {
         self.hidden.load(std::sync::atomic::Ordering::Relaxed)
