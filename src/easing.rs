@@ -309,6 +309,16 @@ impl Interpolate for Size {
         }
     }
 }
+
+impl Interpolate for bool {
+    fn interpolate(&self, other: &bool, f: f32) -> bool {
+        if f < 0.5 {
+            self.to_owned()
+        } else {
+            other.to_owned()
+        }
+    }
+}
 // easing version of the bezier 1d with p0 = 0 and p3 = 1
 fn bezier_easing_1d(p1: f64, p2: f64, f: f64) -> f64 {
     let f2 = f * f;
