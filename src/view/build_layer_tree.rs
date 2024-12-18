@@ -183,19 +183,25 @@ impl BuildLayerTree for Layer {
                     let (child_layer_id, child_scene_layer) = child_layer_id
                         .and_then(|child_layer_id| {
                             // try to use existing layer
-                            let child_scene_node =
-                                engine.scene.get_node_sync(child_layer_id).unwrap();
-                            if child_scene_node.is_removed() {
-                                return None;
-                            }
-                            let child_scene_layer = child_scene_node.get().clone();
+                            if let Some(child_scene_node) =
+                                engine.scene.get_node_sync(child_layer_id)
+                            {
+                                if child_scene_node.is_removed() {
+                                    return None;
+                                }
+                                let child_scene_layer = child_scene_node.get().clone();
+                                if child_scene_layer.is_deleted() {
+                                    return None;
+                                }
 
-                            if child_scene_layer.is_deleted() {
-                                return None;
+                                // we should not need to add the layer back to the parent
+                                engine.scene_add_layer(
+                                    child_scene_layer.layer.clone(),
+                                    Some(layer_id),
+                                );
+                                return Some((child_layer_id, child_scene_layer));
                             }
-                            // we should not need to add the layer back to the parent
-                            engine.scene_add_layer(child_scene_layer.layer.clone(), Some(layer_id));
-                            Some((child_layer_id, child_scene_layer))
+                            None
                         })
                         .unwrap_or_else(|| {
                             // the child layer does not exist, or is removed
