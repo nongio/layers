@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ## [unreleased]
 
+### 🚀 Features
+
+- Layer content clip to bounds
+
+### 🐛 Bug Fixes
+
+- Debugger assets path
+- Increase spring animation tolerance
+- Engine.mark_for_delete
+- Engine.trigger_callback deadlock
+- Buildlayertree get or create child
+
 ### ⚙️ Miscellaneous Tasks
 
 - [**breaking**] Rename library to lay-rs
@@ -11,6 +23,12 @@ All notable changes to this project will be documented in this file.
 - [**breaking**] Storage using tokio:rwlock
 - Bump rust-skia
 - C api refactor
+- Expose LayerTree anchor point
+- [**breaking**] Replicate layer api
+
+### Restore
+
+- Layer.set_hidden
 
 ## [0.5.0] - 2024-10-27
 
