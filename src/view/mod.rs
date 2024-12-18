@@ -38,10 +38,15 @@ pub struct View<S: Hash + Clone> {
 }
 
 impl<S: Hash + Clone> View<S> {
-    pub fn new(key: &str, initial_state: S, render_function: impl ViewRenderFunction<S>) -> Self {
+    pub fn new(
+        key: impl Into<String>,
+        initial_state: S,
+        render_function: impl ViewRenderFunction<S>,
+    ) -> Self {
+        let key = key.into();
         let render_function: Arc<dyn ViewRenderFunction<S>> = Arc::new(render_function);
         Self {
-            key: key.to_string(),
+            key,
             layer: Arc::new(RwLock::new(None)),
             render_function,
             last_state: Arc::new(RwLock::new(None)),
@@ -129,7 +134,8 @@ impl<S: Hash + Clone> View<S> {
         let viewlayer_node_map = self.viewlayer_node_map.read().unwrap();
         viewlayer_node_map
             .get(id)
-            .map(|v| v.front().unwrap())
+            .map(|v| v.front())
+            .flatten()
             .and_then(|node| {
                 if let Some(root) = &*self.layer.read().unwrap() {
                     if let Some(node) = root.engine.scene_get_node(node) {
@@ -137,6 +143,10 @@ impl<S: Hash + Clone> View<S> {
                         return Some(scene_node.layer.clone());
                     }
                 }
+                None
+            })
+            .or_else(|| {
+                println!("layer_by_key not found {}", id);
                 None
             })
     }
