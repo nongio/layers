@@ -134,8 +134,7 @@ impl<S: Hash + Clone> View<S> {
         let viewlayer_node_map = self.viewlayer_node_map.read().unwrap();
         viewlayer_node_map
             .get(id)
-            .map(|v| v.front())
-            .flatten()
+            .and_then(|v| v.front())
             .and_then(|node| {
                 if let Some(root) = &*self.layer.read().unwrap() {
                     if let Some(node) = root.engine.scene_get_node(node) {

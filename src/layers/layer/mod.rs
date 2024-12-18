@@ -104,7 +104,7 @@ impl Layer {
 
         let mut style = self.engine.get_node_layout_style(self.layout_node_id);
         style.display = display;
-        
+
         // self.engine.set_node_layout_style(self.layout_node_id, style);
 
         if let Some(id) = self.id() {
@@ -114,18 +114,17 @@ impl Layer {
                     let node = node.get();
                     node.insert_flags(RenderableFlags::NEEDS_LAYOUT | RenderableFlags::NEEDS_PAINT);
                 }
-                let mut iter = id.ancestors(&arena);
+                let mut iter = id.ancestors(arena);
                 iter.next(); // skip self
                 if let Some(parent_id) = iter.next() {
                     if let Some(parent) = arena.get(parent_id) {
                         let parent = parent.get();
-                        parent
-                            .insert_flags(RenderableFlags::NEEDS_LAYOUT | RenderableFlags::NEEDS_PAINT);
+                        parent.insert_flags(
+                            RenderableFlags::NEEDS_LAYOUT | RenderableFlags::NEEDS_PAINT,
+                        );
                     }
                 }
-
             });
-
         }
     }
     pub fn hidden(&self) -> bool {
