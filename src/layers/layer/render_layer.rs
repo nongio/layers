@@ -35,6 +35,7 @@ pub struct RenderLayer {
     pub content_draw_func: Option<ContentDrawFunctionInternal>,
     pub content: Option<Picture>,
     pub content_damage: skia_safe::Rect,
+    pub clip_content: bool,
 }
 
 impl RenderLayer {
@@ -276,6 +277,7 @@ impl RenderLayer {
         let premultiplied_opacity = opacity * context_opacity;
         let blend_mode = model.blend_mode.value();
         let content_damage = skia_safe::Rect::default();
+        let clip_content = model.clip_content.value();
         Self {
             key,
             size,
@@ -303,6 +305,7 @@ impl RenderLayer {
             content_damage,
             rbounds,
             global_transformed_rbounds: transformed_rbounds,
+            clip_content,
         }
     }
 }
@@ -340,6 +343,7 @@ impl Default for RenderLayer {
             global_transformed_rbounds: skia_safe::RRect::default(),
             content_draw_func: None,
             content_damage: skia_safe::Rect::default(),
+            clip_content: false,
         }
     }
 }
