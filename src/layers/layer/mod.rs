@@ -160,6 +160,8 @@ impl Layer {
     change_model!(shadow_color, Color, RenderableFlags::NEEDS_PAINT);
     change_model!(image_filter_progress, f32, RenderableFlags::NEEDS_PAINT);
     change_model!(clip_content, bool, RenderableFlags::NEEDS_PAINT);
+    change_model!(clip_children, bool, RenderableFlags::NEEDS_PAINT);
+
 
     pub fn change_size(&self, value: Size) -> AnimatedNodeChange {
         let flags = RenderableFlags::NEEDS_LAYOUT;
@@ -549,12 +551,8 @@ impl Layer {
     }
     pub fn on_change_size<F: Into<TransactionCallback>>(&self, f: F, once: bool) {
         let size_id = self.model.size.id;
-        self.engine.on_update(
-            TransactionRef {
-                id: 0,
-                value_id: size_id,
-                engine_id: self.engine.id,
-            },
+        self.engine.on_update_value(
+            size_id,
             f,
             once,
         );
