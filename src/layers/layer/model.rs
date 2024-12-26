@@ -130,6 +130,7 @@ pub(crate) struct ModelLayer {
     pub filter_bounds: Arc<RwLock<Option<skia::Rect>>>,
     pub image_filter_progress: Attribute<f32>,
     pub clip_content: Attribute<bool>,
+    pub clip_children: Attribute<bool>,
 }
 
 impl Default for ModelLayer {
@@ -167,6 +168,7 @@ impl Default for ModelLayer {
         let filter_progress = Attribute::new(0.0);
         let filter_bounds = Arc::new(RwLock::new(None));
         let clip_content = Attribute::new(false);
+        let clip_children = Attribute::new(false);
         Self {
             key: RwLock::new(String::new()),
             display,
@@ -191,6 +193,7 @@ impl Default for ModelLayer {
             image_filter_progress: filter_progress,
             filter_bounds,
             clip_content,
+            clip_children,
         }
     }
 }

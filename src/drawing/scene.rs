@@ -217,6 +217,14 @@ pub fn paint_node_tree(
         context_opacity = render_layer.opacity;
     }
     // TODO: clip bounds only if the layer is set to clip children
+    let restore_point = render_canvas.save();
+    if render_layer.clip_children {
+        render_canvas.clip_rrect(
+            render_layer.rbounds,
+            Some(skia_safe::ClipOp::Intersect),
+            Some(true),
+        );
+    }
     // let bounds = skia_safe::Rect::from_wh(render_layer.size.x, render_layer.size.y);
     // canvas.clip_rect(bounds, None, None);
     node_id.children(arena).for_each(|child_id| {
@@ -227,6 +235,7 @@ pub fn paint_node_tree(
         render_node_tree(child_ref, arena, render_canvas, context_opacity);
         render_canvas.restore_to_count(restore_point);
     });
+    render_canvas.restore_to_count(restore_point);
 }
 pub fn set_node_transform(node: &SceneNode, canvas: &Canvas) {
     let render_layer = node.render_layer.read().unwrap();

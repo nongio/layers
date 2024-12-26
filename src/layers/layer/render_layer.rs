@@ -36,6 +36,7 @@ pub struct RenderLayer {
     pub content: Option<Picture>,
     pub content_damage: skia_safe::Rect,
     pub clip_content: bool,
+    pub clip_children: bool,
 }
 
 impl RenderLayer {
@@ -176,6 +177,10 @@ impl RenderLayer {
         self.rbounds = skia_safe::RRect::new_rect_radii(bounds, &border_corner_radius.into());
         self.global_transformed_rbounds =
             skia_safe::RRect::new_rect_radii(transformed_bounds, &border_corner_radius.into());
+
+        self.clip_content = model.clip_content.value();
+        self.clip_children = model.clip_children.value();
+    
     }
 
     pub(crate) fn from_model_and_layout(
@@ -278,6 +283,8 @@ impl RenderLayer {
         let blend_mode = model.blend_mode.value();
         let content_damage = skia_safe::Rect::default();
         let clip_content = model.clip_content.value();
+        let clip_children = model.clip_children.value();
+
         Self {
             key,
             size,
@@ -306,6 +313,7 @@ impl RenderLayer {
             rbounds,
             global_transformed_rbounds: transformed_rbounds,
             clip_content,
+            clip_children,
         }
     }
 }
@@ -344,6 +352,7 @@ impl Default for RenderLayer {
             content_draw_func: None,
             content_damage: skia_safe::Rect::default(),
             clip_content: false,
+            clip_children: false,
         }
     }
 }

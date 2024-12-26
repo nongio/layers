@@ -11,20 +11,33 @@ use crate::types::Size;
 
 /// A trait for structs that can produce into a layertree
 pub trait RenderLayerTree {
-    fn key(&self) -> String;
+    fn get_key(&self) -> String;
     fn mount_layer(&self, layer: Layer);
-
     fn render_layertree(&self) -> LayerTree;
 }
 /// A layertree renders itself into a layertree
 impl RenderLayerTree for LayerTree {
-    fn key(&self) -> String {
+    fn get_key(&self) -> String {
         self.key.clone()
     }
     fn mount_layer(&self, _layer: Layer) {}
 
     fn render_layertree(&self) -> LayerTree {
         self.clone()
+    }
+}
+/// A layertree renders itself into a layertree
+impl RenderLayerTree for LayerTreeBuilder {
+    fn get_key(&self) -> String {
+        self.key.clone().unwrap_or_default()
+    }
+    fn mount_layer(&self, _layer: Layer) {}
+
+    fn render_layertree(&self) -> LayerTree {
+        self
+            .build()
+            .unwrap()
+            .render_layertree()
     }
 }
 
@@ -92,6 +105,11 @@ pub struct LayerTree {
 
     #[builder(setter(into), default)]
     pub replicate_node: Option<NodeRef>,
+
+    #[builder(setter(into), default)]
+    pub clip_content: Option<bool>,
+    #[builder(setter(into), default)]
+    pub clip_children: Option<bool>,
 }
 
 impl AsRef<LayerTree> for LayerTree {
@@ -266,8 +284,8 @@ impl Into<Vec<LayerTree>> for LayerTree {
 }
 
 impl RenderLayerTree for Arc<dyn RenderLayerTree> {
-    fn key(&self) -> String {
-        self.as_ref().key()
+    fn get_key(&self) -> String {
+        self.as_ref().get_key()
     }
     fn mount_layer(&self, layer: Layer) {
         self.as_ref().mount_layer(layer);

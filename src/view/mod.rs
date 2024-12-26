@@ -185,7 +185,7 @@ impl<S: Hash + Clone> std::fmt::Debug for View<S> {
 }
 
 impl<S: Hash + Clone> RenderLayerTree for View<S> {
-    fn key(&self) -> String {
+    fn get_key(&self) -> String {
         self.key.clone()
     }
     fn mount_layer(&self, layer: Layer) {

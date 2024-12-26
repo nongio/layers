@@ -147,6 +147,12 @@ impl BuildLayerTree for Layer {
         if let Some(on_pointer_release) = viewlayer_tree.on_pointer_release.clone() {
             scene_layer.add_on_pointer_release(on_pointer_release);
         }
+        if let Some(clip_content) = viewlayer_tree.clip_content {
+            scene_layer.set_clip_content(clip_content, None);
+        }
+        if let Some(clip_children) = viewlayer_tree.clip_children {
+            scene_layer.set_clip_children(clip_children, None);
+        }
         let layer_id = scene_layer.id();
         let engine = scene_layer.engine;
         if let Some(layer_id) = layer_id {
@@ -174,7 +180,7 @@ impl BuildLayerTree for Layer {
             // Add missing layers
             if let Some(children) = viewlayer_tree.children.as_ref() {
                 for child in children.iter() {
-                    let child_key = child.key().clone();
+                    let child_key = child.get_key().clone();
                     // check if there is already a layer for this child otherwise create one
                     let mut nodes = cache_viewlayer.get(&child_key).cloned().unwrap_or_default();
                     let child_layer_id = nodes.pop_front();
@@ -227,7 +233,7 @@ impl BuildLayerTree for Layer {
                         let mut nodes =
                             cache_viewlayer.get(&child_key).cloned().unwrap_or_default();
                         nodes.push_back(child_layer_id);
-                        cache_viewlayer.insert(child.key(), nodes);
+                        cache_viewlayer.insert(child.get_key(), nodes);
                     }
 
                     current_scene_layers_children
