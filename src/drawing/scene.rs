@@ -169,7 +169,11 @@ pub fn create_surface_for_node(
     let width = (bounds.x * safe_multiplier) as i32;
     let height = (bounds.y * safe_multiplier) as i32;
     if width == 0 || height == 0 {
-        println!("Invalid size for surface {:?}", bounds);
+        tracing::warn!(
+            "Invalid size for surface {:?} [{:?}]",
+            node.id().unwrap(),
+            bounds
+        );
         return None;
     }
 
