@@ -97,7 +97,7 @@ pub fn load_svg_image(
     );
     let image = skia_safe::images::raster_from_data(
         &info,
-        &skia_safe::Data::new_copy(pixmap.data()),
+        skia_safe::Data::new_copy(pixmap.data()),
         pixmap_size.width() as usize * 4,
     )
     .unwrap();

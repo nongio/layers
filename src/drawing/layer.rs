@@ -7,6 +7,7 @@ use crate::{engine::SceneNode, types::PaintColor};
 use super::scene::BACKGROUND_BLUR_SIGMA;
 
 /// Draw a layer into a skia::Canvas.
+#[profiling::function]
 pub fn draw_layer(
     canvas: &Canvas,
     layer: &RenderLayer,

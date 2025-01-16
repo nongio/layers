@@ -34,10 +34,7 @@ impl RenderLayerTree for LayerTreeBuilder {
     fn mount_layer(&self, _layer: Layer) {}
 
     fn render_layertree(&self) -> LayerTree {
-        self
-            .build()
-            .unwrap()
-            .render_layertree()
+        self.build().unwrap().render_layertree()
     }
 }
 
