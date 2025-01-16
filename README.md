@@ -91,7 +91,7 @@ root_layer.set_layout_style(taffy::Style {
     align_items: Some(taffy::AlignItems::Center),
     ..Default::default()
 });
-engine.scene_add_layer(root_layer.clone());
+engine.add_layer(root_layer.clone());
 ```
 
 ## Usage: Tick the engine to update layout and animations
@@ -135,7 +135,7 @@ pub fn render_main_view(state: &bool, view: &View<bool>) -> LayerTree {
 let engine = LayersEngine::new(1000.0, 1000.0);
 // create a new layer and add it to the scene
 let layer = engine.new_layer();
-engine.scene_add_layer(layer.clone());
+engine.add_layer(layer.clone());
 
 // define a new view with a boolean state
 let initial = false;
