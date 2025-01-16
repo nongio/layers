@@ -10,7 +10,7 @@ use std::sync::{Arc, RwLock};
 pub fn call_finish_transaction() {
     let engine = LayersEngine::new(1000.0, 1000.0);
     let layer = engine.new_layer();
-    engine.scene_add_layer(layer.clone());
+    engine.add_layer(layer.clone());
 
     let transaction = layer.set_position(
         Point { x: 200.0, y: 100.0 },
@@ -45,7 +45,7 @@ pub fn call_finish_transaction() {
 pub fn call_start_transaction() {
     let engine = LayersEngine::new(1000.0, 1000.0);
     let layer = engine.new_layer();
-    engine.scene_add_layer(layer.clone());
+    engine.add_layer(layer.clone());
 
     let transaction = layer.set_position(
         Point { x: 200.0, y: 100.0 },
@@ -89,7 +89,7 @@ pub fn call_start_transaction() {
 pub fn call_update_transaction() {
     let engine = LayersEngine::new(1000.0, 1000.0);
     let layer = engine.new_layer();
-    engine.scene_add_layer(layer.clone());
+    engine.add_layer(layer.clone());
 
     let called = Arc::new(RwLock::new(0.0));
     let c = called.clone();
@@ -120,7 +120,7 @@ pub fn call_update_transaction() {
 pub fn call_finish_transaction_spring() {
     let engine = LayersEngine::new(1000.0, 1000.0);
     let layer = engine.new_layer();
-    engine.scene_add_layer(layer.clone());
+    engine.add_layer(layer.clone());
 
     let transaction = layer.set_position(
         Point { x: 200.0, y: 100.0 },
@@ -158,7 +158,7 @@ pub fn call_finish_transaction_spring() {
 pub fn call_finish_transaction_spring_predictable() {
     let engine = LayersEngine::new(1000.0, 1000.0);
     let layer = engine.new_layer();
-    engine.scene_add_layer(layer.clone());
+    engine.add_layer(layer.clone());
 
     let transaction = layer.set_position(
         Point { x: 200.0, y: 100.0 },
@@ -196,7 +196,7 @@ pub fn call_finish_transaction_spring_predictable() {
 pub fn call_start_value() {
     let engine = LayersEngine::new(1000.0, 1000.0);
     let layer = engine.new_layer();
-    engine.scene_add_layer(layer.clone());
+    engine.add_layer(layer.clone());
 
     layer.set_position(
         Point { x: 200.0, y: 100.0 },
@@ -256,7 +256,7 @@ pub fn call_start_value() {
 pub fn call_update_value() {
     let engine = LayersEngine::new(1000.0, 1000.0);
     let layer = engine.new_layer();
-    engine.scene_add_layer(layer.clone());
+    engine.add_layer(layer.clone());
 
     layer.set_position(
         Point { x: 200.0, y: 100.0 },
