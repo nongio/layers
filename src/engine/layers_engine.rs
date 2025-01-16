@@ -46,7 +46,7 @@ use super::{
 ///     align_items: Some(taffy::AlignItems::Center),
 ///     ..Default::default()
 /// });
-/// engine.scene_add_layer(root_layer.clone());
+/// engine.add_layer(root_layer.clone());
 /// ```
 /// ## Usage: Update the engine
 /// ```rust
@@ -155,31 +155,42 @@ impl LayersEngine {
     }
     /// Add a new layer to the scene
     /// The layer will be added to the root of the scene
-    pub fn scene_add_layer(&self, layer: impl Into<Layer>) -> NodeRef {
-        self.engine.scene_add_layer(layer, None)
+    pub fn add_layer(&self, layer: impl Into<Layer>) -> NodeRef {
+        self.engine.append_layer(layer, None)
     }
     /// Add a new layer to the scene, attached to the given parent
     ///
     /// If the parent is None, the layer will be attached to the root of the scene
-    pub fn scene_add_layer_to(
+    pub fn append_layer_to(
         &self,
         layer: impl Into<Layer>,
         parent: impl Into<Option<NodeRef>>,
     ) -> NodeRef {
         let parent = parent.into();
-        self.engine.scene_add_layer(layer, parent)
+        self.engine.append_layer(layer, parent)
+    }
+    /// Add a new layer to the scene, attached to the given parent
+    ///
+    /// If the parent is None, the layer will be attached to the root of the scene
+    pub fn prepend_layer_to(
+        &self,
+        layer: impl Into<Layer>,
+        parent: impl Into<Option<NodeRef>>,
+    ) -> NodeRef {
+        let parent = parent.into();
+        self.engine.prepend_layer(layer, parent)
     }
     /// Add a new layer to the scene, attached to the given parent,
     /// maintaining the given position.
     ///
     /// If the parent is None, the layer will be attached to the root of the scene
-    pub fn scene_add_layer_to_positioned(
+    pub fn add_layer_to_positioned(
         &self,
         layer: impl Into<Layer>,
         parent: impl Into<Option<NodeRef>>,
     ) -> NodeRef {
         let parent = parent.into();
-        self.engine.scene_add_layer_to_positioned(layer, parent)
+        self.engine.add_layer_to_positioned(layer, parent)
     }
     /// Remove a layer from the scene
     ///
@@ -191,7 +202,7 @@ impl LayersEngine {
     }
     /// Set the root layer of the scene
     pub fn scene_set_root(&self, layer: impl Into<Layer>) -> NodeRef {
-        self.engine.scene_set_root(layer)
+        self.engine.set_root_layer(layer)
     }
     /// Get a node from the scene if it exists
     pub fn scene_get_node(&self, node: &NodeRef) -> Option<TreeStorageNode<SceneNode>> {

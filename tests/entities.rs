@@ -6,7 +6,7 @@ pub fn change_layer_position() {
 
     let layer = engine.new_layer();
 
-    let _id = engine.scene_add_layer(layer.clone());
+    let _id = engine.add_layer(layer.clone());
 
     assert_eq!(layer.position().x, 0.0);
 

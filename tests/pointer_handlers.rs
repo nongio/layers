@@ -10,7 +10,7 @@ pub fn pointer_move() {
     let layer = engine.new_layer();
     layer.set_size(Size::points(200.0, 200.0), None);
     layer.set_position((0.0, 0.0), None);
-    engine.scene_add_layer(layer.clone());
+    engine.add_layer(layer.clone());
 
     engine.update(0.016);
     let called = Arc::new(RwLock::new(0));
@@ -35,7 +35,7 @@ pub fn pointer_doesnt_move() {
     let layer = engine.new_layer();
     layer.set_size(Size::points(200.0, 200.0), None);
     layer.set_position((200.0, 200.0), None);
-    engine.scene_add_layer(layer.clone());
+    engine.add_layer(layer.clone());
     engine.update(0.016);
 
     let called = Arc::new(RwLock::new(0));
@@ -60,12 +60,12 @@ pub fn pointer_move_nested() {
     let layer = engine.new_layer();
     layer.set_size(Size::points(200.0, 200.0), None);
     layer.set_position((200.0, 200.0), None);
-    engine.scene_add_layer(layer.clone());
+    engine.add_layer(layer.clone());
 
     let layer2 = engine.new_layer();
     layer2.set_size(Size::points(200.0, 200.0), None);
     layer2.set_position((200.0, 200.0), None);
-    engine.scene_add_layer_to(layer2.clone(), layer.id());
+    engine.append_layer_to(layer2.clone(), layer.id());
 
     engine.update(0.016);
 
@@ -92,12 +92,12 @@ pub fn pointer_move_nested_parent() {
     let layer = engine.new_layer();
     layer.set_size(Size::points(200.0, 200.0), None);
     layer.set_position((200.0, 200.0), None);
-    engine.scene_add_layer(layer.clone());
+    engine.add_layer(layer.clone());
 
     let layer2 = engine.new_layer();
     layer2.set_size(Size::points(200.0, 200.0), None);
     layer2.set_position((200.0, 200.0), None);
-    engine.scene_add_layer_to(layer2.clone(), layer.id());
+    engine.append_layer_to(layer2.clone(), layer.id());
 
     engine.update(0.016);
 
@@ -123,12 +123,12 @@ pub fn pointer_doesnt_move_nested() {
     let layer = engine.new_layer();
     layer.set_size(Size::points(200.0, 200.0), None);
     layer.set_position((200.0, 200.0), None);
-    engine.scene_add_layer(layer.clone());
+    engine.add_layer(layer.clone());
 
     let layer2 = engine.new_layer();
     layer2.set_size(Size::points(200.0, 200.0), None);
     layer2.set_position((200.0, 200.0), None);
-    engine.scene_add_layer_to(layer2.clone(), layer.id());
+    engine.append_layer_to(layer2.clone(), layer.id());
 
     engine.update(0.016);
 
@@ -156,7 +156,7 @@ pub fn pointer_remove() {
     layer.set_size(Size::points(200.0, 200.0), None);
     layer.set_position((0.0, 0.0), None);
 
-    engine.scene_add_layer(layer.clone());
+    engine.add_layer(layer.clone());
 
     engine.update(0.016);
     let called = Arc::new(RwLock::new(0));
@@ -184,12 +184,12 @@ pub fn pointer_in_out_nested_parent() {
     let layer = engine.new_layer();
     layer.set_size(Size::points(200.0, 200.0), None);
     layer.set_position((200.0, 200.0), None);
-    engine.scene_add_layer(layer.clone());
+    engine.add_layer(layer.clone());
 
     let layer2 = engine.new_layer();
     layer2.set_size(Size::points(200.0, 200.0), None);
     layer2.set_position((200.0, 200.0), None);
-    engine.scene_add_layer_to(layer2.clone(), layer.id());
+    engine.append_layer_to(layer2.clone(), layer.id());
 
     engine.update(0.016);
 

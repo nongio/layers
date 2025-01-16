@@ -83,7 +83,7 @@ pub fn simple_build() {
     let engine = LayersEngine::new(1000.0, 1000.0);
     let layer = engine.new_layer();
 
-    engine.scene_add_layer(layer.clone());
+    engine.add_layer(layer.clone());
 
     let lt = LayerTreeBuilder::default()
         .children(vec![LayerTreeBuilder::default().build().unwrap()])
@@ -99,7 +99,7 @@ pub fn build_a_view() {
     let engine = LayersEngine::new(1000.0, 1000.0);
     let layer = engine.new_layer();
 
-    engine.scene_add_layer(layer.clone());
+    engine.add_layer(layer.clone());
 
     let initial = false;
     let view = View::new("test_view", initial, render_one_child_view);
@@ -117,7 +117,7 @@ pub fn rebuild_a_view() {
     let engine = LayersEngine::new(1000.0, 1000.0);
     let layer = engine.new_layer();
 
-    engine.scene_add_layer(layer.clone());
+    engine.add_layer(layer.clone());
 
     let initial = false;
     let view = View::new("test_view", initial, render_one_child_view);
@@ -154,7 +154,7 @@ pub fn nested_views() {
     let engine = LayersEngine::new(1000.0, 1000.0);
     let layer = engine.new_layer();
 
-    engine.scene_add_layer(layer.clone());
+    engine.add_layer(layer.clone());
 
     let initial = false;
     let view = View::new("parent_view", initial, render_main_view);
@@ -191,7 +191,7 @@ pub fn nested_views() {
 //     // let engine = LayersEngine::new(1000.0, 1000.0);
 //     // let layer = engine.new_layer();
 
-//     // engine.scene_add_layer(layer.clone());
+//     // engine.add_layer(layer.clone());
 
 //     let layer_tree = LayerTreeBuilder::default()
 //         .key("test_layer")

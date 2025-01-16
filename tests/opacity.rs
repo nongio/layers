@@ -7,7 +7,7 @@ mod tests {
         let engine = LayersEngine::new(1000.0, 1000.0);
 
         let layer = engine.new_layer();
-        let node = engine.scene_add_layer(layer.clone());
+        let node = engine.add_layer(layer.clone());
 
         layer.set_opacity(0.0, None);
         engine.update(0.016);
@@ -38,11 +38,11 @@ mod tests {
 
         wrap.set_opacity(0.0, None);
 
-        engine.scene_add_layer(wrap.clone());
+        engine.add_layer(wrap.clone());
 
         let layer = engine.new_layer();
 
-        let node = engine.scene_add_layer_to(layer.clone(), wrap.clone());
+        let node = engine.append_layer_to(layer.clone(), wrap.clone());
 
         engine.update(0.016);
         let scene_node = engine.scene_get_node(&node).unwrap();

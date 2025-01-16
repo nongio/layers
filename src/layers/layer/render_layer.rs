@@ -180,7 +180,6 @@ impl RenderLayer {
 
         self.clip_content = model.clip_content.value();
         self.clip_children = model.clip_children.value();
-    
     }
 
     pub(crate) fn from_model_and_layout(

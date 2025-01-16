@@ -201,10 +201,8 @@ impl BuildLayerTree for Layer {
                                 }
 
                                 // we should not need to add the layer back to the parent
-                                engine.scene_add_layer(
-                                    child_scene_layer.layer.clone(),
-                                    Some(layer_id),
-                                );
+                                engine
+                                    .append_layer(child_scene_layer.layer.clone(), Some(layer_id));
                                 return Some((child_layer_id, child_scene_layer));
                             }
                             None
@@ -212,7 +210,7 @@ impl BuildLayerTree for Layer {
                         .unwrap_or_else(|| {
                             // the child layer does not exist, or is removed
                             let layer = Layer::with_engine(engine.clone());
-                            let id = engine.scene_add_layer(layer, Some(layer_id));
+                            let id = engine.append_layer(layer, Some(layer_id));
                             let node = engine.scene.get_node_sync(id).unwrap();
 
                             (id, node.get().clone())
