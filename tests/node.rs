@@ -18,8 +18,8 @@ pub fn bounds_with_children() {
     layer.set_position((100.0, 100.0), None);
     layer.set_size(Size::points(0.0, 0.0), None);
 
-    engine.scene_add_layer(wrap.clone());
-    engine.scene_add_layer_to(layer.clone(), wrap.clone());
+    engine.add_layer(wrap.clone());
+    engine.append_layer_to(layer.clone(), wrap.clone());
 
     let draw_shadow = move |_canvas: &lay_rs::skia::Canvas, w: f32, h: f32| {
         lay_rs::skia::Rect::from_xywh(0.0, 0.0, w, h)
@@ -75,7 +75,7 @@ pub fn bounds_with_children() {
 //     layer.set_position((100.0, 100.0), None);
 //     layer.set_size(Size::points(0.0, 0.0), None);
 
-//     engine.scene_add_layer(layer.clone());
+//     engine.add_layer(layer.clone());
 
 //     let draw_shadow = move |canvas: &lay_rs::skia::Canvas, w: f32, h: f32| {
 //         lay_rs::skia::Rect::from_xywh(0.0, 0.0, w, h)

@@ -12,7 +12,7 @@ use tokio::{runtime::Handle, task::JoinError};
 use crate::prelude::{Layer, Point};
 
 use super::{
-    node::{RenderableFlags, SceneNode},
+    node::{DrawCacheManagement, SceneNode},
     storage::{TreeStorage, TreeStorageId, TreeStorageNode},
     NodeRef,
 };
@@ -53,7 +53,25 @@ impl Scene {
             child.detach(nodes);
             parent.append(child, nodes);
             let scene_node = nodes.get(child).unwrap().get();
-            scene_node.insert_flags(RenderableFlags::NEEDS_PAINT);
+            scene_node.set_need_repaint(true);
+
+            let parent = *parent;
+            let new_parent_node = nodes.get(parent).unwrap().get();
+            new_parent_node.set_need_layout(true);
+        });
+    }
+
+    pub(crate) fn prepend_node_to(&self, child: NodeRef, parent: NodeRef) {
+        self.with_arena_mut(|nodes| {
+            let child = *child;
+            child.detach(nodes);
+            parent.prepend(child, nodes);
+            let scene_node = nodes.get(child).unwrap().get();
+            scene_node.set_need_repaint(true);
+
+            let parent = *parent;
+            let new_parent_node = nodes.get(parent).unwrap().get();
+            new_parent_node.set_need_layout(true);
         });
     }
     /// Add a new node to the scene

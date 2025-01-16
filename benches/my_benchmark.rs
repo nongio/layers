@@ -27,7 +27,7 @@ fn criterion_benchmark_update(c: &mut Criterion) {
             let mut layers = Vec::<Layer>::new();
             for _ in 0..count {
                 let layer = engine.new_layer();
-                engine.scene_add_layer(layer.clone());
+                engine.add_layer(layer.clone());
                 layers.push(layer);
             }
 
@@ -139,7 +139,7 @@ fn criterion_benchmark_draw(c: &mut Criterion) {
                     layer.set_image_cache(true);
                     // let i = i as f32;
                     // layer.set_position((i, i), None);
-                    engine.scene_add_layer(layer.clone());
+                    engine.add_layer(layer.clone());
                     layers.push(layer);
                 }
 
@@ -222,7 +222,7 @@ fn criterion_benchmark_draw_shadow(c: &mut Criterion) {
                     layer.set_image_cache(true);
                     // let i = i as f32;
                     layer.set_position((0.0, 0.0), None);
-                    engine.scene_add_layer(layer.clone());
+                    engine.add_layer(layer.clone());
                     layers.push(layer);
                 }
 

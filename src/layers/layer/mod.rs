@@ -162,7 +162,6 @@ impl Layer {
     change_model!(clip_content, bool, RenderableFlags::NEEDS_PAINT);
     change_model!(clip_children, bool, RenderableFlags::NEEDS_PAINT);
 
-
     pub fn change_size(&self, value: Size) -> AnimatedNodeChange {
         let flags = RenderableFlags::NEEDS_LAYOUT;
         let change: Arc<ModelChange<Size>> = Arc::new(ModelChange {
@@ -272,7 +271,11 @@ impl Layer {
             .load(std::sync::atomic::Ordering::Relaxed)
     }
     pub fn add_sublayer(&self, layer: Layer) -> NodeRef {
-        self.engine.scene_add_layer(layer, self.id())
+        self.engine.append_layer(layer, self.id())
+    }
+
+    pub fn prepend_sublayer(&self, layer: Layer) -> NodeRef {
+        self.engine.prepend_layer(layer, self.id())
     }
 
     pub fn set_blend_mode(&self, blend_mode: BlendMode) {
@@ -551,11 +554,7 @@ impl Layer {
     }
     pub fn on_change_size<F: Into<TransactionCallback>>(&self, f: F, once: bool) {
         let size_id = self.model.size.id;
-        self.engine.on_update_value(
-            size_id,
-            f,
-            once,
-        );
+        self.engine.on_update_value(size_id, f, once);
     }
 }
 

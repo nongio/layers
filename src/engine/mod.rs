@@ -127,6 +127,7 @@ impl<F: Fn(&Layer, f32) + Send + Sync + 'static> From<F> for TransactionCallback
         }
     }
 }
+
 impl PartialEq for TransactionCallback {
     fn eq(&self, other: &Self) -> bool {
         self.id == other.id
@@ -384,7 +385,8 @@ impl Engine {
         let new_engine = Self::new(id, width, height);
         Arc::new(new_engine)
     }
-    pub fn scene_set_root(&self, layer: impl Into<Layer>) -> NodeRef {
+    /// set the layer as the root of the scene and root of the layout tree
+    pub fn set_root_layer(&self, layer: impl Into<Layer>) -> NodeRef {
         let layer: Layer = layer.into();
         let layout = layer.layout_node_id;
 
@@ -412,16 +414,11 @@ impl Engine {
         id
     }
 
-    pub fn scene_add_layer(&self, layer: impl Into<Layer>, parent: Option<NodeRef>) -> NodeRef {
-        let layer: Layer = layer.into();
+    fn layout_detach_layer(&self, layer: &Layer) {
         let layout = layer.layout_node_id;
 
-        let new_parent = parent.or_else(|| {
-            let scene_root = *self.scene_root.read().unwrap();
-            scene_root
-        });
-
         {
+            // if the layer has an id, then remove it from the layout tree
             let mut layout_tree = self.layout_tree.write().unwrap();
             if layer.id().is_some() {
                 if let Some(layout_parent) = layout_tree.parent(layout) {
@@ -429,36 +426,99 @@ impl Engine {
                 }
             }
         }
-        let layer_id = if new_parent.is_none() {
+    }
+
+    fn layout_append_layer(&self, layer: &Layer, parent: NodeRef) {
+        let layout = layer.layout_node_id;
+        let parent_layout = {
+            let parent_node = self.scene.get_node_sync(parent).unwrap();
+            let parent_scenenode = parent_node.get();
+            parent_scenenode.layout_node_id
+        };
+        let mut layout_tree = self.layout_tree.write().unwrap();
+        layout_tree.add_child(parent_layout, layout).unwrap();
+        let res = layout_tree.mark_dirty(parent_layout);
+        if let Some(err) = res.err() {
+            println!("layout err {}", err);
+        }
+    }
+
+    fn layout_prepend_layer(&self, layer: &Layer, parent: NodeRef) {
+        let layout = layer.layout_node_id;
+        let parent_layout = {
+            let parent_node = self.scene.get_node_sync(parent).unwrap();
+            let parent_scenenode = parent_node.get();
+            parent_scenenode.layout_node_id
+        };
+        let mut layout_tree = self.layout_tree.write().unwrap();
+        layout_tree
+            .insert_child_at_index(parent_layout, 0, layout)
+            .unwrap();
+        let res = layout_tree.mark_dirty(parent_layout);
+        if let Some(err) = res.err() {
+            println!("layout err {}", err);
+        }
+    }
+
+    pub fn append_layer(&self, layer: impl Into<Layer>, parent: Option<NodeRef>) -> NodeRef {
+        let layer: Layer = layer.into();
+        let layout = layer.layout_node_id;
+
+        let layer_id = layer.id().unwrap_or_else(|| {
+            let id = self.scene.add(layer.clone(), layout);
+            layer.set_id(id);
+            id
+        });
+
+        self.layout_detach_layer(&layer);
+
+        let new_parent = parent.or_else(|| {
+            let scene_root = *self.scene_root.read().unwrap();
+            scene_root
+        });
+
+        if new_parent.is_none() {
             // if we append to a scene without a root, we set the layer as the root
-            self.scene_set_root(layer)
+            self.set_root_layer(layer);
         } else {
             let new_parent = new_parent.unwrap();
-            let id = layer.id().unwrap_or_else(|| {
-                let id = self.scene.add(layer.clone(), layout);
-                layer.set_id(id);
-                id
-            });
 
-            let new_parent_node = self.scene.get_node_sync(new_parent).unwrap();
-            let new_parent_node = new_parent_node.get();
-            new_parent_node.set_need_layout(true);
-
-            let parent_layout = new_parent_node.layout_node_id;
-            self.scene.append_node_to(id, new_parent);
-            {
-                let mut layout_tree = self.layout_tree.write().unwrap();
-                layout_tree.add_child(parent_layout, layout).unwrap();
-                let res = layout_tree.mark_dirty(parent_layout);
-                if let Some(err) = res.err() {
-                    println!("layout err {}", err);
-                }
-            }
-            id
-        };
+            self.scene.append_node_to(layer_id, new_parent);
+            self.layout_append_layer(&layer, new_parent);
+        }
         layer_id
     }
-    pub fn scene_add_layer_to_positioned(
+
+    pub fn prepend_layer(&self, layer: impl Into<Layer>, parent: Option<NodeRef>) -> NodeRef {
+        let layer: Layer = layer.into();
+        let layout = layer.layout_node_id;
+
+        let layer_id = layer.id().unwrap_or_else(|| {
+            let id = self.scene.add(layer.clone(), layout);
+            layer.set_id(id);
+            id
+        });
+
+        self.layout_detach_layer(&layer);
+
+        let new_parent = parent.or_else(|| {
+            let scene_root = *self.scene_root.read().unwrap();
+            scene_root
+        });
+
+        if new_parent.is_none() {
+            // if we append to a scene without a root, we set the layer as the root
+            self.set_root_layer(layer);
+        } else {
+            let new_parent = new_parent.unwrap();
+
+            self.scene.prepend_node_to(layer_id, new_parent);
+            self.layout_prepend_layer(&layer, new_parent);
+        }
+        layer_id
+    }
+
+    pub fn add_layer_to_positioned(
         &self,
         layer: impl Into<Layer>,
         parent: Option<NodeRef>,
@@ -487,7 +547,7 @@ impl Engine {
             y: position.y - parent_position.y,
         };
 
-        let node = self.scene_add_layer(layer.clone(), parent);
+        let node = self.append_layer(layer.clone(), parent);
         layer.set_position(new_position, None);
         {
             execute_transactions(self);
@@ -504,12 +564,14 @@ impl Engine {
 
         node
     }
+
     pub fn mark_for_delete(&self, layer: NodeRef) {
         if let Some(node) = self.scene.get_node_sync(layer) {
             let node = node.get();
             node.mark_for_deletion();
         }
     }
+
     pub(crate) fn scene_remove_layer(&self, layer: impl Into<Option<NodeRef>>) {
         let layer_id: Option<NodeRef> = layer.into();
         if let Some(layer_id) = layer_id {

@@ -30,7 +30,7 @@ pub extern "C" fn engine_add_layer_to_scene(
     let layer = unsafe { &*layer };
     let layer = (*layer).clone();
 
-    engine.scene_add_layer(layer).0.into()
+    engine.add_layer(layer).0.into()
 }
 
 #[no_mangle]

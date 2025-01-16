@@ -19,7 +19,7 @@ pub fn setup_layer(layer: &Layer) {
 //     let engine = LayersEngine::new(1000.0, 1000.0);
 //     let layer = engine.new_layer();
 //     setup_layer(&layer);
-//     let _id = engine.scene_add_layer(layer.clone());
+//     let _id = engine.add_layer(layer.clone());
 
 //     // let data = std::fs::read("./assets/fill.png").unwrap();
 //     // layer.set_content_from_data_encoded(&data);

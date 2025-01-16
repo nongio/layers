@@ -97,7 +97,7 @@ async fn main() {
     engine.scene_set_root(root.clone());
 
     let layer = engine.new_layer();
-    engine.scene_add_layer_to(layer.clone(), root.id());
+    engine.append_layer_to(layer.clone(), root.id());
 
     let instant = std::time::Instant::now();
     let mut update_frame = 0;
@@ -105,7 +105,7 @@ async fn main() {
     let last_instant = instant;
 
     let test_layer = engine.new_layer();
-    engine.scene_add_layer_to(test_layer.clone(), root.id());
+    engine.append_layer_to(test_layer.clone(), root.id());
     test_layer.set_anchor_point((0.0, 0.0), None);
     test_layer.set_size(Size::points(500.0, 900.0), None);
     test_layer.set_background_color(
@@ -125,7 +125,7 @@ async fn main() {
     );
 
     let test2 = engine.new_layer();
-    engine.scene_add_layer_to(test2.clone(), test_layer.id());
+    engine.append_layer_to(test2.clone(), test_layer.id());
     test2.set_anchor_point((0.0, 0.0), None);
     test2.set_size(Size::points(100.0, 100.0), None);
     test2.set_background_color(

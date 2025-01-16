@@ -15,7 +15,7 @@ mod tests {
         let layer = engine.new_layer();
         layer.set_position((100.0, 100.0), None);
         layer.set_size(Size::points(100.0, 100.0), None);
-        let node = engine.scene_add_layer(layer.clone());
+        let node = engine.add_layer(layer.clone());
 
         engine.update(0.016);
 
@@ -93,7 +93,7 @@ mod tests {
             },
             None,
         );
-        engine.scene_add_layer(layer.clone());
+        engine.add_layer(layer.clone());
         engine.update(0.016);
 
         let scene_damage = engine.damage();
@@ -110,7 +110,7 @@ mod tests {
         let layer = engine.new_layer();
         layer.set_position((100.0, 100.0), None);
         layer.set_size(Size::points(100.0, 100.0), None);
-        engine.scene_add_layer(layer.clone());
+        engine.add_layer(layer.clone());
         engine.update(0.016);
         let scene_damage = engine.damage();
         // adding an empty layer should not damage the content
@@ -137,12 +137,12 @@ mod tests {
         layer.set_position((100.0, 100.0), None);
         layer.set_size(Size::points(100.0, 100.0), None);
         // layer.set_image_cache(true);
-        engine.scene_add_layer(layer.clone());
+        engine.add_layer(layer.clone());
 
         let layer2 = engine.new_layer();
         layer2.set_position((100.0, 100.0), None);
         layer2.set_size(Size::points(100.0, 100.0), None);
-        engine.scene_add_layer_to(layer2.clone(), layer.clone());
+        engine.append_layer_to(layer2.clone(), layer.clone());
 
         engine.update(0.016);
         let scene_damage = engine.damage();
@@ -180,7 +180,7 @@ mod tests {
         let layer = engine.new_layer();
         layer.set_position((100.0, 100.0), None);
         layer.set_size(Size::points(100.0, 100.0), None);
-        engine.scene_add_layer(layer.clone());
+        engine.add_layer(layer.clone());
 
         engine.update(0.016);
         let scene_damage = engine.damage();
@@ -199,7 +199,7 @@ mod tests {
             },
             None,
         );
-        engine.scene_add_layer(layer.clone());
+        engine.add_layer(layer.clone());
 
         let draw_func = |_c: &skia_safe::Canvas, _w: f32, _h: f32| -> skia_safe::Rect {
             skia_safe::Rect::from_xywh(0.0, 0.0, 10.0, 10.0)
@@ -226,7 +226,7 @@ mod tests {
             },
             None,
         );
-        engine.scene_add_layer(layer.clone());
+        engine.add_layer(layer.clone());
 
         engine.update(0.016);
         let scene_damage = engine.damage();
@@ -263,7 +263,7 @@ mod tests {
         let engine = LayersEngine::new(1000.0, 1000.0);
         let wrap = engine.new_layer();
         wrap.set_size(Size::percent(1.0, 1.0), None);
-        engine.scene_add_layer(wrap.clone());
+        engine.add_layer(wrap.clone());
         let layer = engine.new_layer();
         layer.set_layout_style(lay_rs::taffy::Style {
             position: lay_rs::taffy::Position::Absolute,
@@ -273,7 +273,7 @@ mod tests {
         layer.set_size(Size::points(100.0, 100.0), None);
         layer.set_background_color(Color::new_hex("#ff0000ff"), None);
         layer.set_opacity(0.0, None);
-        engine.scene_add_layer_to(layer.clone(), wrap.clone());
+        engine.append_layer_to(layer.clone(), wrap.clone());
 
         engine.update(0.016);
         let scene_damage = engine.damage();
@@ -320,7 +320,7 @@ mod tests {
         let engine = LayersEngine::new(1000.0, 1000.0);
         let wrap = engine.new_layer();
         wrap.set_size(Size::percent(1.0, 1.0), None);
-        engine.scene_add_layer(wrap.clone());
+        engine.add_layer(wrap.clone());
 
         let layer = engine.new_layer();
         layer.set_layout_style(lay_rs::taffy::Style {
@@ -332,7 +332,7 @@ mod tests {
         layer.set_background_color(Color::new_hex("#ff0000ff"), None);
         wrap.set_opacity(0.0, None);
 
-        engine.scene_add_layer_to(layer.clone(), wrap.clone());
+        engine.append_layer_to(layer.clone(), wrap.clone());
 
         engine.update(0.016);
         let scene_damage = engine.damage();
@@ -371,7 +371,7 @@ mod tests {
         wrap.set_position((100.0, 100.0), None);
         wrap.set_size(Size::points(0.0, 0.0), None);
 
-        engine.scene_add_layer(wrap.clone());
+        engine.add_layer(wrap.clone());
 
         let layer = engine.new_layer();
         layer.set_layout_style(lay_rs::taffy::Style {
@@ -382,7 +382,7 @@ mod tests {
         layer.set_size(Size::points(100.0, 100.0), None);
         layer.set_background_color(Color::new_hex("#ff0000ff"), None);
 
-        engine.scene_add_layer_to(layer.clone(), wrap.clone());
+        engine.append_layer_to(layer.clone(), wrap.clone());
 
         engine.update(0.016);
         let scene_damage = engine.damage();
@@ -407,8 +407,8 @@ mod tests {
         wrap.set_position((200.0, 200.0), None);
         layer.set_size(Size::points(0.0, 0.0), None);
 
-        engine.scene_add_layer(wrap.clone());
-        engine.scene_add_layer_to(layer.clone(), wrap.clone());
+        engine.add_layer(wrap.clone());
+        engine.append_layer_to(layer.clone(), wrap.clone());
 
         let draw_shadow = move |_: &lay_rs::skia::Canvas, w: f32, h: f32| {
             lay_rs::skia::Rect::from_xywh(0.0, 0.0, w, h)
