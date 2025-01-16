@@ -2,11 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
-## [unreleased]
+## [0.6.0]
 
 ### 🚀 Features
 
 - Layer content clip to bounds
+- Layer clip children
 
 ### 🐛 Bug Fixes
 
@@ -18,13 +19,18 @@ All notable changes to this project will be documented in this file.
 
 ### ⚙️ Miscellaneous Tasks
 
-- [**breaking**] Rename library to lay-rs
 - [**breaking**] Layer content caching api + export layer as content
 - [**breaking**] Storage using tokio:rwlock
 - Bump rust-skia
-- C api refactor
 - Expose LayerTree anchor point
-- [**breaking**] Replicate layer api
+- Replicate layer api
+- Improve error tracing
+- Svg rendering using resvg
+- C api refactor
+
+### Api
+
+- [**breaking**] Rename engine.add_layer api
 
 ### Restore
 
