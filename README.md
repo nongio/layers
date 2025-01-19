@@ -72,9 +72,9 @@ the executable will be in the `build/` folder.
 ## Usage: Setup a basic scene with a root layer
 ```rust
 use lay_rs::prelude::*;
-let engine = LayersEngine::new(800.0, 600.0);
+let engine = Engine::create(800.0, 600.0);
 let layer = engine.new_layer();
-let engine = LayersEngine::new(1024.0, 768.0);
+let engine = Engine::create(1024.0, 768.0);
 let root_layer = engine.new_layer();
 root_layer.set_position(Point { x: 0.0, y: 0.0 });
 root_layer.set_background_color(
@@ -97,7 +97,7 @@ engine.add_layer(root_layer.clone());
 ## Usage: Tick the engine to update layout and animations
 ```rust
 use lay_rs::prelude::*;
-let engine = LayersEngine::new(800.0, 600.0);
+let engine = Engine::create(800.0, 600.0);
 // setup the scene...
 engine.update(0.016);
 ```
@@ -132,7 +132,7 @@ pub fn render_main_view(state: &bool, view: &View<bool>) -> LayerTree {
         .unwrap()
 }
 
-let engine = LayersEngine::new(1000.0, 1000.0);
+let engine = Engine::create(1000.0, 1000.0);
 // create a new layer and add it to the scene
 let layer = engine.new_layer();
 engine.add_layer(layer.clone());

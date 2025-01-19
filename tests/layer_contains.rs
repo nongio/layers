@@ -1,9 +1,9 @@
-use lay_rs::types::Point;
-use lay_rs::{engine::LayersEngine, types::Size};
+use lay_rs::prelude::*;
+use lay_rs::types::{Point, Size};
 
 #[test]
 pub fn layer_contains() {
-    let engine = LayersEngine::new(1000.0, 1000.0);
+    let engine = Engine::create(1000.0, 1000.0);
     let layer = engine.new_layer();
     layer.set_size(Size::points(100.0, 100.0), None);
 
@@ -23,7 +23,7 @@ pub fn layer_contains() {
 
 #[test]
 pub fn scene_node_contains() {
-    let engine = LayersEngine::new(1000.0, 1000.0);
+    let engine = Engine::create(1000.0, 1000.0);
     let layer = engine.new_layer();
     engine.add_layer(layer.clone());
     layer.set_size(Size::points(100.0, 100.0), None);
@@ -58,7 +58,7 @@ pub fn scene_node_contains() {
 
 #[test]
 pub fn layer_contains_scale() {
-    let engine = LayersEngine::new(1000.0, 1000.0);
+    let engine = Engine::create(1000.0, 1000.0);
     let layer = engine.new_layer();
     layer.set_size(Size::points(100.0, 100.0), None);
 

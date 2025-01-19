@@ -76,7 +76,7 @@ async fn main() {
 
     let window_width = window_width as f32;
     let window_height = window_height as f32;
-    let engine = LayersEngine::new(window_width * 6.0, window_height * 6.0);
+    let engine = Engine::create(window_width * 6.0, window_height * 6.0);
     let root = engine.new_layer();
     engine.scene_set_root(root.clone());
 
@@ -100,7 +100,7 @@ async fn main() {
 
     let layer = engine.new_layer();
     layer.set_anchor_point((0.5, 0.5), None);
-    engine.scene_add_layer(layer.clone());
+    engine.add_layer(layer.clone());
 
     layer.build_layer_tree(
         LayerTreeBuilder::default()
@@ -172,10 +172,10 @@ async fn main() {
     layer2.set_size(Size::points(500.0, 300.0), None);
     layer2.set_background_color(Color::new_hex("#DC9CFF"), None);
     layer2.set_scale((1.2, 1.2), None);
-    layer2.set_content_cache(false);
+    layer2.set_picture_cache(false);
     layer2.set_draw_content(engine.layer_as_content(&layer));
 
-    engine.scene_add_layer(layer2.clone());
+    engine.add_layer(layer2.clone());
 
     // engine.start_debugger();
     let mut mass = 1.0;

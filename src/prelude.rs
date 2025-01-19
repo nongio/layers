@@ -2,7 +2,7 @@ pub use super::drawing::scene::{draw_scene, render_node_tree};
 pub use super::{
     drawing::scene::DrawScene,
     easing::Interpolate,
-    engine::{animation::*, scene::Scene, LayersEngine, NodeRef},
+    engine::{animation::*, scene::Scene, Engine, NodeRef},
     layers::{
         layer::model::{ContentDrawError, ContentDrawFunction, PointerHandlerFunction},
         layer::Effect,

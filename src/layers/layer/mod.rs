@@ -262,7 +262,7 @@ impl Layer {
         self.image_cache
             .store(value, std::sync::atomic::Ordering::Relaxed);
     }
-    pub fn set_content_cache(&self, value: bool) {
+    pub fn set_picture_cache(&self, value: bool) {
         self.picture_cache
             .store(value, std::sync::atomic::Ordering::Relaxed);
     }
@@ -521,7 +521,6 @@ impl Layer {
             self.engine.mark_for_delete(id);
         }
     }
-
     pub fn set_effect(&self, effect: impl Effect + 'static) {
         let effect = Arc::new(effect);
         effect.init(self);

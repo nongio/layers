@@ -9,7 +9,7 @@ use glutin::{
     dpi::LogicalSize, event_loop::EventLoop, platform::unix::EventLoopBuilderExtUnix,
     window::WindowBuilder, GlProfile,
 };
-use lay_rs::{engine::LayersEngine, prelude::*, types::*};
+use lay_rs::{engine::Engine, prelude::*, types::*};
 
 #[allow(dead_code)]
 fn criterion_benchmark_update(c: &mut Criterion) {
@@ -20,7 +20,7 @@ fn criterion_benchmark_update(c: &mut Criterion) {
     // println!("child_counts: {:?}", child_counts);
     for &count in &child_counts {
         group.bench_with_input(BenchmarkId::from_parameter(count), &count, |b, &count| {
-            let engine = LayersEngine::new(1000.0, 1000.0);
+            let engine = Engine::create(1000.0, 1000.0);
 
             let root = engine.new_layer();
             engine.scene_set_root(root);
@@ -117,7 +117,7 @@ fn criterion_benchmark_draw(c: &mut Criterion) {
         );
         for &count in &child_counts {
             group.bench_with_input(BenchmarkId::from_parameter(count), &count, |b, &count| {
-                let engine = LayersEngine::new(2000.0, 2000.0);
+                let engine = Engine::create(2000.0, 2000.0);
 
                 let root = engine.new_layer();
                 root.set_size(Size::points(1000.0, 1000.0), None);
@@ -195,7 +195,7 @@ fn criterion_benchmark_draw_shadow(c: &mut Criterion) {
         );
         for &count in &child_counts {
             group.bench_with_input(BenchmarkId::from_parameter(count), &count, |b, &count| {
-                let engine = LayersEngine::new(2000.0, 2000.0);
+                let engine = Engine::create(2000.0, 2000.0);
 
                 let root = engine.new_layer();
                 root.set_size(Size::points(1000.0, 1000.0), None);

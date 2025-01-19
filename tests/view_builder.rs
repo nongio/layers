@@ -80,7 +80,7 @@ pub fn render_main_view(state: &bool, view: &View<bool>) -> LayerTree {
 
 #[test]
 pub fn simple_build() {
-    let engine = LayersEngine::new(1000.0, 1000.0);
+    let engine = Engine::create(1000.0, 1000.0);
     let layer = engine.new_layer();
 
     engine.add_layer(layer.clone());
@@ -96,7 +96,7 @@ pub fn simple_build() {
 
 #[test]
 pub fn build_a_view() {
-    let engine = LayersEngine::new(1000.0, 1000.0);
+    let engine = Engine::create(1000.0, 1000.0);
     let layer = engine.new_layer();
 
     engine.add_layer(layer.clone());
@@ -114,7 +114,7 @@ pub fn build_a_view() {
 
 #[test]
 pub fn rebuild_a_view() {
-    let engine = LayersEngine::new(1000.0, 1000.0);
+    let engine = Engine::create(1000.0, 1000.0);
     let layer = engine.new_layer();
 
     engine.add_layer(layer.clone());
@@ -151,7 +151,7 @@ pub fn rebuild_a_view() {
 
 #[test]
 pub fn nested_views() {
-    let engine = LayersEngine::new(1000.0, 1000.0);
+    let engine = Engine::create(1000.0, 1000.0);
     let layer = engine.new_layer();
 
     engine.add_layer(layer.clone());
@@ -188,7 +188,7 @@ pub fn nested_views() {
 
 // #[test]
 // pub fn layer_tree_from_css() {
-//     // let engine = LayersEngine::new(1000.0, 1000.0);
+//     // let engine = Engine::create(1000.0, 1000.0);
 //     // let layer = engine.new_layer();
 
 //     // engine.add_layer(layer.clone());

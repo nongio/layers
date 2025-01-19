@@ -2,7 +2,7 @@
 mod tests {
     use lay_rs::{
         drawing::draw_layer,
-        engine::LayersEngine,
+        prelude::*,
         renderer::skia_image::SkiaImageRenderer,
         skia,
         types::{Color, PaintColor, Point, Size},
@@ -11,7 +11,7 @@ mod tests {
 
     #[test]
     pub fn damage_render_layer() {
-        let engine = LayersEngine::new(1000.0, 1000.0);
+        let engine = Engine::create(1000.0, 1000.0);
         let layer = engine.new_layer();
         layer.set_position((100.0, 100.0), None);
         layer.set_size(Size::points(100.0, 100.0), None);
@@ -83,7 +83,7 @@ mod tests {
 
     #[test]
     pub fn damage_rect() {
-        let engine = LayersEngine::new(1000.0, 1000.0);
+        let engine = Engine::create(1000.0, 1000.0);
         let layer = engine.new_layer();
         layer.set_position((100.0, 100.0), None);
         layer.set_size(Size::points(100.0, 100.0), None);
@@ -106,7 +106,7 @@ mod tests {
 
     #[test]
     pub fn damage_content() {
-        let engine = LayersEngine::new(1000.0, 1000.0);
+        let engine = Engine::create(1000.0, 1000.0);
         let layer = engine.new_layer();
         layer.set_position((100.0, 100.0), None);
         layer.set_size(Size::points(100.0, 100.0), None);
@@ -132,7 +132,7 @@ mod tests {
 
     #[test]
     pub fn damage_content_nested() {
-        let engine = LayersEngine::new(1000.0, 1000.0);
+        let engine = Engine::create(1000.0, 1000.0);
         let layer = engine.new_layer();
         layer.set_position((100.0, 100.0), None);
         layer.set_size(Size::points(100.0, 100.0), None);
@@ -142,7 +142,7 @@ mod tests {
         let layer2 = engine.new_layer();
         layer2.set_position((100.0, 100.0), None);
         layer2.set_size(Size::points(100.0, 100.0), None);
-        engine.append_layer_to(layer2.clone(), layer.clone());
+        engine.append_layer(layer2.clone(), layer.id());
 
         engine.update(0.016);
         let scene_damage = engine.damage();
@@ -176,7 +176,7 @@ mod tests {
 
     #[test]
     pub fn damage_empty() {
-        let engine = LayersEngine::new(1000.0, 1000.0);
+        let engine = Engine::create(1000.0, 1000.0);
         let layer = engine.new_layer();
         layer.set_position((100.0, 100.0), None);
         layer.set_size(Size::points(100.0, 100.0), None);
@@ -189,7 +189,7 @@ mod tests {
 
     #[test]
     pub fn damage_rect_content() {
-        let engine = LayersEngine::new(1000.0, 1000.0);
+        let engine = Engine::create(1000.0, 1000.0);
         let layer = engine.new_layer();
         layer.set_position((100.0, 100.0), None);
         layer.set_size(Size::points(100.0, 100.0), None);
@@ -216,7 +216,7 @@ mod tests {
 
     #[test]
     pub fn damage_move_layer() {
-        let engine = LayersEngine::new(1000.0, 1000.0);
+        let engine = Engine::create(1000.0, 1000.0);
         let layer = engine.new_layer();
         layer.set_position((100.0, 100.0), None);
         layer.set_size(Size::points(100.0, 100.0), None);
@@ -260,7 +260,7 @@ mod tests {
 
     #[test]
     pub fn damage_opacity() {
-        let engine = LayersEngine::new(1000.0, 1000.0);
+        let engine = Engine::create(1000.0, 1000.0);
         let wrap = engine.new_layer();
         wrap.set_size(Size::percent(1.0, 1.0), None);
         engine.add_layer(wrap.clone());
@@ -273,7 +273,7 @@ mod tests {
         layer.set_size(Size::points(100.0, 100.0), None);
         layer.set_background_color(Color::new_hex("#ff0000ff"), None);
         layer.set_opacity(0.0, None);
-        engine.append_layer_to(layer.clone(), wrap.clone());
+        engine.append_layer(layer.clone(), wrap.id());
 
         engine.update(0.016);
         let scene_damage = engine.damage();
@@ -317,7 +317,7 @@ mod tests {
 
     #[test]
     pub fn damage_parent_opacity() {
-        let engine = LayersEngine::new(1000.0, 1000.0);
+        let engine = Engine::create(1000.0, 1000.0);
         let wrap = engine.new_layer();
         wrap.set_size(Size::percent(1.0, 1.0), None);
         engine.add_layer(wrap.clone());
@@ -332,7 +332,7 @@ mod tests {
         layer.set_background_color(Color::new_hex("#ff0000ff"), None);
         wrap.set_opacity(0.0, None);
 
-        engine.append_layer_to(layer.clone(), wrap.clone());
+        engine.append_layer(layer.clone(), wrap.id());
 
         engine.update(0.016);
         let scene_damage = engine.damage();
@@ -365,7 +365,7 @@ mod tests {
 
     #[test]
     pub fn damage_parent_offset() {
-        let engine = LayersEngine::new(1000.0, 1000.0);
+        let engine = Engine::create(1000.0, 1000.0);
 
         let wrap = engine.new_layer();
         wrap.set_position((100.0, 100.0), None);
@@ -382,7 +382,7 @@ mod tests {
         layer.set_size(Size::points(100.0, 100.0), None);
         layer.set_background_color(Color::new_hex("#ff0000ff"), None);
 
-        engine.append_layer_to(layer.clone(), wrap.clone());
+        engine.append_layer(layer.clone(), wrap.id());
 
         engine.update(0.016);
         let scene_damage = engine.damage();
@@ -400,7 +400,7 @@ mod tests {
         let h = 500.0;
         const CHILD_OUTSET: f32 = 100.0;
 
-        let engine = LayersEngine::new(1000.0, 1000.0);
+        let engine = Engine::create(1000.0, 1000.0);
         let wrap = engine.new_layer();
         let layer = engine.new_layer();
 
@@ -408,7 +408,7 @@ mod tests {
         layer.set_size(Size::points(0.0, 0.0), None);
 
         engine.add_layer(wrap.clone());
-        engine.append_layer_to(layer.clone(), wrap.clone());
+        engine.append_layer(layer.clone(), wrap.id());
 
         let draw_shadow = move |_: &lay_rs::skia::Canvas, w: f32, h: f32| {
             lay_rs::skia::Rect::from_xywh(0.0, 0.0, w, h)

@@ -1,8 +1,8 @@
 use lay_rs::{
-    engine::LayersEngine,
+    prelude::*,
     skia,
     types::{Point, Size},
-    view::{BuildLayerTree, LayerTreeBuilder},
+    view::LayerTreeBuilder,
 };
 
 #[test]
@@ -11,7 +11,7 @@ pub fn bounds_with_children() {
     let h = 500.0;
     const SAFE_AREA: f32 = 100.0;
 
-    let engine = LayersEngine::new(1000.0, 1000.0);
+    let engine = Engine::create(1000.0, 1000.0);
     let wrap = engine.new_layer();
     let layer = engine.new_layer();
 
@@ -19,7 +19,7 @@ pub fn bounds_with_children() {
     layer.set_size(Size::points(0.0, 0.0), None);
 
     engine.add_layer(wrap.clone());
-    engine.append_layer_to(layer.clone(), wrap.clone());
+    engine.append_layer(layer.clone(), wrap.id());
 
     let draw_shadow = move |_canvas: &lay_rs::skia::Canvas, w: f32, h: f32| {
         lay_rs::skia::Rect::from_xywh(0.0, 0.0, w, h)
@@ -70,7 +70,7 @@ pub fn bounds_with_children() {
 //     let h = 500.0;
 //     const SAFE_AREA: f32 = 100.0;
 
-//     let engine = LayersEngine::new(1000.0, 1000.0);
+//     let engine = Engine::create(1000.0, 1000.0);
 //     let layer = engine.new_layer();
 //     layer.set_position((100.0, 100.0), None);
 //     layer.set_size(Size::points(0.0, 0.0), None);

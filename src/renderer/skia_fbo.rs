@@ -109,7 +109,12 @@ impl SkiaFboRenderer {
 
 impl DrawScene for SkiaFboRenderer {
     #[profiling::function]
-    fn draw_scene(&self, scene: &Scene, root_id: NodeRef, damage: Option<skia_safe::Rect>) {
+    fn draw_scene(
+        &self,
+        scene: std::sync::Arc<Scene>,
+        root_id: NodeRef,
+        damage: Option<skia_safe::Rect>,
+    ) {
         let mut surface = self.surface();
         let mut canvas = surface.canvas();
         let save_point = canvas.save();

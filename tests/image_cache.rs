@@ -1,13 +1,12 @@
 use lay_rs::{
-    engine::LayersEngine,
-    prelude::DrawScene,
+    prelude::*,
     renderer::skia_image::SkiaImageRenderer,
     types::{BorderRadius, Color, Size},
 };
 
 #[test]
 pub fn image_cache() {
-    let engine = LayersEngine::new(1000.0, 1000.0);
+    let engine = Engine::create(1000.0, 1000.0);
 
     let layer = engine.new_layer();
 
@@ -33,7 +32,7 @@ pub fn image_cache() {
     child_layer.set_border_color(Color::new_hex("#000000"), None);
     child_layer.set_border_width(2.0, None);
 
-    engine.append_layer_to(child_layer.clone(), node_id);
+    engine.append_layer(child_layer.clone(), Some(node_id));
 
     engine.update(0.01);
 

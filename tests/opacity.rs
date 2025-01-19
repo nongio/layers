@@ -1,10 +1,10 @@
 #[cfg(test)]
 mod tests {
-    use lay_rs::engine::LayersEngine;
+    use lay_rs::prelude::*;
 
     #[test]
     pub fn layer_opacity() {
-        let engine = LayersEngine::new(1000.0, 1000.0);
+        let engine = Engine::create(1000.0, 1000.0);
 
         let layer = engine.new_layer();
         let node = engine.add_layer(layer.clone());
@@ -33,7 +33,7 @@ mod tests {
     }
     #[test]
     pub fn layer_parent_opacity() {
-        let engine = LayersEngine::new(1000.0, 1000.0);
+        let engine = Engine::create(1000.0, 1000.0);
         let wrap = engine.new_layer();
 
         wrap.set_opacity(0.0, None);
@@ -42,7 +42,7 @@ mod tests {
 
         let layer = engine.new_layer();
 
-        let node = engine.append_layer_to(layer.clone(), wrap.clone());
+        let node = engine.append_layer(layer.clone(), wrap.id());
 
         engine.update(0.016);
         let scene_node = engine.scene_get_node(&node).unwrap();

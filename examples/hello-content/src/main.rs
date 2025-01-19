@@ -91,7 +91,7 @@ fn main() {
         windowed_context: WindowedContext,
     }
     let env = Env { windowed_context };
-    let engine = LayersEngine::new(window_width as f32 * 2.0, window_height as f32 * 2.0);
+    let engine = Engine::create(window_width as f32 * 2.0, window_height as f32 * 2.0);
     let root_layer = engine.new_layer();
 
     root_layer.set_size(
@@ -112,7 +112,7 @@ fn main() {
         justify_content: Some(taffy::JustifyContent::Center),
         ..Default::default()
     });
-    engine.scene_add_layer(root_layer.clone());
+    engine.add_layer(root_layer.clone());
 
     let other = engine.new_layer();
     other.set_size(lay_rs::types::Size::points(100.0, 100.0), None);
@@ -127,7 +127,7 @@ fn main() {
         // position: taffy::Position::Absolute,
         ..Default::default()
     });
-    engine.scene_add_layer(other.clone());
+    engine.add_layer(other.clone());
     let content_layer = engine.new_layer();
     let inner_content_layer = engine.new_layer();
     inner_content_layer.set_position(
@@ -158,8 +158,8 @@ fn main() {
         ..Default::default()
     });
 
-    engine.scene_add_layer(content_layer.clone());
-    engine.scene_add_layer_to(inner_content_layer.clone(), content_layer.id());
+    engine.add_layer(content_layer.clone());
+    engine.append_layer(inner_content_layer.clone(), content_layer.id());
     inner_content_layer.set_draw_content(
         |canvas: &lay_rs::skia::Canvas, width, height| -> lay_rs::skia::Rect {
             draw(canvas, width, height);

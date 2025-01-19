@@ -1,8 +1,8 @@
-use lay_rs::{engine::LayersEngine, types::Point};
+use lay_rs::{prelude::*, types::Point};
 
 #[test]
 pub fn change_layer_position() {
-    let engine = LayersEngine::new(1000.0, 1000.0);
+    let engine = Engine::create(1000.0, 1000.0);
 
     let layer = engine.new_layer();
 

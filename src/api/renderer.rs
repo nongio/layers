@@ -24,10 +24,7 @@ pub extern "C" fn create_skia_renderer(
 }
 
 #[no_mangle]
-pub extern "C" fn render_scene(
-    renderer: *mut SkiaFboRenderer,
-    engine: *const engine::LayersEngine,
-) {
+pub extern "C" fn render_scene(renderer: *mut SkiaFboRenderer, engine: *const engine::Engine) {
     let mut paint = skia_safe::Paint::new(skia_safe::Color4f::new(0.6, 0.6, 0.6, 1.0), None);
     paint.set_anti_alias(true);
     // paint.set_style(skia_bindings::SkPaint_Style::Fill);

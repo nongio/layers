@@ -8,19 +8,19 @@
 //! - The *render* step uses the displaylist to generate a texture of the node
 //! - The *compose* step generates the final image using the textures
 //!
-//! The `LayersEngine` is the main engine responsible for managing layers and rendering.
+//! The `Engine` is the main engine responsible for managing layers and rendering.
 //!
 //! # Usage:
 //!
 //! ```
-//! let engine = LayersEngine::new();
+//! let engine = Engine::create();
 //! engine.add_layer(Layer::new());
 //! engine.render();
 //! ```
-pub use layers_engine::LayersEngine;
 pub use node::SceneNode;
 
-mod layers_engine;
+mod debug_server;
+
 mod stages;
 
 pub(crate) mod command;
@@ -34,11 +34,9 @@ pub(crate) mod storage;
 
 use core::fmt;
 use indextree::NodeId;
-use layers_engine::{initialize_engines, ENGINES, INIT};
+
 use node::ContainsPoint;
 
-#[cfg(feature = "debugger")]
-use layers_debug_server::DebugServerError;
 #[cfg(feature = "debugger")]
 #[allow(unused_imports)]
 use stages::send_debugger;
@@ -50,7 +48,10 @@ use std::{
     collections::HashMap,
     hash::Hash,
     ops::Deref,
-    sync::{atomic::AtomicUsize, Arc, RwLock},
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc, Once, RwLock,
+    },
 };
 
 use self::{
@@ -65,7 +66,9 @@ use self::{
     storage::{FlatStorage, FlatStorageId, TreeStorageId, TreeStorageNode},
 };
 use crate::{
+    drawing::render_node_tree,
     layers::layer::{model::PointerHandlerFunction, Layer},
+    prelude::ContentDrawFunction,
     types::Point,
 };
 
@@ -215,8 +218,43 @@ pub enum PointerEventType {
     Down,
     Up,
 }
+/// Public API for the Layers Engine
+/// ## Usage: Setup a basic scene with a root layer
+/// ```rust
+/// use lay_rs::prelude::*;
+///
+/// let engine = Engine::create(800.0, 600.0);
+/// let layer = engine.new_layer();
+/// let engine = Engine::create(1024.0, 768.0);
+/// let root_layer = engine.new_layer();
+/// root_layer.set_position(Point { x: 0.0, y: 0.0 }, None);
 
-pub(crate) struct Engine {
+/// root_layer.set_background_color(
+///     PaintColor::Solid {
+///         color: Color::new_rgba255(180, 180, 180, 255),
+///     },
+///    None,
+/// );
+/// root_layer.set_border_corner_radius(10.0, None);
+/// root_layer.set_layout_style(taffy::Style {
+///     position: taffy::Position::Absolute,
+///     display: taffy::Display::Flex,
+///     flex_direction: taffy::FlexDirection::Column,
+///     justify_content: Some(taffy::JustifyContent::Center),
+///     align_items: Some(taffy::AlignItems::Center),
+///     ..Default::default()
+/// });
+/// engine.add_layer(root_layer.clone());
+/// ```
+/// ## Usage: Update the engine
+/// ```rust
+/// use lay_rs::prelude::*;
+///
+/// let engine = Engine::create(800.0, 600.0);
+/// // setup the scene...
+/// engine.update(0.016);
+/// ```
+pub struct Engine {
     pub id: usize,
     /// The scene is a tree of nodes
     pub(crate) scene: Arc<Scene>,
@@ -343,6 +381,47 @@ impl From<NodeRef> for usize {
 
 static UNIQ_POINTER_HANDLER_ID: AtomicUsize = AtomicUsize::new(0);
 
+pub(crate) static INIT: Once = Once::new();
+pub(crate) static ENGINE_ID: AtomicUsize = AtomicUsize::new(0);
+pub(crate) static mut ENGINES: Option<RwLock<HashMap<usize, Arc<Engine>>>> = None;
+
+/// Initializes the ENGINES static variable.
+fn initialize_engines() {
+    INIT.call_once(|| unsafe {
+        ENGINES = Some(RwLock::new(HashMap::new()));
+    });
+}
+
+/// Adds an engine to the ENGINES map and returns its ID.
+fn add_engine(engine: Arc<Engine>) -> usize {
+    initialize_engines();
+    let id = engine.id;
+    ENGINE_ID.store(id, Ordering::SeqCst);
+    unsafe {
+        if let Some(ref engines) = ENGINES {
+            let mut engines = engines.write().unwrap();
+            engines.insert(id, engine);
+        }
+    }
+    id
+}
+/// Adds an engine to the ENGINES map and returns its ID.
+fn next_engine_id() -> usize {
+    initialize_engines();
+    let id = ENGINE_ID.load(Ordering::SeqCst);
+
+    id + 1
+}
+/// Retrieves an engine by its ID.
+fn get_engine_ref(id: usize) -> Arc<Engine> {
+    initialize_engines();
+    unsafe {
+        let engines = ENGINES.as_ref().unwrap();
+        let engines = engines.read().unwrap();
+        return engines.get(&id).unwrap().clone();
+    }
+}
+
 impl Engine {
     fn new(id: usize, width: f32, height: f32) -> Self {
         // rayon::ThreadPoolBuilder::new()
@@ -381,12 +460,21 @@ impl Engine {
             current_hover_node: RwLock::new(None),
         }
     }
-    pub fn create(id: usize, width: f32, height: f32) -> Arc<Self> {
-        let new_engine = Self::new(id, width, height);
-        Arc::new(new_engine)
+
+    fn get_arc_ref(&self) -> Arc<Self> {
+        get_engine_ref(self.id)
+    }
+
+    pub fn create(width: f32, height: f32) -> Arc<Self> {
+        initialize_engines();
+        let id = ENGINE_ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let new_engine = Arc::new(Engine::new(id, width, height));
+        add_engine(new_engine.clone());
+
+        new_engine
     }
     /// set the layer as the root of the scene and root of the layout tree
-    pub fn set_root_layer(&self, layer: impl Into<Layer>) -> NodeRef {
+    pub fn scene_set_root(&self, layer: impl Into<Layer>) -> NodeRef {
         let layer: Layer = layer.into();
         let layout = layer.layout_node_id;
 
@@ -412,6 +500,16 @@ impl Engine {
         let change = Arc::new(NoopChange::new(id.0.into()));
         self.schedule_change(id, change, None);
         id
+    }
+
+    /// Set the size of the scene
+    pub fn scene_set_size(&self, width: f32, height: f32) {
+        self.scene.set_size(width, height);
+    }
+
+    /// Create a new layer associated with the engine
+    pub fn new_layer(&self) -> Layer {
+        Layer::with_engine(self.get_arc_ref())
     }
 
     fn layout_detach_layer(&self, layer: &Layer) {
@@ -479,7 +577,7 @@ impl Engine {
 
         if new_parent.is_none() {
             // if we append to a scene without a root, we set the layer as the root
-            self.set_root_layer(layer);
+            self.scene_set_root(layer);
         } else {
             let new_parent = new_parent.unwrap();
 
@@ -487,6 +585,10 @@ impl Engine {
             self.layout_append_layer(&layer, new_parent);
         }
         layer_id
+    }
+
+    pub fn add_layer(&self, layer: impl Into<Layer>) -> NodeRef {
+        self.append_layer(layer, None)
     }
 
     pub fn prepend_layer(&self, layer: impl Into<Layer>, parent: Option<NodeRef>) -> NodeRef {
@@ -508,7 +610,7 @@ impl Engine {
 
         if new_parent.is_none() {
             // if we append to a scene without a root, we set the layer as the root
-            self.set_root_layer(layer);
+            self.scene_set_root(layer);
         } else {
             let new_parent = new_parent.unwrap();
 
@@ -599,6 +701,12 @@ impl Engine {
             }
         }
     }
+    pub fn scene(&self) -> Arc<Scene> {
+        self.scene.clone()
+    }
+    pub fn scene_root(&self) -> Option<NodeRef> {
+        *self.scene_root.read().unwrap()
+    }
     pub fn scene_get_node(&self, node: &NodeRef) -> Option<TreeStorageNode<SceneNode>> {
         self.scene.get_node_sync(*node)
     }
@@ -607,6 +715,7 @@ impl Engine {
         let parent = node.parent();
         parent.map(NodeRef)
     }
+
     pub fn now(&self) -> f32 {
         self.timestamp.read().unwrap().0
     }
@@ -649,6 +758,9 @@ impl Engine {
         });
     }
 
+    pub fn get_transaction(&self, tref: TransactionRef) -> Option<AnimatedNodeChange> {
+        self.transactions.get(&tref.id)
+    }
     pub fn get_transaction_for_value(&self, value_id: usize) -> Option<AnimatedNodeChange> {
         self.values_transactions
             .read()
@@ -843,7 +955,7 @@ impl Engine {
         // layout.set_style(node, style).unwrap();
     }
 
-    pub fn layer_at(&self, point: Point) -> Option<NodeRef> {
+    pub fn scene_layer_at(&self, point: Point) -> Option<NodeRef> {
         let mut result = None;
         self.scene.with_arena(|arena| {
             for node in arena.iter() {
@@ -1145,6 +1257,27 @@ impl Engine {
     pub fn get_pointer_position(&self) -> Point {
         *self.pointer_position.read().unwrap()
     }
+
+    pub fn layer_as_content(&self, layer: &Layer) -> ContentDrawFunction {
+        let layer_ref = layer.clone();
+        let engine_ref = self.get_arc_ref();
+        let draw_function = move |c: &skia::Canvas, w: f32, h: f32| {
+            let id = layer_ref.id().unwrap();
+            let scene = engine_ref.scene.clone();
+            scene.with_arena(|arena| {
+                render_node_tree(id, arena, c, 1.0);
+            });
+            skia::Rect::from_xywh(0.0, 0.0, w, h)
+        };
+        ContentDrawFunction::from(draw_function)
+    }
+    pub fn damage(&self) -> skia_safe::Rect {
+        *self.damage.read().unwrap()
+    }
+    pub fn clear_damage(&self) {
+        let mut damage = self.damage.write().unwrap();
+        *damage = skia_safe::Rect::default();
+    }
 }
 
 impl Deref for NodeRef {
@@ -1152,42 +1285,5 @@ impl Deref for NodeRef {
 
     fn deref(&self) -> &Self::Target {
         &self.0
-    }
-}
-
-#[cfg(feature = "debugger")]
-impl layers_debug_server::DebugServer for Engine {
-    fn handle_message(&self, result: std::result::Result<String, DebugServerError>) {
-        match result {
-            Ok(msg) => {
-                if let Ok((command, node_id)) =
-                    serde_json::from_str::<(String, NodeId)>(msg.as_str())
-                {
-                    match command.as_str() {
-                        "highlight" => {
-                            self.scene.with_arena(|arena| {
-                                let node = arena.get(node_id).unwrap();
-                                let scene_node: &crate::engine::node::SceneNode = node.get();
-                                scene_node.set_debug_info(true);
-                            });
-                        }
-                        "unhighlight" => {
-                            self.scene.with_arena(|arena| {
-                                let node = arena.get(node_id).unwrap();
-                                let scene_node: &crate::engine::node::SceneNode = node.get();
-                                scene_node.set_debug_info(false);
-                            });
-                        }
-
-                        _ => {
-                            println!("Unknown command: {}", command);
-                        }
-                    }
-                }
-            }
-            Err(_) => {
-                eprintln!("error receiving websocket msg");
-            }
-        }
     }
 }

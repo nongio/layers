@@ -1,14 +1,10 @@
-use lay_rs::{
-    engine::{animation::Transition, LayersEngine},
-    prelude::{Layer, Spring},
-};
-use lay_rs::{prelude::TimingFunction, types::Point};
+use lay_rs::prelude::*;
 use std::sync::{Arc, RwLock};
 
 /// it should call the finish handler when the transaction is finished 1 time
 #[test]
 pub fn call_finish_transaction() {
-    let engine = LayersEngine::new(1000.0, 1000.0);
+    let engine = Engine::create(1000.0, 1000.0);
     let layer = engine.new_layer();
     engine.add_layer(layer.clone());
 
@@ -43,7 +39,7 @@ pub fn call_finish_transaction() {
 /// it should call the start handler when the transaction is started 1 time
 #[test]
 pub fn call_start_transaction() {
-    let engine = LayersEngine::new(1000.0, 1000.0);
+    let engine = Engine::create(1000.0, 1000.0);
     let layer = engine.new_layer();
     engine.add_layer(layer.clone());
 
@@ -87,7 +83,7 @@ pub fn call_start_transaction() {
 /// it should call the update handler on every update until the transaction is finished
 #[test]
 pub fn call_update_transaction() {
-    let engine = LayersEngine::new(1000.0, 1000.0);
+    let engine = Engine::create(1000.0, 1000.0);
     let layer = engine.new_layer();
     engine.add_layer(layer.clone());
 
@@ -118,7 +114,7 @@ pub fn call_update_transaction() {
 /// it should call the finish handler when the spring transaction is finished 1 time
 #[test]
 pub fn call_finish_transaction_spring() {
-    let engine = LayersEngine::new(1000.0, 1000.0);
+    let engine = Engine::create(1000.0, 1000.0);
     let layer = engine.new_layer();
     engine.add_layer(layer.clone());
 
@@ -156,7 +152,7 @@ pub fn call_finish_transaction_spring() {
 /// it should call the finish handler when the spring transaction is finished 1 time
 #[test]
 pub fn call_finish_transaction_spring_predictable() {
-    let engine = LayersEngine::new(1000.0, 1000.0);
+    let engine = Engine::create(1000.0, 1000.0);
     let layer = engine.new_layer();
     engine.add_layer(layer.clone());
 
@@ -194,7 +190,7 @@ pub fn call_finish_transaction_spring_predictable() {
 /// it should call the start handler when the transaction is started 1 time
 #[test]
 pub fn call_start_value() {
-    let engine = LayersEngine::new(1000.0, 1000.0);
+    let engine = Engine::create(1000.0, 1000.0);
     let layer = engine.new_layer();
     engine.add_layer(layer.clone());
 
@@ -254,7 +250,7 @@ pub fn call_start_value() {
 /// it should call the finish handler when the transaction is started 1 time
 #[test]
 pub fn call_update_value() {
-    let engine = LayersEngine::new(1000.0, 1000.0);
+    let engine = Engine::create(1000.0, 1000.0);
     let layer = engine.new_layer();
     engine.add_layer(layer.clone());
 

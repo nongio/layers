@@ -22,11 +22,16 @@ use super::layer::{draw_debug, draw_layer};
 use std::{collections::HashMap, iter::IntoIterator};
 
 pub trait DrawScene {
-    fn draw_scene(&self, scene: &Scene, root_id: NodeRef, damage: Option<skia_safe::Rect>);
+    fn draw_scene(
+        &self,
+        scene: std::sync::Arc<Scene>,
+        root_id: NodeRef,
+        damage: Option<skia_safe::Rect>,
+    );
 }
 
 /// Draw the scene to the given skia::Canvas
-pub fn draw_scene(canvas: &skia::Canvas, scene: &Scene, root_id: NodeRef) {
+pub fn draw_scene(canvas: &skia::Canvas, scene: std::sync::Arc<Scene>, root_id: NodeRef) {
     scene.with_arena(|arena| {
         if let Some(root) = scene.get_node_sync(root_id) {
             let node = root.get();
@@ -159,6 +164,7 @@ pub fn surface_for_node(
     }
     None
 }
+
 pub fn create_surface_for_node(
     node: &SceneNode,
     render_layer: &RenderLayer,
@@ -241,6 +247,7 @@ pub fn paint_node_tree(
     });
     render_canvas.restore_to_count(restore_point);
 }
+
 pub fn set_node_transform(node: &SceneNode, canvas: &Canvas) {
     let render_layer = node.render_layer.read().unwrap();
     let transform = render_layer.local_transform.to_m33();
@@ -257,7 +264,8 @@ pub fn render_node_tree(
     context_opacity: f32,
 ) {
     let node_id: TreeStorageId = node_ref.into();
-
+    #[cfg(feature = "profile-with-puffin")]
+    profiling::puffin::profile_scope!("render_node_tree", format!("{}", node_id));
     let scene_node = arena.get(node_id).unwrap().get();
     if scene_node.layer.hidden() {
         return;
@@ -294,7 +302,9 @@ pub fn render_node_tree(
                     );
 
                     // draw into the offscreen surface
-                    let current_frame = scene_node.frame.load(std::sync::atomic::Ordering::Relaxed);
+                    let current_frame = scene_node
+                        .frame_number
+                        .load(std::sync::atomic::Ordering::Relaxed);
                     if current_frame != recorded_frame {
                         let surface_bounds = skia::Rect::from_wh(
                             recording_surface.width() as f32,
@@ -402,6 +412,7 @@ pub fn render_node_tree(
 
     render_canvas.restore_to_count(restore_point);
 }
+
 pub(crate) const BACKGROUND_BLUR_SIGMA: f32 = 25.0;
 
 // paint a single node in the provided canvas
@@ -414,6 +425,7 @@ pub(crate) fn paint_node(
     offscreen: bool,
 ) -> usize {
     let node_id: TreeStorageId = node_ref.into();
+    profiling::scope!("paint_node", format!("{}", node_id));
     let node = arena.get(node_id).unwrap().get();
     let render_layer = node.render_layer.read().unwrap();
     let node_opacity = render_layer.opacity;
@@ -482,10 +494,16 @@ pub(crate) fn paint_node(
             canvas.restore_to_count(before_backdrop);
         }
     }
-
     if let Some(draw_cache) = &*draw_cache {
-        profiling::scope!("draw_cache");
-        draw_cache.draw(canvas, &paint);
+        let mut p = None;
+        if opacity != 1.0
+            || (blend_mode == crate::prelude::BlendMode::BackgroundBlur && opacity > 0.0)
+        {
+            p = Some(&paint);
+        }
+        // passing a None for paint is important to optimise
+        // skia creates a new layer when painting a picture with a paint
+        draw_cache.draw(canvas, p);
     } else {
         draw_layer(canvas, &render_layer, context_opacity, arena);
     }
@@ -493,7 +511,7 @@ pub(crate) fn paint_node(
     restore_transform
 }
 /// Print the node tree to the console
-pub fn print_scene(scene: &Scene, root_id: NodeRef) {
+pub fn print_scene(scene: std::sync::Arc<Scene>, root_id: NodeRef) {
     scene.with_arena(|arena| {
         if let Some(_root) = scene.get_node_sync(root_id) {
             debug_node_tree(root_id, &arena, 1.0, 0);

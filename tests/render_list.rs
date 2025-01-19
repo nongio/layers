@@ -2,12 +2,13 @@
 mod tests {
     use lay_rs::{
         drawing::{node_tree_list, node_tree_list_visible},
-        engine::LayersEngine,
+        prelude::*,
         types::*,
     };
+
     #[test]
     pub fn render_list() {
-        let engine = LayersEngine::new(1000.0, 1000.0);
+        let engine = Engine::create(1000.0, 1000.0);
 
         let layer = engine.new_layer();
         engine.add_layer(layer.clone());
@@ -28,7 +29,7 @@ mod tests {
 
     #[test]
     pub fn render_list_occluded() {
-        let engine = LayersEngine::new(1000.0, 1000.0);
+        let engine = Engine::create(1000.0, 1000.0);
 
         let layer = engine.new_layer();
         layer.set_position((0.0, 0.0), None);
@@ -59,7 +60,7 @@ mod tests {
     }
     #[test]
     pub fn render_list_opacity() {
-        let engine = LayersEngine::new(1000.0, 1000.0);
+        let engine = Engine::create(1000.0, 1000.0);
 
         let layer = engine.new_layer();
         layer.set_position((0.0, 0.0), None);
@@ -90,7 +91,7 @@ mod tests {
     }
     #[test]
     pub fn render_list_children() {
-        let engine = LayersEngine::new(1000.0, 1000.0);
+        let engine = Engine::create(1000.0, 1000.0);
 
         let layer = engine.new_layer();
         layer.set_position((0.0, 0.0), None);
@@ -121,7 +122,7 @@ mod tests {
     }
     #[test]
     pub fn render_list_hidden() {
-        let engine = LayersEngine::new(1000.0, 1000.0);
+        let engine = Engine::create(1000.0, 1000.0);
 
         let layer = engine.new_layer();
         layer.set_position((0.0, 0.0), None);

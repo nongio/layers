@@ -57,11 +57,12 @@ impl DrawCache {
     pub fn size(&self) -> &skia_safe::Size {
         &self.size
     }
-    pub fn draw(&self, canvas: &skia_safe::Canvas, paint: &skia_safe::Paint) {
+    #[profiling::function]
+    pub fn draw(&self, canvas: &skia_safe::Canvas, paint: Option<&skia_safe::Paint>) {
         if self.size.width == 0.0 || self.size.height == 0.0 {
             return;
         }
-        canvas.draw_picture(&self.picture, None, Some(paint));
+        canvas.draw_picture(&self.picture, None, paint);
     }
 }
 
@@ -83,10 +84,10 @@ pub struct SceneNode {
     pub(crate) layout_node_id: TaffyNodeId,
     pub(crate) deleted: Arc<AtomicBool>,
     pub(crate) pointer_hover: Arc<AtomicBool>,
-    pub(crate) debug_info: Arc<RwLock<Option<DrawDebugInfo>>>,
     pub(crate) repaint_damage: Arc<RwLock<skia_safe::Rect>>,
-    pub(crate) frame: Arc<AtomicUsize>,
+    pub(crate) frame_number: Arc<AtomicUsize>,
     pub(crate) _follow_node: Arc<RwLock<Option<NodeRef>>>,
+    pub(crate) debug_info: Arc<RwLock<Option<DrawDebugInfo>>>,
 }
 
 impl SceneNode {
@@ -109,7 +110,7 @@ impl SceneNode {
             pointer_hover: Arc::new(AtomicBool::new(false)),
             repaint_damage: Arc::new(RwLock::new(skia_safe::Rect::default())),
             debug_info: Arc::new(RwLock::new(None)),
-            frame: Arc::new(AtomicUsize::new(0)),
+            frame_number: Arc::new(AtomicUsize::new(0)),
             _follow_node: Arc::new(RwLock::new(None)),
         }
     }
@@ -159,7 +160,7 @@ impl SceneNode {
             let id: usize = self.layer.id().unwrap().0.into();
             *dbg_info = Some(DrawDebugInfo {
                 info: format!("{}", id),
-                frame: self.frame.load(std::sync::atomic::Ordering::Relaxed),
+                frame: self.frame_number.load(std::sync::atomic::Ordering::Relaxed),
                 render_layer: self.render_layer(),
             });
         } else {
@@ -187,11 +188,12 @@ impl SceneNode {
         if self.is_image_cached() {
             // println!("{:?} increase  _frame", self.id());
             if self
-                .frame
+                .frame_number
                 .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
                 > 99999
             {
-                self.frame.store(1, std::sync::atomic::Ordering::Relaxed);
+                self.frame_number
+                    .store(1, std::sync::atomic::Ordering::Relaxed);
             }
         }
     }
@@ -216,11 +218,14 @@ impl SceneNode {
             let nodeid = *nodeid;
             let draw_function =
                 move |c: &skia::Canvas, w: f32, h: f32, arena: &Arena<SceneNode>| {
+                    profiling::scope!("replicate_node");
                     render_node_tree(nodeid, arena, c, 1.0);
                     skia::Rect::from_xywh(0.0, 0.0, w, h)
                 };
 
             self.layer.set_draw_content_internal(draw_function);
+            // when mirroring another layer we don't want to cache the content
+            self.layer.set_picture_cache(false);
         }
 
         self.follow_node(nodeid);
@@ -252,7 +257,7 @@ impl DrawCacheManagement for SceneNode {
                 needs_repaint = true;
             }
         }
-        // FIXME
+        // FIXME: can this be optimized?
         if render_layer.blend_mode == BlendMode::BackgroundBlur {
             needs_repaint = true;
         }
