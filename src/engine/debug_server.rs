@@ -11,16 +11,16 @@ impl layers_debug_server::DebugServer for crate::engine::Engine {
                 {
                     match command.as_str() {
                         "highlight" => {
-                            self.scene.with_arena(|arena| {
-                                let node = arena.get(node_id).unwrap();
-                                let scene_node: &crate::engine::node::SceneNode = node.get();
+                            self.scene.with_arena_mut(|arena| {
+                                let node = arena.get_mut(node_id).unwrap();
+                                let scene_node = node.get_mut();
                                 scene_node.set_debug_info(true);
                             });
                         }
                         "unhighlight" => {
-                            self.scene.with_arena(|arena| {
-                                let node = arena.get(node_id).unwrap();
-                                let scene_node: &crate::engine::node::SceneNode = node.get();
+                            self.scene.with_arena_mut(|arena| {
+                                let node = arena.get_mut(node_id).unwrap();
+                                let scene_node = node.get_mut();
                                 scene_node.set_debug_info(false);
                             });
                         }
