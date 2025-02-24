@@ -97,6 +97,13 @@ jobs:
         run: sudo apt-get update; sudo apt-get install -y libdrm-dev libudev-dev libgbm-dev libxkbcommon-dev libegl1-mesa-dev libwayland-dev libinput-dev libdbus-1-dev libsystemd-dev libseat-dev
       - name: Check
         run: cargo check --features "default"
+      - name: bench
+        run: cargo bench
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: layrs_${{ github.sha }}_bench
+          path: ./target/criterion
 
   doc:
     name: Documentation on Github Pages
