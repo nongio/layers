@@ -123,7 +123,7 @@ impl BuildLayerTree for Layer {
         }
 
         if let Some(image_cache) = viewlayer_tree.image_cache {
-            scene_layer.set_image_cache(image_cache);
+            scene_layer.set_image_cached(image_cache);
         }
         if let Some(pointer_events) = viewlayer_tree.pointer_events {
             scene_layer.set_pointer_events(pointer_events);
@@ -153,122 +153,105 @@ impl BuildLayerTree for Layer {
         if let Some(clip_children) = viewlayer_tree.clip_children {
             scene_layer.set_clip_children(clip_children, None);
         }
-        let layer_id = scene_layer.id();
+        let layer_id = scene_layer.id;
         let engine = scene_layer.engine;
-        if let Some(layer_id) = layer_id {
-            if let Some(scene_node) = self.engine.scene_get_node(&layer_id) {
-                let scene_node = scene_node.get();
-                scene_node.replicate_node(&viewlayer_tree.replicate_node);
-            }
 
-            // Children
-            let mut current_scene_layers_children: HashSet<NodeId> = {
-                let children = engine
-                    .scene
-                    .with_arena(|arena| layer_id.0.children(arena).collect());
-                children
-            };
+        // if let Some(scene_node) = self.engine.scene_get_node(&layer_id) {
+        // let scene_node = scene_node.get();
+        // scene_node.replicate_node(&viewlayer_tree.replicate_node);
+        // }
 
-            let mut layer_view_map: HashMap<NodeRef, String> = HashMap::new();
-            {
-                for (view_key, nodes) in cache_viewlayer.iter() {
-                    for node_id in nodes.iter() {
-                        layer_view_map.insert(*node_id, view_key.clone());
-                    }
+        // Children
+        let mut current_scene_layers_children: HashSet<NodeId> = {
+            let children = engine
+                .scene
+                .with_arena(|arena| layer_id.0.children(arena).collect());
+            children
+        };
+
+        let mut layer_view_map: HashMap<NodeRef, String> = HashMap::new();
+        {
+            for (view_key, nodes) in cache_viewlayer.iter() {
+                for node_id in nodes.iter() {
+                    layer_view_map.insert(*node_id, view_key.clone());
                 }
             }
-            // Add missing layers
-            if let Some(children) = viewlayer_tree.children.as_ref() {
-                for child in children.iter() {
-                    let child_key = child.get_key().clone();
-                    // check if there is already a layer for this child otherwise create one
-                    let mut nodes = cache_viewlayer.get(&child_key).cloned().unwrap_or_default();
-                    let child_layer_id = nodes.pop_front();
+        }
+        // Add missing layers
+        if let Some(children) = viewlayer_tree.children.as_ref() {
+            for child in children.iter() {
+                let child_key = child.get_key().clone();
+                // check if there is already a layer for this child otherwise create one
+                let mut nodes = cache_viewlayer.get(&child_key).cloned().unwrap_or_default();
+                let child_layer_id = nodes.pop_front();
 
-                    // get or create the child layer
-                    let (child_layer_id, child_scene_layer) = child_layer_id
-                        .and_then(|child_layer_id| {
-                            // try to use existing layer
-                            if let Some(child_scene_node) =
-                                engine.scene.get_node_sync(child_layer_id)
-                            {
-                                if child_scene_node.is_removed() {
-                                    return None;
-                                }
-                                let child_scene_layer = child_scene_node.get().clone();
-                                if child_scene_layer.is_deleted() {
-                                    return None;
-                                }
+                // get or create the child layer
+                let (child_layer_id, child_layer) = child_layer_id
+                    .and_then(|child_layer_id| {
+                        // try to use existing layer
+                        if !engine.scene.is_node_removed(child_layer_id) {
+                            // we should not need to add the layer back to the parent
+                            let child_layer = engine.get_layer(child_layer_id).unwrap();
+                            engine.append_layer(child_layer.clone(), Some(layer_id));
+                            return Some((child_layer_id, child_layer));
+                        }
+                        None
+                    })
+                    .unwrap_or_else(|| {
+                        // the child layer does not exist, or is removed
+                        let layer = engine.new_layer();
 
-                                // we should not need to add the layer back to the parent
-                                engine
-                                    .append_layer(child_scene_layer.layer.clone(), Some(layer_id));
-                                return Some((child_layer_id, child_scene_layer));
-                            }
-                            None
-                        })
-                        .unwrap_or_else(|| {
-                            // the child layer does not exist, or is removed
-                            let layer = Layer::with_engine(engine.clone());
-                            let id = engine.append_layer(layer, Some(layer_id));
-                            let node = engine.scene.get_node_sync(id).unwrap();
+                        (layer.id, layer)
+                    });
 
-                            (id, node.get().clone())
-                        });
+                layer_view_map.retain(|n, _| !node_same_index(n.0, child_layer_id.0));
+                cache_remove_id(&child_layer_id, cache_viewlayer);
+                drop(nodes);
 
-                    layer_view_map.retain(|n, _| !node_same_index(n.0, child_layer_id.0));
-                    cache_remove_id(&child_layer_id, cache_viewlayer);
-                    drop(nodes);
-
-                    // re-add the layer to the parent in case it is not in the right order
-                    child.mount_layer(child_scene_layer.layer.clone());
-                    let child = child.render_layertree();
-                    child_scene_layer
-                        .layer
-                        .build_layer_tree_internal(&child, cache_viewlayer);
-                    {
-                        // add child to cache
-                        let mut nodes =
-                            cache_viewlayer.get(&child_key).cloned().unwrap_or_default();
-                        nodes.push_back(child_layer_id);
-                        cache_viewlayer.insert(child.get_key(), nodes);
-                    }
-
-                    current_scene_layers_children
-                        .retain(|id| !node_same_index(*id, child_layer_id.0));
-                }
-            }
-
-            // Remove remaining extra layers
-            for scene_layer_id in current_scene_layers_children {
-                let scene_layer_ref = NodeRef(scene_layer_id);
-
-                let scene_layer = {
-                    let scene_node = engine.scene.get_node_sync(scene_layer_id).unwrap();
-                    scene_node.get().clone()
-                };
-                // let transition = scene_layer.layer.set_size(
-                //     Size {
-                //         width: taffy::Dimension::Length(0.0),
-                //         height: taffy::Dimension::Length(0.0),
-                //     },
-                //     Some(Transition {
-                //         duration: 0.5,
-                //         ..Default::default()
-                //     }),
-                // );
-
+                // re-add the layer to the parent in case it is not in the right order
+                child.mount_layer(child_layer.clone());
+                let child = child.render_layertree();
+                child_layer.build_layer_tree_internal(&child, cache_viewlayer);
                 {
-                    if let Some(view_key) = layer_view_map.get(&scene_layer_ref) {
-                        cache_remove_viewlayer(view_key, None, cache_viewlayer);
-                    }
+                    // add child to cache
+                    let mut nodes = cache_viewlayer.get(&child_key).cloned().unwrap_or_default();
+                    nodes.push_back(child_layer_id);
+                    cache_viewlayer.insert(child.get_key(), nodes);
                 }
-                // let scene_layer_clone = scene_layer.clone();
-                // scene_layer.layer.on_finish(transition, move |_| {
 
-                scene_layer.mark_for_deletion();
-                // });
+                current_scene_layers_children.retain(|id| !node_same_index(*id, child_layer_id.0));
             }
+        }
+
+        // Remove remaining extra layers
+        for scene_layer_id in current_scene_layers_children {
+            let scene_layer_ref = NodeRef(scene_layer_id);
+
+            let layer = engine.get_layer(scene_layer_ref).unwrap();
+            // let scene_node = engine.scene.get_node_sync(scene_layer_id).unwrap();
+            // let scene_node = scene_node.get();
+
+            // let transition = scene_layer.layer.set_size(
+            //     Size {
+            //         width: taffy::Dimension::Length(0.0),
+            //         height: taffy::Dimension::Length(0.0),
+            //     },
+            //     Some(Transition {
+            //         duration: 0.5,
+            //         ..Default::default()
+            //     }),
+            // );
+
+            {
+                if let Some(view_key) = layer_view_map.get(&scene_layer_ref) {
+                    cache_remove_viewlayer(view_key, None, cache_viewlayer);
+                }
+            }
+            // let scene_layer_clone = scene_layer.clone();
+            // scene_layer.layer.on_finish(transition, move |_| {
+
+            layer.remove();
+            // });
         }
     }
 }

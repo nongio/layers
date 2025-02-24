@@ -13,11 +13,7 @@ use std::{cell::Cell, io::Write};
 
 use crate::{
     drawing::scene::set_node_transform,
-    engine::{
-        node::{DrawCacheManagement, SceneNode},
-        scene::Scene,
-        NodeRef,
-    },
+    engine::{node::SceneNode, scene::Scene, NodeRef},
 };
 use crate::{drawing::scene::DrawScene, layers::layer::render_layer, prelude::render_node_tree};
 
@@ -122,7 +118,7 @@ impl DrawScene for SkiaFboRenderer {
             canvas.clip_rect(damage, None, None);
         }
         scene.with_arena(|arena| {
-            if let Some(root) = scene.get_node_sync(root_id) {
+            if let Some(root) = arena.get(root_id.into()) {
                 let root = root.get();
                 set_node_transform(root, canvas);
                 render_node_tree(root_id, arena, &mut canvas, 1.0);

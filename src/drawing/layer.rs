@@ -1,19 +1,13 @@
-use indextree::Arena;
 use skia_safe::*;
 
+use crate::types::PaintColor;
 use crate::{engine::draw_to_picture::DrawDebugInfo, layers::layer::render_layer::RenderLayer};
-use crate::{engine::SceneNode, types::PaintColor};
 
 use super::scene::BACKGROUND_BLUR_SIGMA;
 
 /// Draw a layer into a skia::Canvas.
 #[profiling::function]
-pub fn draw_layer(
-    canvas: &Canvas,
-    layer: &RenderLayer,
-    context_opacity: f32,
-    arena: &Arena<SceneNode>,
-) -> skia_safe::Rect {
+pub fn draw_layer(canvas: &Canvas, layer: &RenderLayer, context_opacity: f32) -> skia_safe::Rect {
     let mut draw_damage = skia_safe::Rect::default();
     let opacity = layer.opacity * context_opacity;
     // if the layer is completely transparent, we don't need to draw anything
@@ -111,7 +105,7 @@ pub fn draw_layer(
             canvas.clip_rrect(rrbounds, Some(ClipOp::Intersect), Some(true));
         }
         let caller = draw_func.0.as_ref();
-        let content_damage = caller(canvas, layer.size.width, layer.size.height, arena);
+        let content_damage = caller(canvas, layer.size.width, layer.size.height);
         draw_damage.join(content_damage);
 
         canvas.restore_to_count(save_count);
