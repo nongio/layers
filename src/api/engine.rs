@@ -16,11 +16,12 @@ pub extern "C" fn create_engine(width: f32, height: f32) -> *const engine::Engin
     Arc::into_raw(engine)
 }
 
-#[no_mangle]
-pub extern "C" fn engine_update(engine: *const engine::Engine, delta: f32) -> bool {
-    let engine = unsafe { &*engine };
-    engine.update(delta)
-}
+// FIXME
+// #[no_mangle]
+// pub extern "C" fn engine_update(engine: *const engine::Engine, delta: f32) -> bool {
+//     let engine = unsafe { &*engine };
+//     engine.update(delta)
+// }
 
 #[no_mangle]
 pub extern "C" fn engine_add_layer_to_scene(
