@@ -19,7 +19,7 @@ pub fn bounds_with_children() {
     layer.set_size(Size::points(0.0, 0.0), None);
 
     engine.add_layer(wrap.clone());
-    engine.append_layer(layer.clone(), wrap.id());
+    engine.append_layer(layer.clone(), wrap.id);
 
     let draw_shadow = move |_canvas: &lay_rs::skia::Canvas, w: f32, h: f32| {
         lay_rs::skia::Rect::from_xywh(0.0, 0.0, w, h)

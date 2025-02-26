@@ -42,7 +42,7 @@ mod tests {
 
         let layer = engine.new_layer();
 
-        let node = engine.append_layer(layer.clone(), wrap.id());
+        let node = engine.append_layer(layer.clone(), wrap.id);
 
         engine.update(0.016);
         let scene_node = engine.scene_get_node(&node).unwrap();

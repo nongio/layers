@@ -142,7 +142,7 @@ mod tests {
         let layer2 = engine.new_layer();
         layer2.set_position((100.0, 100.0), None);
         layer2.set_size(Size::points(100.0, 100.0), None);
-        engine.append_layer(layer2.clone(), layer.id());
+        engine.append_layer(layer2.clone(), layer.id);
 
         engine.update(0.016);
         let scene_damage = engine.damage();
@@ -273,7 +273,7 @@ mod tests {
         layer.set_size(Size::points(100.0, 100.0), None);
         layer.set_background_color(Color::new_hex("#ff0000ff"), None);
         layer.set_opacity(0.0, None);
-        engine.append_layer(layer.clone(), wrap.id());
+        engine.append_layer(layer.clone(), wrap.id);
 
         engine.update(0.016);
         let scene_damage = engine.damage();
@@ -332,7 +332,7 @@ mod tests {
         layer.set_background_color(Color::new_hex("#ff0000ff"), None);
         wrap.set_opacity(0.0, None);
 
-        engine.append_layer(layer.clone(), wrap.id());
+        engine.append_layer(layer.clone(), wrap.id);
 
         engine.update(0.016);
         let scene_damage = engine.damage();
@@ -382,7 +382,7 @@ mod tests {
         layer.set_size(Size::points(100.0, 100.0), None);
         layer.set_background_color(Color::new_hex("#ff0000ff"), None);
 
-        engine.append_layer(layer.clone(), wrap.id());
+        engine.append_layer(layer.clone(), wrap.id);
 
         engine.update(0.016);
         let scene_damage = engine.damage();
@@ -408,7 +408,7 @@ mod tests {
         layer.set_size(Size::points(0.0, 0.0), None);
 
         engine.add_layer(wrap.clone());
-        engine.append_layer(layer.clone(), wrap.id());
+        engine.append_layer(layer.clone(), wrap.id);
 
         let draw_shadow = move |_: &lay_rs::skia::Canvas, w: f32, h: f32| {
             lay_rs::skia::Rect::from_xywh(0.0, 0.0, w, h)

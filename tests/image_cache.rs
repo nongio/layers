@@ -54,7 +54,7 @@ pub fn image_cache() {
     assert_eq!(result.score, 1.0);
 
     // save the image
-    layer.set_image_cache(true);
+    layer.set_image_cached(true);
     engine.update(0.01);
     {
         let mut renderer = SkiaImageRenderer::new(1000, 1000, "tests/image_cache/render_image.png");
@@ -71,7 +71,7 @@ pub fn image_cache() {
     assert_eq!(result.score, 1.0);
 
     // save the image
-    child_layer.set_image_cache(true);
+    child_layer.set_image_cached(true);
     engine.update(0.01);
     {
         let mut renderer =
