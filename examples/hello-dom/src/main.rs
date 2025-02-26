@@ -125,7 +125,7 @@ async fn main() {
         lay_rs::skia::Rect::from_xywh(0.0, 0.0, w, h)
     });
     let layer = engine.new_layer();
-    engine.append_layer(layer.clone(), root.id());
+    engine.append_layer(layer.clone(), root.id);
 
     let instant = std::time::Instant::now();
     let mut update_frame = 0;

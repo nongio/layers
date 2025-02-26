@@ -40,7 +40,7 @@ pub fn view_app_icon(state: &AppIconState, view: &View<AppIconState>) -> LayerTr
     // let internal_state = view.layer.sta;
     let index = state.index;
     let val = layer.with_state(|state| state.get::<i32>("notification").unwrap_or_default());
-    let id: usize = layer.id().unwrap().0.into();
+    let id: usize = layer.id.0.into();
     let draw_picture = move |canvas: &lay_rs::skia::Canvas, w: f32, h: f32| -> lay_rs::skia::Rect {
         let paint = skia::Paint::new(Color4f::new(1.0, 1.0, 0.0, 1.0), None);
         let width = (w - PADDING * 2.0).max(0.0);

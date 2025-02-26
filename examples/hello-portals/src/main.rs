@@ -172,7 +172,7 @@ async fn main() {
     layer2.set_size(Size::points(500.0, 300.0), None);
     layer2.set_background_color(Color::new_hex("#DC9CFF"), None);
     layer2.set_scale((1.2, 1.2), None);
-    layer2.set_picture_cache(false);
+    layer2.set_picture_cached(false);
     layer2.set_draw_content(engine.layer_as_content(&layer));
 
     engine.add_layer(layer2.clone());

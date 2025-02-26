@@ -159,7 +159,7 @@ fn main() {
     });
 
     engine.add_layer(content_layer.clone());
-    engine.append_layer(inner_content_layer.clone(), content_layer.id());
+    engine.append_layer(inner_content_layer.clone(), content_layer.id);
     inner_content_layer.set_draw_content(
         |canvas: &lay_rs::skia::Canvas, width, height| -> lay_rs::skia::Rect {
             draw(canvas, width, height);
