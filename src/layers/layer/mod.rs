@@ -229,10 +229,8 @@ impl Layer {
     pub fn add_on_pointer_move<F: Into<PointerHandlerFunction>>(&self, handler: F) -> usize {
         let handler = handler.into();
 
-        let handler_id = self
-            .engine
-            .add_pointer_handler(self.id, PointerEventType::Move, handler);
-        handler_id
+        self.engine
+            .add_pointer_handler(self.id, PointerEventType::Move, handler)
     }
     pub fn remove_on_pointer_move(&self, handler_id: usize) {
         self.engine.remove_pointer_handler(self.id, handler_id);
@@ -240,10 +238,8 @@ impl Layer {
     pub fn add_on_pointer_in<F: Into<PointerHandlerFunction>>(&self, handler: F) -> usize {
         let handler = handler.into();
 
-        let handler_id = self
-            .engine
-            .add_pointer_handler(self.id, PointerEventType::In, handler);
-        handler_id
+        self.engine
+            .add_pointer_handler(self.id, PointerEventType::In, handler)
     }
     pub fn remove_on_pointer_in(&self, handler_id: Option<usize>) {
         let handler_id = handler_id.unwrap();
@@ -251,10 +247,9 @@ impl Layer {
     }
     pub fn add_on_pointer_out<F: Into<PointerHandlerFunction>>(&self, handler: F) -> usize {
         let handler = handler.into();
-        let handler_id = self
-            .engine
-            .add_pointer_handler(self.id, PointerEventType::Out, handler);
-        handler_id
+
+        self.engine
+            .add_pointer_handler(self.id, PointerEventType::Out, handler)
     }
     pub fn remove_on_pointer_out(&self, handler_id: Option<usize>) {
         let handler_id = handler_id.unwrap();
@@ -263,10 +258,8 @@ impl Layer {
     pub fn add_on_pointer_press<F: Into<PointerHandlerFunction>>(&self, handler: F) -> usize {
         let handler = handler.into();
 
-        let handler_id = self
-            .engine
-            .add_pointer_handler(self.id, PointerEventType::Down, handler);
-        handler_id
+        self.engine
+            .add_pointer_handler(self.id, PointerEventType::Down, handler)
     }
     pub fn remove_on_pointer_press(&self, handler_id: Option<usize>) {
         let handler_id = handler_id.unwrap();
@@ -275,10 +268,8 @@ impl Layer {
     pub fn add_on_pointer_release<F: Into<PointerHandlerFunction>>(&self, handler: F) -> usize {
         let handler = handler.into();
 
-        let handler_id = self
-            .engine
-            .add_pointer_handler(self.id, PointerEventType::Up, handler);
-        handler_id
+        self.engine
+            .add_pointer_handler(self.id, PointerEventType::Up, handler)
     }
     pub fn remove_on_pointer_release(&self, handler_id: Option<usize>) {
         let handler_id = handler_id.unwrap();

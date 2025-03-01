@@ -74,7 +74,6 @@ bitflags! {
 // #[derive(Clone)]
 pub struct SceneNode {
     pub(crate) render_layer: RenderLayer,
-
     rendering_flags: RenderableFlags,
     pub(crate) repaint_damage: skia_safe::Rect,
     pub(crate) hidden: bool,
@@ -151,7 +150,7 @@ impl SceneNode {
             if debug_info {
                 // let id: usize = self.layer.id().unwrap().0.into();
                 self._debug_info = Some(DrawDebugInfo {
-                    info: format!("{}", ""),
+                    info: "".to_string(),
                     frame: self.frame_number,
                     render_layer: self.render_layer().clone(),
                 });
@@ -200,7 +199,7 @@ impl SceneNode {
     }
     pub(crate) fn follow_node(&mut self, nodeid: &Option<NodeRef>) {
         // let mut _follow_node = self._follow_node.write().unwrap();
-        self._follow_node = nodeid.clone();
+        self._follow_node = *nodeid;
     }
     // pub fn replicate_node(&self, nodeid: &Option<NodeRef>) {
     //     if let Some(nodeid) = nodeid {
@@ -233,7 +232,7 @@ impl SceneNode {
         let render_layer = &self.render_layer;
 
         if self.hidden() || render_layer.premultiplied_opacity == 0.0 {
-            let rd = self.repaint_damage.clone();
+            let rd = self.repaint_damage;
             self.repaint_damage = damage;
             return rd;
         }
@@ -274,7 +273,7 @@ impl SceneNode {
                         );
                         self.draw_cache = Some(new_cache);
                     }
-                    let previous_damage = self.repaint_damage.clone();
+                    let previous_damage = self.repaint_damage;
                     self.repaint_damage = damage;
                     damage.join(previous_damage);
 

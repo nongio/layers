@@ -106,7 +106,7 @@ pub(crate) fn execute_transactions(engine: &Engine) -> (Vec<NodeRef>, Vec<FlatSt
                     let flags = command.change.execute(animation_state.progress);
 
                     let node_id = command.node_id;
-                    updated_nodes.write().unwrap().push(node_id.into());
+                    updated_nodes.write().unwrap().push(node_id);
                     scene.with_arena_mut(|arena| {
                         if let Some(node) = arena.get_mut(node_id.0) {
                             let node = node.get_mut();
@@ -173,9 +173,7 @@ pub(crate) fn update_layout_tree(engine: &Engine) {
         profiling::scope!("update_nodes_size");
         engine.scene.with_arena(|arena| {
             arena.iter().for_each(|node| {
-                if node.is_removed() {
-                    return;
-                }
+                if node.is_removed() {}
                 // FIXME
                 // let scene_node = node.get();
                 // let size = scene_node.layer.model.size.value();
@@ -540,6 +538,7 @@ pub(crate) fn cleanup_transactions(engine: &Engine, finished_transations: Vec<Fl
 }
 
 #[profiling::function]
+#[allow(clippy::unnecessary_filter_map)]
 pub(crate) fn cleanup_nodes(engine: &Engine) -> skia_safe::Rect {
     let mut damage = skia_safe::Rect::default();
     let deleted = {

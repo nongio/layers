@@ -320,7 +320,7 @@ impl RenderLayer {
             clip_content,
             clip_children,
             image_filter: model.image_filter.read().unwrap().clone(),
-            image_filter_bounds: model.filter_bounds.read().unwrap().clone(),
+            image_filter_bounds: *model.filter_bounds.read().unwrap(),
             color_filter: model.color_filter.read().unwrap().clone(),
         }
     }

@@ -62,7 +62,11 @@ version = "=0.80"
 features = ["binary-cache", "gl", "metal", "svg", "textlayout", "webp"]
 
 [dev-dependencies]
-criterion = { version = "0.5.1", features = ["async_futures", "async_tokio"] }
+criterion = { version = "0.5.1", features = [
+    "async_futures",
+    "async_tokio",
+    "html_reports",
+] }
 paste = "1.0"
 glutin = "0.29"
 winit = "0.28"

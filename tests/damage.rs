@@ -19,14 +19,21 @@ mod tests {
 
         engine.update(0.016);
 
-        let scene_node = engine.scene_get_node(&node).unwrap();
-        let scene_node = scene_node.get();
-        let render_layer = scene_node.render_layer();
+        let scene = engine.scene();
+
+        let nodeid = node.0;
+        let render_layer = scene.with_arena(move |a| {
+            let node = a.get(nodeid);
+            let node = node.unwrap();
+            let node = node.get();
+            node.render_layer().clone()
+        });
+
         let renderer = SkiaImageRenderer::new(1000, 1000, "damage.png");
         let mut surface = renderer.surface();
         let canvas = surface.canvas();
-        engine.scene().with_arena(|arena| {
-            let damage = draw_layer(canvas, &render_layer, 1.0, arena);
+        engine.scene().with_arena(|_arena| {
+            let damage = draw_layer(canvas, &render_layer, 1.0);
 
             // test empty layer
             assert_eq!(damage, skia_safe::Rect::from_xywh(0.0, 0.0, 0.0, 0.0));
@@ -35,9 +42,14 @@ mod tests {
         // test layer with background damage
         layer.set_background_color(Color::new_hex("#ff0000ff"), None);
         engine.update(0.016);
-        let render_layer = scene_node.render_layer();
-        engine.scene().with_arena(|arena| {
-            let damage = draw_layer(canvas, &render_layer, 1.0, arena);
+        let render_layer = scene.with_arena(move |a| {
+            let node = a.get(nodeid);
+            let node = node.unwrap();
+            let node = node.get();
+            node.render_layer().clone()
+        });
+        engine.scene().with_arena(|_arena| {
+            let damage = draw_layer(canvas, &render_layer, 1.0);
             assert_eq!(damage, skia_safe::Rect::from_xywh(0.0, 0.0, 100.0, 100.0));
         });
 
@@ -45,9 +57,14 @@ mod tests {
         layer.set_border_color(Color::new_hex("#ff0000ff"), None);
         layer.set_border_width(10.0, None);
         engine.update(0.016);
-        let render_layer = scene_node.render_layer();
-        engine.scene().with_arena(|arena| {
-            let damage = draw_layer(canvas, &render_layer, 1.0, arena);
+        let render_layer = scene.with_arena(move |a| {
+            let node = a.get(nodeid);
+            let node = node.unwrap();
+            let node = node.get();
+            node.render_layer().clone()
+        });
+        engine.scene().with_arena(|_arena| {
+            let damage = draw_layer(canvas, &render_layer, 1.0);
             assert_eq!(damage, skia_safe::Rect::from_xywh(-5.0, -5.0, 110.0, 110.0));
         });
 
@@ -57,9 +74,14 @@ mod tests {
         layer.set_shadow_radius(20.0, None);
         layer.set_shadow_spread(20.0, None);
         engine.update(0.016);
-        let render_layer = scene_node.render_layer();
-        engine.scene().with_arena(|arena| {
-            let damage = draw_layer(canvas, &render_layer, 1.0, arena);
+        let render_layer = scene.with_arena(move |a| {
+            let node = a.get(nodeid);
+            let node = node.unwrap();
+            let node = node.get();
+            node.render_layer().clone()
+        });
+        engine.scene().with_arena(|_arena| {
+            let damage = draw_layer(canvas, &render_layer, 1.0);
             assert_eq!(
                 damage,
                 skia_safe::Rect::from_xywh(-50.0, -50.0, 180.0, 180.0)
@@ -70,9 +92,16 @@ mod tests {
         layer.set_blend_mode(lay_rs::types::BlendMode::BackgroundBlur);
 
         engine.update(0.016);
-        let render_layer = scene_node.render_layer();
-        engine.scene().with_arena(|arena| {
-            let damage = draw_layer(canvas, &render_layer, 1.0, arena);
+
+        let render_layer = scene.with_arena(move |a| {
+            let node = a.get(nodeid);
+            let node = node.unwrap();
+            let node = node.get();
+            node.render_layer().clone()
+        });
+
+        engine.scene().with_arena(|_| {
+            let damage = draw_layer(canvas, &render_layer, 1.0);
 
             assert_eq!(
                 damage,

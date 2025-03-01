@@ -68,7 +68,7 @@ use self::{
 };
 use crate::{
     drawing::render_node_tree,
-    layers::layer::{model::PointerHandlerFunction, Layer},
+    layers::layer::{model::PointerHandlerFunction, render_layer::RenderLayer, Layer},
     prelude::ContentDrawFunction,
     types::Point,
 };
@@ -381,9 +381,9 @@ impl From<NodeRef> for usize {
         node_ref.0.into()
     }
 }
-impl Into<NodeRef> for TreeStorageId {
-    fn into(self) -> NodeRef {
-        NodeRef(self)
+impl From<TreeStorageId> for NodeRef {
+    fn from(val: TreeStorageId) -> Self {
+        NodeRef(val)
     }
 }
 
@@ -759,6 +759,14 @@ impl Engine {
     }
     pub fn scene_root(&self) -> Option<NodeRef> {
         *self.scene_root.blocking_read()
+    }
+
+    pub fn render_layer(&self, node_ref: NodeRef) -> Option<RenderLayer> {
+        self.scene.with_arena(|arena| {
+            let node = arena.get(node_ref.into())?;
+            let node = node.get().render_layer().clone();
+            Some(node)
+        })
     }
 
     pub fn scene_get_node_parent(&self, node_ref: NodeRef) -> Option<NodeRef> {

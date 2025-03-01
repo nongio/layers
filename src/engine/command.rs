@@ -49,7 +49,7 @@ impl<V: Sync + Clone + std::fmt::Debug> Attribute<V> {
             transition,
         }
     }
-
+    #[allow(clippy::wrong_self_convention)]
     pub fn from_to(&self, from: V, to: V, transition: Option<Transition>) -> AttributeChange<V> {
         AttributeChange {
             from,
