@@ -126,14 +126,6 @@ impl Scene {
     //     })
     // }
 
-    pub fn new_node(&self) -> NodeRef {
-        let node = SceneNode::new();
-        self.insert_node(node, None)
-    }
-    pub fn append_node(&self, parent: Option<NodeRef>) -> NodeRef {
-        let node = SceneNode::new();
-        self.insert_node(node, parent)
-    }
     pub(crate) fn remove_node(&self, id: impl Into<TreeStorageId>) {
         let id = id.into();
 
