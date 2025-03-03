@@ -7,7 +7,7 @@ pub fn layer_contains() {
     let layer = engine.new_layer();
     layer.set_size(Size::points(100.0, 100.0), None);
 
-    engine.add_layer(layer.clone());
+    engine.add_layer(&layer);
 
     engine.update(0.016);
 
@@ -25,7 +25,7 @@ pub fn layer_contains() {
 pub fn scene_node_contains() {
     let engine = Engine::create(1000.0, 1000.0);
     let layer = engine.new_layer();
-    engine.add_layer(layer.clone());
+    engine.add_layer(&layer);
     layer.set_size(Size::points(100.0, 100.0), None);
     layer.set_anchor_point(Point { x: 0.5, y: 0.5 }, None);
     layer.set_position(Point { x: 100.0, y: 100.0 }, None);
@@ -62,7 +62,7 @@ pub fn layer_contains_scale() {
     let layer = engine.new_layer();
     layer.set_size(Size::points(100.0, 100.0), None);
 
-    engine.add_layer(layer.clone());
+    engine.add_layer(&layer);
 
     layer.set_scale(Point { x: 2.0, y: 2.0 }, None);
     engine.update(0.016);

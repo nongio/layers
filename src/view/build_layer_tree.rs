@@ -191,8 +191,8 @@ impl BuildLayerTree for Layer {
                         // try to use existing layer
                         if !engine.scene.is_node_removed(child_layer_id) {
                             // we should not need to add the layer back to the parent
-                            let child_layer = engine.get_layer(child_layer_id).unwrap();
-                            engine.append_layer(child_layer.clone(), Some(layer_id));
+                            let child_layer = engine.get_layer(&child_layer_id).unwrap();
+                            engine.append_layer(&child_layer.id, Some(layer_id));
                             return Some((child_layer_id, child_layer));
                         }
                         None
@@ -227,7 +227,7 @@ impl BuildLayerTree for Layer {
         for scene_layer_id in current_scene_layers_children {
             let scene_layer_ref = NodeRef(scene_layer_id);
 
-            let layer = engine.get_layer(scene_layer_ref).unwrap();
+            let layer = engine.get_layer(&scene_layer_ref).unwrap();
             // let scene_node = engine.scene.get_node_sync(scene_layer_id).unwrap();
             // let scene_node = scene_node.get();
 

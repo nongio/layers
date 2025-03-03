@@ -10,7 +10,7 @@ pub fn image_cache() {
 
     let layer = engine.new_layer();
 
-    let node_id = engine.add_layer(layer.clone());
+    engine.add_layer(&layer);
 
     layer.set_position((50.0, 50.0), None);
     layer.set_size(Size::points(200.0, 200.0), None);
@@ -32,7 +32,7 @@ pub fn image_cache() {
     child_layer.set_border_color(Color::new_hex("#000000"), None);
     child_layer.set_border_width(2.0, None);
 
-    engine.append_layer(child_layer.clone(), Some(node_id));
+    engine.append_layer(&child_layer, Some(layer.id));
 
     engine.update(0.01);
 

@@ -5,7 +5,7 @@ use lay_rs::prelude::*;
 pub fn linear_animation() {
     let engine = Engine::create(1000.0, 1000.0);
     let layer = engine.new_layer();
-    engine.add_layer(layer.clone());
+    engine.add_layer(&layer);
 
     layer
         .set_opacity(0.0, Some(Transition::linear(1.0)))
@@ -81,7 +81,7 @@ pub fn spring_animation() {
 pub fn merge_spring_animation() {
     let engine = Engine::create(1000.0, 1000.0);
     let layer = engine.new_layer();
-    engine.add_layer(layer.clone());
+    engine.add_layer(&layer);
 
     let tr = layer.set_position((10.0, 10.0), Transition::spring(2.0, 0.2));
 

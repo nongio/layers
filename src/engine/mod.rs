@@ -376,6 +376,12 @@ impl From<NodeRef> for TreeStorageId {
         node_ref.0
     }
 }
+impl From<&NodeRef> for TreeStorageId {
+    fn from(node_ref: &NodeRef) -> Self {
+        node_ref.0
+    }
+}
+
 impl From<NodeRef> for usize {
     fn from(node_ref: NodeRef) -> Self {
         node_ref.0.into()
@@ -384,6 +390,12 @@ impl From<NodeRef> for usize {
 impl From<TreeStorageId> for NodeRef {
     fn from(val: TreeStorageId) -> Self {
         NodeRef(val)
+    }
+}
+
+impl From<&TreeStorageId> for NodeRef {
+    fn from(val: &TreeStorageId) -> Self {
+        NodeRef(val.clone())
     }
 }
 
@@ -534,9 +546,9 @@ impl Engine {
         layer
     }
 
-    pub fn get_layer(&self, node: impl Into<NodeRef>) -> Option<Layer> {
+    pub fn get_layer<'a>(&self, node: impl Into<&'a NodeRef>) -> Option<Layer> {
         let node_id = node.into();
-        self.layers.blocking_read().get(&node_id).cloned()
+        self.layers.blocking_read().get(node_id).cloned()
     }
 
     pub fn with_layers(&self, f: impl Fn(&HashMap<NodeRef, Layer>)) {
@@ -560,7 +572,7 @@ impl Engine {
     fn layout_append_layer(&self, layer: &Layer, parent: NodeRef) {
         let layout = layer.layout_id;
         let parent_layout = {
-            self.get_layer(parent)
+            self.get_layer(&parent)
                 .map(|parent_layer| parent_layer.layout_id)
         };
         if parent_layout.is_none() {
@@ -579,7 +591,7 @@ impl Engine {
     fn layout_prepend_layer(&self, layer: &Layer, parent: NodeRef) {
         let layout = layer.layout_id;
         let parent_layout = {
-            self.get_layer(parent)
+            self.get_layer(&parent)
                 .map(|parent_layer| parent_layer.layout_id)
         };
         if parent_layout.is_none() {
@@ -599,47 +611,41 @@ impl Engine {
     /// Append the layer's node to the scene tree and layout tree
     /// the layer is appended to the parent node if it is provided
     /// otherwise it is appended to the root of the scene
-    pub fn append_layer(
+    pub fn append_layer<'a>(
         &self,
-        layer: impl Into<Layer>,
+        layer_id: impl Into<&'a NodeRef>,
         parent: impl Into<Option<NodeRef>>,
-    ) -> NodeRef {
-        let layer: Layer = layer.into();
-        let parent = parent.into();
-        let layer_id = layer.id;
+    ) {
+        let layer_id = layer_id.into();
+        if let Some(layer) = self.get_layer(layer_id) {
+            let parent = parent.into();
+            self.layout_detach_layer(&layer);
+            let new_parent = parent.or_else(|| {
+                let scene_root = *self.scene_root.blocking_read();
+                scene_root
+            });
 
-        self.layout_detach_layer(&layer);
+            if new_parent.is_none() {
+                // if we append to a scene without a root, we set the layer as the root
+                self.scene_set_root(layer);
+            } else {
+                let new_parent = new_parent.unwrap();
 
-        let new_parent = parent.or_else(|| {
-            let scene_root = *self.scene_root.blocking_read();
-            scene_root
-        });
-
-        if new_parent.is_none() {
-            // if we append to a scene without a root, we set the layer as the root
-            self.scene_set_root(layer);
-        } else {
-            let new_parent = new_parent.unwrap();
-
-            self.scene.append_node_to(layer.id, new_parent);
-            self.layout_append_layer(&layer, new_parent);
+                self.scene.append_node_to(layer.id, new_parent);
+                self.layout_append_layer(&layer, new_parent);
+            }
         }
-        layer_id
     }
 
     /// Append the layer to the root of the scene
     /// alias for append_layer, without a parent
-    pub fn add_layer(&self, layer: impl Into<Layer>) -> NodeRef {
+    pub fn add_layer<'a>(&self, layer: impl Into<&'a NodeRef>) {
         self.append_layer(layer, None)
     }
 
     /// Prepend the layer to the root of the scene or to a parent node
     /// if the parent is provided
-    pub fn prepend_layer(
-        &self,
-        layer: impl Into<Layer>,
-        parent: impl Into<Option<NodeRef>>,
-    ) -> NodeRef {
+    pub fn prepend_layer(&self, layer: impl Into<Layer>, parent: impl Into<Option<NodeRef>>) {
         let layer: Layer = layer.into();
         let layer_id = layer.id;
         let parent = parent.into();
@@ -659,14 +665,9 @@ impl Engine {
             self.scene.prepend_node_to(layer_id, new_parent);
             self.layout_prepend_layer(&layer, new_parent);
         }
-        layer_id
     }
 
-    pub fn add_layer_to_positioned(
-        &self,
-        layer: impl Into<Layer>,
-        parent: Option<NodeRef>,
-    ) -> NodeRef {
+    pub fn add_layer_to_positioned(&self, layer: impl Into<Layer>, parent: Option<NodeRef>) {
         // FIXME ensure that newly added layers are layouted
         // update...
         {
@@ -693,7 +694,8 @@ impl Engine {
             y: position.y - parent_position.y,
         };
 
-        let node = self.append_layer(layer.clone(), parent);
+        self.append_layer(&layer.id, parent);
+
         layer.set_position(new_position, None);
         {
             execute_transactions(self);
@@ -707,8 +709,6 @@ impl Engine {
         // println!("new model position {:?}", new_position);
         // let new_position = layer.render_position();
         // println!("new render position {:?}", new_position);
-
-        node
     }
 
     pub fn mark_for_delete(&self, layer: NodeRef) {
@@ -721,21 +721,21 @@ impl Engine {
     }
 
     // FIXME: quite convoluted logic.. move main logic into scene
-    pub(crate) fn scene_remove_layer(&self, layer: impl Into<NodeRef>) {
+    pub(crate) fn scene_remove_layer<'a>(&self, layer: impl Into<&'a NodeRef>) {
         // Scene object is responsible for removing the node and its children
         // Engine is responsible for removing the layout node,
         // and mark the scene node for relayout?
         self.scene.with_arena_mut(|arena| {
-            let layer_id: NodeRef = layer.into();
+            let layer_id = layer.into();
             if let Some(node) = arena.get_mut(layer_id.into()) {
                 let layer = self.get_layer(layer_id).unwrap();
                 let layout_id = layer.layout_id;
                 let parent_id = node.parent();
 
                 if let Some(parent_id) = parent_id {
-                    if let Some(parent_node) = arena.get_mut(parent_id) {
+                    if let Some(parent_node) = arena.get_mut(parent_id.clone()) {
                         let parent = parent_node.get_mut();
-                        let parent_layer = self.get_layer(parent_id).unwrap();
+                        let parent_layer = self.get_layer(&NodeRef(parent_id)).unwrap();
                         let parent_layout_id = parent_layer.layout_id;
                         parent.set_need_layout(true);
 
@@ -761,7 +761,8 @@ impl Engine {
         *self.scene_root.blocking_read()
     }
 
-    pub fn render_layer(&self, node_ref: NodeRef) -> Option<RenderLayer> {
+    pub fn render_layer<'a>(&self, node_ref: impl Into<&'a NodeRef>) -> Option<RenderLayer> {
+        let node_ref = node_ref.into();
         self.scene.with_arena(|arena| {
             let node = arena.get(node_ref.into())?;
             let node = node.get().render_layer().clone();
@@ -1200,7 +1201,7 @@ impl Engine {
     fn bubble_up_event(&self, node_ref: NodeRef, event_type: &PointerEventType) {
         self.scene.with_arena(|arena| {
             if let Some(node) = arena.get(node_ref.into()) {
-                let layer = self.get_layer(node_ref).unwrap();
+                let layer = self.get_layer(&node_ref).unwrap();
                 if node.is_removed() {
                     return;
                 }
@@ -1236,7 +1237,7 @@ impl Engine {
             root_id = Some(root);
         }
         let root_id = root_id.unwrap();
-        let root_layer = self.get_layer(root_id).unwrap();
+        let root_layer = self.get_layer(&NodeRef(root_id)).unwrap();
         let mut hover_self = false;
 
         let (hidden, children) = self.scene.with_arena_mut(|arena| {

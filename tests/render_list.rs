@@ -11,13 +11,13 @@ mod tests {
         let engine = Engine::create(1000.0, 1000.0);
 
         let layer = engine.new_layer();
-        engine.add_layer(layer.clone());
+        engine.add_layer(&layer);
 
         let layer = engine.new_layer();
-        engine.add_layer(layer.clone());
+        engine.add_layer(&layer);
 
         let layer = engine.new_layer();
-        engine.add_layer(layer.clone());
+        engine.add_layer(&layer);
 
         engine.update(0.016);
 
@@ -35,19 +35,19 @@ mod tests {
         layer.set_position((0.0, 0.0), None);
         layer.set_size(Size::points(100.0, 100.0), None);
 
-        engine.add_layer(layer.clone());
+        engine.add_layer(&layer);
 
         let layer = engine.new_layer();
         layer.set_position((100.0, 100.0), None);
         layer.set_size(Size::points(100.0, 100.0), None);
 
-        engine.add_layer(layer.clone());
+        engine.add_layer(&layer);
 
         let layer = engine.new_layer();
         layer.set_position((100.0, 100.0), None);
         layer.set_size(Size::points(150.0, 150.0), None);
 
-        engine.add_layer(layer.clone());
+        engine.add_layer(&layer);
 
         engine.update(0.016);
 
@@ -66,19 +66,19 @@ mod tests {
         layer.set_position((0.0, 0.0), None);
         layer.set_size(Size::points(100.0, 100.0), None);
 
-        engine.add_layer(layer.clone());
+        engine.add_layer(&layer);
 
         let layer = engine.new_layer();
         layer.set_position((0.0, 0.0), None);
         layer.set_size(Size::points(100.0, 100.0), None);
         layer.set_opacity(0.9, None);
-        engine.add_layer(layer.clone());
+        engine.add_layer(&layer);
 
         let layer = engine.new_layer();
         layer.set_position((0.0, 0.0), None);
         layer.set_size(Size::points(150.0, 150.0), None);
         layer.set_blend_mode(lay_rs::prelude::BlendMode::BackgroundBlur);
-        engine.add_layer(layer.clone());
+        engine.add_layer(&layer);
 
         engine.update(0.016);
 
@@ -97,19 +97,19 @@ mod tests {
         layer.set_position((0.0, 0.0), None);
         layer.set_size(Size::points(100.0, 100.0), None);
 
-        engine.add_layer(layer.clone());
+        engine.add_layer(&layer);
 
         let layer = engine.new_layer();
         layer.set_position((0.0, 0.0), None);
         layer.set_size(Size::points(50.0, 50.0), None);
         layer.set_opacity(1.0, None);
-        engine.add_layer(layer.clone());
+        engine.add_layer(&layer);
 
         let layer = engine.new_layer();
         layer.set_position((0.0, 0.0), None);
         layer.set_size(Size::points(150.0, 150.0), None);
         layer.set_opacity(0.9, None);
-        engine.add_layer(layer.clone());
+        engine.add_layer(&layer);
 
         engine.update(0.016);
 
@@ -128,20 +128,20 @@ mod tests {
         layer.set_position((0.0, 0.0), None);
         layer.set_size(Size::points(100.0, 100.0), None);
 
-        engine.add_layer(layer.clone());
+        engine.add_layer(&layer);
 
         let layer = engine.new_layer();
         layer.set_position((0.0, 0.0), None);
         layer.set_size(Size::points(100.0, 100.0), None);
         layer.set_opacity(0.0, None);
-        engine.add_layer(layer.clone());
+        engine.add_layer(&layer);
 
         let layer = engine.new_layer();
         layer.set_position((0.0, 0.0), None);
         layer.set_size(Size::points(150.0, 150.0), None);
         layer.set_blend_mode(lay_rs::prelude::BlendMode::BackgroundBlur);
         layer.set_hidden(true);
-        engine.add_layer(layer.clone());
+        engine.add_layer(&layer);
 
         engine.update(0.016);
 

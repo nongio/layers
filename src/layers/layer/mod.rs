@@ -211,11 +211,11 @@ impl Layer {
         self.engine
             .set_node_flags(self.id, RenderableFlags::NEEDS_PAINT);
     }
-    pub fn add_sublayer(&self, layer: Layer) -> NodeRef {
+    pub fn add_sublayer<'a>(&self, layer: impl Into<&'a NodeRef>) {
         self.engine.append_layer(layer, self.id)
     }
 
-    pub fn prepend_sublayer(&self, layer: Layer) -> NodeRef {
+    pub fn prepend_sublayer(&self, layer: Layer) {
         self.engine.prepend_layer(layer, self.id)
     }
 
@@ -348,7 +348,7 @@ impl Layer {
             self.engine.scene.with_arena(|arena| {
                 node_id
                     .children(arena)
-                    .filter_map(|cid| self.engine.get_layer(cid))
+                    .filter_map(|cid| self.engine.get_layer(&NodeRef(cid)))
                     .collect()
             })
         };
@@ -468,8 +468,20 @@ impl Hash for Layer {
     }
 }
 
-impl From<Layer> for Option<NodeRef> {
+impl From<Layer> for NodeRef {
     fn from(val: Layer) -> Self {
-        Some(val.id)
+        val.id
+    }
+}
+
+impl From<&Layer> for NodeRef {
+    fn from(val: &Layer) -> Self {
+        val.id
+    }
+}
+
+impl<'a> From<&'a Layer> for &'a NodeRef {
+    fn from(val: &'a Layer) -> Self {
+        &val.id
     }
 }
