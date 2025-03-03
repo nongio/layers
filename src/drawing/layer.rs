@@ -6,6 +6,7 @@ use crate::{engine::draw_to_picture::DrawDebugInfo, layers::layer::render_layer:
 use super::scene::BACKGROUND_BLUR_SIGMA;
 
 /// Draw a layer into a skia::Canvas.
+/// Returns the damage rect in the layer's coordinate space.
 #[profiling::function]
 pub fn draw_layer(canvas: &Canvas, layer: &RenderLayer, context_opacity: f32) -> skia_safe::Rect {
     let mut draw_damage = skia_safe::Rect::default();
@@ -15,28 +16,9 @@ pub fn draw_layer(canvas: &Canvas, layer: &RenderLayer, context_opacity: f32) ->
         return draw_damage;
     }
 
-    let bounds = Rect::from_xywh(0.0, 0.0, layer.size.width, layer.size.height);
-    let rrbounds = RRect::new_rect_radii(
-        bounds,
-        &[
-            Point::new(
-                layer.border_corner_radius.top_left,
-                layer.border_corner_radius.top_left,
-            ),
-            Point::new(
-                layer.border_corner_radius.top_right,
-                layer.border_corner_radius.top_right,
-            ),
-            Point::new(
-                layer.border_corner_radius.bottom_left,
-                layer.border_corner_radius.bottom_left,
-            ),
-            Point::new(
-                layer.border_corner_radius.bottom_right,
-                layer.border_corner_radius.bottom_right,
-            ),
-        ],
-    );
+    // let bounds = Rect::from_xywh(0.0, 0.0, layer.size.width, layer.size.height);
+    let bounds = layer.bounds;
+    let rrbounds = &layer.rbounds;
     let background_color = match layer.background_color {
         PaintColor::Solid { color } => Color4f::from(color),
         _ => Color4f::new(1.0, 1.0, 1.0, opacity),
@@ -126,7 +108,9 @@ pub fn draw_layer(canvas: &Canvas, layer: &RenderLayer, context_opacity: f32) ->
         draw_damage.join(bounds.with_outset((layer.border_width / 2.0, layer.border_width / 2.0)));
     }
 
-    if layer.blend_mode == crate::types::BlendMode::BackgroundBlur {
+    if layer.blend_mode == crate::types::BlendMode::BackgroundBlur
+        && (background_color.a * opacity) > 0.0
+    {
         draw_damage.outset((BACKGROUND_BLUR_SIGMA, BACKGROUND_BLUR_SIGMA));
     }
 

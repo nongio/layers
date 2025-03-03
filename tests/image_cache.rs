@@ -4,6 +4,7 @@ use lay_rs::{
     types::{BorderRadius, Color, Size},
 };
 
+// Visual test for image caching
 #[test]
 pub fn image_cache() {
     let engine = Engine::create(1000.0, 1000.0);

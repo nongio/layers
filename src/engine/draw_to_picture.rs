@@ -8,7 +8,8 @@ pub struct DrawDebugInfo {
     pub frame: usize,
     pub render_layer: RenderLayer,
 }
-
+/// Draw a layer to a picture
+/// Returns the picture and the damage rect in the layer's coordinate space
 pub(crate) fn draw_layer_to_picture(
     render_layer: &RenderLayer,
 ) -> (Option<Picture>, skia_safe::Rect) {

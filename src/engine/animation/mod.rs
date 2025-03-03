@@ -16,6 +16,12 @@
 //! # Usage
 //! ```rust
 //! // use default easing function
+//! use lay_rs::prelude::*;
+//!
+//! let engine = Engine::create(1000.0, 1000.0);
+//! let layer = engine.new_layer();
+//! engine.add_layer(&layer);
+//!
 //! layer.set_position((100.0, 100.0), Transition::ease_in(0.3));
 //!
 //! // spring helper with perceptual duration and bounce
@@ -27,6 +33,10 @@
 //!
 //! # Advanced Easing usage
 //! ```rust
+//! use lay_rs::prelude::*;
+//!
+//! let engine = Engine::create(1000.0, 1000.0);
+//! let layer = engine.new_layer();
 //! // use custom set a delay and easing function
 //! layer.set_position((100.0, 100.0), Transition {
 //!     delay: 0.1,

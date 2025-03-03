@@ -13,9 +13,11 @@
 //! # Usage:
 //!
 //! ```
-//! let engine = Engine::create();
-//! engine.add_layer(Layer::new());
-//! engine.render();
+//! use lay_rs::prelude::*;
+//!
+//! let engine = Engine::create(500.0, 500.0);
+//! let layer = engine.new_layer();
+//! engine.add_layer(&layer);
 //! ```
 pub use node::SceneNode;
 
@@ -57,7 +59,7 @@ use tokio::sync::RwLock;
 
 use self::{
     animation::{Animation, Transition},
-    command::NoopChange,
+    // command::NoopChange,
     node::RenderableFlags,
     scene::Scene,
     stages::{
@@ -245,7 +247,7 @@ pub enum PointerEventType {
 ///     align_items: Some(taffy::AlignItems::Center),
 ///     ..Default::default()
 /// });
-/// engine.add_layer(root_layer.clone());
+/// engine.add_layer(&root_layer);
 /// ```
 /// ## Usage: Update the engine
 /// ```rust
@@ -519,8 +521,8 @@ impl Engine {
         *self.layout_root.blocking_write() = layout;
         // let mut layout_tree = self.layout_tree.write().unwrap();
 
-        let change = Arc::new(NoopChange::new(id.0.into()));
-        self.schedule_change(id, change, None);
+        // let change = Arc::new(NoopChange::new(id.0.into()));
+        // self.schedule_change(id, change, None);
         id
     }
 
