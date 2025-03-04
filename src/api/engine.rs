@@ -24,15 +24,11 @@ pub extern "C" fn create_engine(width: f32, height: f32) -> *const engine::Engin
 // }
 
 #[no_mangle]
-pub extern "C" fn engine_add_layer_to_scene(
-    engine: *const engine::Engine,
-    layer: *const Layer,
-) -> usize {
+pub extern "C" fn engine_add_layer_to_scene(engine: *const engine::Engine, layer: *const Layer) {
     let engine = unsafe { &*engine };
     let layer = unsafe { &*layer };
-    let layer = (*layer).clone();
 
-    engine.append_layer(layer, None).into()
+    engine.append_layer(&layer.id, None);
 }
 
 #[no_mangle]

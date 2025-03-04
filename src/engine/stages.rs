@@ -71,8 +71,8 @@ pub(crate) fn update_animations(
 #[profiling::function]
 /// This function executes the transactions in the engine, in parallel.
 pub(crate) fn execute_transactions(engine: &Engine) -> (Vec<NodeRef>, Vec<FlatStorageId>, bool) {
-    let updated_nodes = Arc::new(RwLock::new(Vec::<NodeRef>::new()));
-    let transactions_finished = Arc::new(RwLock::new(Vec::<FlatStorageId>::new()));
+    let updated_nodes = Arc::new(tokio::sync::RwLock::new(Vec::<NodeRef>::new()));
+    let transactions_finished = Arc::new(tokio::sync::RwLock::new(Vec::<FlatStorageId>::new()));
 
     let needs_redraw = engine.transactions.with_data_mut(|transactions| {
         let needs_redraw = !transactions.is_empty();
@@ -106,7 +106,7 @@ pub(crate) fn execute_transactions(engine: &Engine) -> (Vec<NodeRef>, Vec<FlatSt
                     let flags = command.change.execute(animation_state.progress);
 
                     let node_id = command.node_id;
-                    updated_nodes.write().unwrap().push(node_id);
+                    updated_nodes.blocking_write().push(node_id);
                     scene.with_arena_mut(|arena| {
                         if let Some(node) = arena.get_mut(node_id.0) {
                             let node = node.get_mut();
@@ -114,7 +114,7 @@ pub(crate) fn execute_transactions(engine: &Engine) -> (Vec<NodeRef>, Vec<FlatSt
                         }
                     });
                     if animation_state.is_finished {
-                        transactions_finished.write().unwrap().push(*id);
+                        transactions_finished.blocking_write().push(*id);
                     }
                 },
             );
@@ -122,8 +122,8 @@ pub(crate) fn execute_transactions(engine: &Engine) -> (Vec<NodeRef>, Vec<FlatSt
         needs_redraw
     });
 
-    let transactions_finished = transactions_finished.read().unwrap();
-    let updated_nodes = updated_nodes.read().unwrap();
+    let transactions_finished = transactions_finished.blocking_read();
+    let updated_nodes = updated_nodes.blocking_read();
     (
         updated_nodes.clone(),
         transactions_finished.clone(),
@@ -137,7 +137,7 @@ pub(crate) fn nodes_for_layout(engine: &Engine) -> Vec<NodeRef> {
             let id = root_node.0;
             id.descendants(arena)
                 .map(|node_id| node_id.into())
-                // FIXME
+                // FIXME: should returns less nodes to layout
                 // .filter_map(|node_id| {
                 //     let node = arena.get_mut(node_id).unwrap(); //.get();
                 //     let layer = engine.get_layer(node_id).unwrap();
@@ -173,19 +173,23 @@ pub(crate) fn update_layout_tree(engine: &Engine) {
         profiling::scope!("update_nodes_size");
         engine.scene.with_arena(|arena| {
             arena.iter().for_each(|node| {
-                if node.is_removed() {}
-                // FIXME
-                // let scene_node = node.get();
-                // let size = scene_node.layer.model.size.value();
-                // let layout_node_id = scene_node.layout_node_id();
-                // engine.set_node_layout_size(layout_node_id, size);
+                if node.is_removed() {
+                    return;
+                }
+                let id = arena.get_node_id(node).unwrap();
+                engine.with_layers(|layers| {
+                    let layer = layers.get(&NodeRef(id)).unwrap();
+                    let size = layer.size();
+                    let layout_node_id = layer.layout_id;
+                    engine.set_node_layout_size(layout_node_id, size);
+                });
             });
         });
     };
     let mut layout = engine.layout_tree.blocking_write();
     let layout_root = *engine.layout_root.blocking_read();
 
-    // FIXME
+    // FIXME; optimise this call
     // if layout.dirty(layout_root).unwrap() {
     let scene_size = engine.scene.size.read().unwrap();
 
@@ -221,8 +225,12 @@ pub(crate) fn update_node(
     let children: Vec<_> = node_id.children(arena).collect();
 
     let mut damaged = false;
+    let mut layout_changed = false;
+    let mut pos_changed = false;
     let mut node_damage = skia::Rect::default();
-    let render_layer = {
+    let mut transformed_bounds = skia::Rect::default();
+    let mut new_transformed_bounds = skia::Rect::default();
+    let mut render_layer = {
         let node = arena.get_mut(node_id);
 
         if node.is_none() {
@@ -230,10 +238,9 @@ pub(crate) fn update_node(
         }
 
         let node = node.unwrap().get_mut();
-        let layer = engine.get_layer(node_id).unwrap();
+        let layer = engine.get_layer(&NodeRef(node_id)).unwrap();
         let node_layout = layout.layout(layer.layout_id).unwrap();
 
-        let mut transformed_bounds;
         let mut opacity;
         (transformed_bounds, opacity) = {
             let render_layer = &node.render_layer;
@@ -258,14 +265,14 @@ pub(crate) fn update_node(
 
         let render_layer = node.render_layer();
 
-        let new_transformed_bounds = render_layer.global_transformed_bounds;
+        new_transformed_bounds = render_layer.global_transformed_bounds;
 
         let repainted = !node_damage.is_empty();
 
-        let layout_changed = transformed_bounds.width() != new_transformed_bounds.width()
+        layout_changed = transformed_bounds.width() != new_transformed_bounds.width()
             || transformed_bounds.height() != new_transformed_bounds.height();
 
-        let pos_changed = transformed_bounds.x() != new_transformed_bounds.x()
+        pos_changed = transformed_bounds.x() != new_transformed_bounds.x()
             || transformed_bounds.y() != new_transformed_bounds.y();
 
         let opacity_changed = opacity != render_layer.premultiplied_opacity;
@@ -285,8 +292,8 @@ pub(crate) fn update_node(
 
         render_layer.clone()
     };
-
-    let (damaged, node_damage) = children
+    let mut rl = render_layer.clone();
+    let (damaged, mut node_damage) = children
         .iter()
         .map(|child| {
             // println!("**** map ({}) ", child);
@@ -298,41 +305,38 @@ pub(crate) fn update_node(
                 Some(&render_layer.clone()),
                 parent_changed,
             );
+            let rn = arena.get(child.clone()).unwrap().get().render_layer.clone();
             // damaged = damaged || child_repainted || child_relayout;
-            (child_damaged, child_damage)
+            (child_damaged, child_damage, child, rn)
         })
         .fold(
             (damaged, node_damage),
-            |(damaged, node_damage), (child_damaged, child_damage)| {
+            |(damaged, node_damage), (child_damaged, child_damage, _nodeid, r)| {
                 // update the bounds of the node to include the children
 
-                // FIXME: update bounds_with_children
+                rl.global_transformed_bounds_with_children
+                    .join(r.global_transformed_bounds_with_children);
 
-                // node.render_layer
-                //     .global_transformed_bounds_with_children
-                //     .join(r.global_transformed_bounds_with_children);
+                let (_, _) = r.local_transform.to_m33().map_rect(r.bounds_with_children);
+                let child_bounds = r.bounds_with_children;
 
-                // let (child_bounds, _) = r.local_transform.to_m33().map_rect(r.bounds_with_children);
-                // let child_bounds = r.bounds_with_children;
-                // println!(
-                //     "({}) fold: child_bounds mapped: {:?}",
-                //     node_id, child_bounds
-                // );
-
-                // render_layer.bounds_with_children.join(child_bounds);
+                rl.bounds_with_children.join(child_bounds);
 
                 let node_damage = skia::Rect::join2(node_damage, child_damage);
                 (damaged || child_damaged, node_damage)
             },
         );
-
-    // if the node has some drawing in it, and has changed size or position
-    // we need to repaint
-    // let last_repaint_damage = node.repaint_damage.read().unwrap();
-    // if !last_repaint_damage.is_empty() && (layout_changed || pos_changed || parent_changed) {
-    //     transformed_bounds.join(new_transformed_bounds);
-    //     node_damage.join(transformed_bounds);
-    // }
+    {
+        let node = arena.get_mut(node_id).unwrap().get_mut();
+        node.render_layer = rl;
+        // if the node has some drawing in it, and has changed size or position
+        // we need to repaint
+        let last_repaint_damage = node.repaint_damage;
+        if !last_repaint_damage.is_empty() && (layout_changed || pos_changed || parent_changed) {
+            transformed_bounds.join(new_transformed_bounds);
+            node_damage.join(transformed_bounds);
+        }
+    }
     if damaged {
         // if !node_damage.is_empty() {
         if let Some(node) = arena.get_mut(node_id) {
@@ -340,7 +344,6 @@ pub(crate) fn update_node(
             node.increase_frame();
         }
     }
-    // let render_layer = node.render_layer.read().unwrap();
     (damaged, node_damage)
 }
 
@@ -362,7 +365,7 @@ pub(crate) fn trigger_callbacks(engine: &Engine, started_animations: &[FlatStora
                     is_started: false,
                 });
             if !scene.is_node_removed(command.node_id.0) {
-                let layer = engine.get_layer(command.node_id).unwrap();
+                let layer = engine.get_layer(&command.node_id).unwrap();
                 let tcallbacks = { engine.transaction_handlers.get(transaction_id) };
 
                 let started = command
@@ -542,7 +545,12 @@ pub(crate) fn cleanup_transactions(engine: &Engine, finished_transations: Vec<Fl
 pub(crate) fn cleanup_nodes(engine: &Engine) -> skia_safe::Rect {
     let mut damage = skia_safe::Rect::default();
     let deleted = {
-        let root = engine.scene_root().unwrap();
+        let root = engine.scene_root();
+
+        if root.is_none() {
+            return damage;
+        }
+        let root = root.unwrap();
         engine.scene.with_arena(|arena| {
             root.0
                 .descendants(arena)
@@ -564,7 +572,7 @@ pub(crate) fn cleanup_nodes(engine: &Engine) -> skia_safe::Rect {
         })
     };
     for id in deleted {
-        engine.scene_remove_layer(id);
+        engine.scene_remove_layer(&NodeRef(id));
     }
     damage
 }

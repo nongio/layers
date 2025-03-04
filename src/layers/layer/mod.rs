@@ -115,19 +115,19 @@ impl Layer {
     change_model!(anchor_point, Point, RenderableFlags::NEEDS_LAYOUT);
     change_model!(opacity, f32, RenderableFlags::NEEDS_LAYOUT);
 
-    change_model!(background_color, PaintColor, RenderableFlags::NEEDS_PAINT);
+    change_model!(background_color, PaintColor, RenderableFlags::NEEDS_LAYOUT);
     change_model!(
         border_corner_radius,
         BorderRadius,
-        RenderableFlags::NEEDS_PAINT
+        RenderableFlags::NEEDS_LAYOUT
     );
 
-    change_model!(border_color, PaintColor, RenderableFlags::NEEDS_PAINT);
-    change_model!(border_width, f32, RenderableFlags::NEEDS_PAINT);
-    change_model!(shadow_offset, Point, RenderableFlags::NEEDS_PAINT);
-    change_model!(shadow_radius, f32, RenderableFlags::NEEDS_PAINT);
-    change_model!(shadow_spread, f32, RenderableFlags::NEEDS_PAINT);
-    change_model!(shadow_color, Color, RenderableFlags::NEEDS_PAINT);
+    change_model!(border_color, PaintColor, RenderableFlags::NEEDS_LAYOUT);
+    change_model!(border_width, f32, RenderableFlags::NEEDS_LAYOUT);
+    change_model!(shadow_offset, Point, RenderableFlags::NEEDS_LAYOUT);
+    change_model!(shadow_radius, f32, RenderableFlags::NEEDS_LAYOUT);
+    change_model!(shadow_spread, f32, RenderableFlags::NEEDS_LAYOUT);
+    change_model!(shadow_color, Color, RenderableFlags::NEEDS_LAYOUT);
     change_model!(image_filter_progress, f32, RenderableFlags::NEEDS_PAINT);
     change_model!(clip_content, bool, RenderableFlags::NEEDS_PAINT);
     change_model!(clip_children, bool, RenderableFlags::NEEDS_PAINT);
@@ -153,6 +153,7 @@ impl Layer {
         let transition = transition.into();
         let value: Size = value.into();
         let flags = RenderableFlags::NEEDS_LAYOUT;
+        let value_id = self.model.size.id;
 
         let change: Arc<ModelChange<Size>> = Arc::new(ModelChange {
             value_change: self.model.size.to(value, transition),
@@ -160,9 +161,37 @@ impl Layer {
         });
 
         let animation = transition.map(|t| {
+            // if there is a transition
+            let merged_timing = if let TimingFunction::Spring(mut spring) = t.timing {
+                // and the transition is a spring, check if there is already a running transaction
+                let velocity = self
+                    .engine
+                    .get_transaction_for_value(value_id)
+                    .map(|running_transaction| {
+                        if let Some(animation_id) = running_transaction.animation_id {
+                            let animation_state = self.engine.get_animation(animation_id).unwrap();
+                            let animation = animation_state.animation;
+                            match animation.timing {
+                                TimingFunction::Spring(s) => {
+                                    let (_current_position, current_velocity) =
+                                        s.update_pos_vel_at(animation_state.time);
+                                    current_velocity
+                                }
+                                _ => 0.0,
+                            }
+                        } else {
+                            0.0
+                        }
+                    })
+                    .unwrap_or(0.0);
+                spring.initial_velocity = velocity;
+                TimingFunction::Spring(spring)
+            } else {
+                t.timing
+            };
             self.engine.add_animation(
                 Animation {
-                    timing: t.timing,
+                    timing: merged_timing,
                     start: t.delay + self.engine.now(),
                 },
                 true,
@@ -192,7 +221,7 @@ impl Layer {
         *model_content = Some(draw.into());
 
         self.engine
-            .set_node_flags(self.id, RenderableFlags::NEEDS_PAINT);
+            .set_node_flags(self.id, RenderableFlags::NEEDS_LAYOUT);
     }
     #[allow(unused)]
     pub(crate) fn set_draw_content_internal<F: Into<ContentDrawFunctionInternal>>(
@@ -221,6 +250,8 @@ impl Layer {
 
     pub fn set_blend_mode(&self, blend_mode: BlendMode) {
         self.model.blend_mode.set(blend_mode);
+        self.engine
+            .schedule_change(self.id, Arc::new(NoopChange::new(self.id.0.into())), None);
     }
     pub fn set_display(&self, display: Display) {
         self.model.display.set(display);

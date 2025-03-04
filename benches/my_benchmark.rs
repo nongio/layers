@@ -20,7 +20,7 @@ fn criterion_benchmark_update(c: &mut Criterion) {
             let mut layers = Vec::<Layer>::new();
             for _ in 0..count {
                 let layer = engine.new_layer();
-                engine.add_layer(layer.clone());
+                engine.add_layer(&layer.id);
                 layers.push(layer);
             }
             for layer in layers.iter() {
@@ -52,7 +52,7 @@ fn criterion_benchmark_append(c: &mut Criterion) {
 
             b.iter(|| {
                 let layer = engine.new_layer();
-                engine.add_layer(layer);
+                engine.add_layer(&layer.id);
                 engine.update(black_box(0.016));
             });
         });
@@ -74,7 +74,7 @@ fn criterion_benchmark_remove(c: &mut Criterion) {
             let mut layers = Vec::<Layer>::new();
             for _ in 0..count {
                 let layer = engine.new_layer();
-                engine.add_layer(layer.clone());
+                engine.add_layer(&layer.id);
                 layers.push(layer);
             }
             engine.update(black_box(0.016));
@@ -115,7 +115,7 @@ fn criterion_benchmark_pointer_move(c: &mut Criterion) {
                     ),
                     None,
                 );
-                engine.add_layer(layer.clone());
+                engine.add_layer(&layer.id);
                 layers.push(layer);
             }
             engine.update(black_box(0.016));
