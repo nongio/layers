@@ -397,7 +397,7 @@ impl From<TreeStorageId> for NodeRef {
 
 impl From<&TreeStorageId> for NodeRef {
     fn from(val: &TreeStorageId) -> Self {
-        NodeRef(val.clone())
+        NodeRef(*val)
     }
 }
 
@@ -735,7 +735,7 @@ impl Engine {
                 let parent_id = node.parent();
 
                 if let Some(parent_id) = parent_id {
-                    if let Some(parent_node) = arena.get_mut(parent_id.clone()) {
+                    if let Some(parent_node) = arena.get_mut(parent_id) {
                         let parent = parent_node.get_mut();
                         let parent_layer = self.get_layer(&NodeRef(parent_id)).unwrap();
                         let parent_layout_id = parent_layer.layout_id;

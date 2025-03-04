@@ -305,7 +305,7 @@ pub(crate) fn update_node(
                 Some(&render_layer.clone()),
                 parent_changed,
             );
-            let rn = arena.get(child.clone()).unwrap().get().render_layer.clone();
+            let rn = arena.get(*child).unwrap().get().render_layer.clone();
             // damaged = damaged || child_repainted || child_relayout;
             (child_damaged, child_damage, child, rn)
         })

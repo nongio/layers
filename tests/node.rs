@@ -1,10 +1,3 @@
-use lay_rs::{
-    prelude::*,
-    skia,
-    types::{Point, Size},
-    view::LayerTreeBuilder,
-};
-
 // FIXME: test bounds with children
 // #[test]
 // pub fn bounds_with_children() {
