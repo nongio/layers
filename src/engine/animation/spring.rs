@@ -11,7 +11,8 @@ pub struct Spring {
     pub(crate) last_update: f32,
 }
 
-const TOLERANCE: f32 = 0.00025;
+const TOLERANCE_POSITION: f32 = 0.003;
+const TOLERANCE_VELOCITY: f32 = 0.003;
 
 impl Spring {
     pub fn new(mass: f32, stiffness: f32, damping: f32) -> Self {
@@ -125,6 +126,6 @@ impl Spring {
         let target = 1.0;
         let (position, velocity) = self.update_pos_vel_at(elapsed);
 
-        (position - target).abs() < TOLERANCE && velocity.abs() < TOLERANCE
+        (position - target).abs() < TOLERANCE_POSITION && velocity.abs() < TOLERANCE_VELOCITY
     }
 }
