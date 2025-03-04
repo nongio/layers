@@ -66,7 +66,7 @@ impl BuildLayerTree for Layer {
         viewlayer_tree: &LayerTree,
         cache_viewlayer: &mut HashMap<String, VecDeque<NodeRef>>,
     ) {
-        let scene_layer = self.clone();
+        let scene_layer = self;
 
         if !viewlayer_tree.key.is_empty() {
             scene_layer.set_key(viewlayer_tree.key.clone());
@@ -154,7 +154,7 @@ impl BuildLayerTree for Layer {
             scene_layer.set_clip_children(clip_children, None);
         }
         let layer_id = scene_layer.id;
-        let engine = scene_layer.engine;
+        let engine = scene_layer.engine.clone();
 
         // if let Some(scene_node) = self.engine.scene_get_node(&layer_id) {
         // let scene_node = scene_node.get();
@@ -200,7 +200,7 @@ impl BuildLayerTree for Layer {
                     .unwrap_or_else(|| {
                         // the child layer does not exist, or is removed
                         let layer = engine.new_layer();
-
+                        engine.append_layer(&layer, Some(layer_id));
                         (layer.id, layer)
                     });
 

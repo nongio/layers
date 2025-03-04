@@ -14,6 +14,7 @@ pub fn render_one_child_view(state: &bool, _view: &View<bool>) -> LayerTree {
         .children(layer_trees_opt!(if *state {
             Some(
                 LayerTreeBuilder::default()
+                    .key("child_view")
                     .position((Point { x: 0.0, y: 0.0 }, None))
                     .size((
                         Size {
@@ -121,10 +122,9 @@ pub fn rebuild_a_view() {
 
     let initial = false;
     let view = View::new("test_view", initial, render_one_child_view);
-    view.mount_layer(layer);
+    view.mount_layer(layer.clone());
 
     engine.update(0.016);
-    let layer = view.layer.read().unwrap().clone().unwrap();
 
     print_scene(engine.scene(), engine.scene_root().unwrap());
     let num_children = layer.children_nodes().len();
