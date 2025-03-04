@@ -98,8 +98,8 @@ cbindgen = "0.24.3"
 
 [workspace]
 members = [
-    "examples/hello-rust",
-    "examples/hello-dom",
+    "examples/hello-spring",
+    "examples/hello-views",
     "examples/hello-content",
     "examples/hello-filters",
     "examples/hello-portals",
