@@ -71,14 +71,14 @@ pub(crate) fn update_animations(
 #[profiling::function]
 /// This function executes the transactions in the engine, in parallel.
 pub(crate) fn execute_transactions(engine: &Engine) -> (Vec<NodeRef>, Vec<FlatStorageId>, bool) {
-    let updated_nodes = Arc::new(tokio::sync::RwLock::new(Vec::<NodeRef>::new()));
-    let transactions_finished = Arc::new(tokio::sync::RwLock::new(Vec::<FlatStorageId>::new()));
+    let updated_nodes = Arc::new(std::sync::RwLock::new(Vec::<NodeRef>::new()));
+    let transactions_finished = Arc::new(std::sync::RwLock::new(Vec::<FlatStorageId>::new()));
 
     let needs_redraw = engine.transactions.with_data_mut(|transactions| {
         let needs_redraw = !transactions.is_empty();
         if needs_redraw {
             let animations = engine.animations.data();
-            let animations = &*animations.blocking_read();
+            let animations = &*animations.read().unwrap();
             let scene = engine.scene();
 
             // iterate in parallel over all the changes to be applied
@@ -106,7 +106,7 @@ pub(crate) fn execute_transactions(engine: &Engine) -> (Vec<NodeRef>, Vec<FlatSt
                     let flags = command.change.execute(animation_state.progress);
 
                     let node_id = command.node_id;
-                    updated_nodes.blocking_write().push(node_id);
+                    updated_nodes.write().unwrap().push(node_id);
                     scene.with_arena_mut(|arena| {
                         if let Some(node) = arena.get_mut(node_id.0) {
                             let node = node.get_mut();
@@ -114,7 +114,7 @@ pub(crate) fn execute_transactions(engine: &Engine) -> (Vec<NodeRef>, Vec<FlatSt
                         }
                     });
                     if animation_state.is_finished {
-                        transactions_finished.blocking_write().push(*id);
+                        transactions_finished.write().unwrap().push(*id);
                     }
                 },
             );
@@ -122,8 +122,8 @@ pub(crate) fn execute_transactions(engine: &Engine) -> (Vec<NodeRef>, Vec<FlatSt
         needs_redraw
     });
 
-    let transactions_finished = transactions_finished.blocking_read();
-    let updated_nodes = updated_nodes.blocking_read();
+    let transactions_finished = transactions_finished.read().unwrap();
+    let updated_nodes = updated_nodes.read().unwrap();
     (
         updated_nodes.clone(),
         transactions_finished.clone(),
@@ -186,8 +186,8 @@ pub(crate) fn update_layout_tree(engine: &Engine) {
             });
         });
     };
-    let mut layout = engine.layout_tree.blocking_write();
-    let layout_root = *engine.layout_root.blocking_read();
+    let mut layout = engine.layout_tree.write().unwrap();
+    let layout_root = *engine.layout_root.read().unwrap();
 
     // FIXME; optimise this call
     // if layout.dirty(layout_root).unwrap() {
@@ -519,7 +519,7 @@ pub(crate) fn cleanup_transactions(engine: &Engine, finished_transations: Vec<Fl
             if let Some(tr) = transactions.get(tid) {
                 let vid = tr.change.value_id();
                 transactions.remove(tid);
-                let mut values_transactions = engine.values_transactions.blocking_write();
+                let mut values_transactions = engine.values_transactions.write().unwrap();
                 if let Some(existing_tid) = values_transactions.get(&vid) {
                     if (*existing_tid) == *tid {
                         values_transactions.remove(&vid);

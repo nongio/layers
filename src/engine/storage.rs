@@ -2,7 +2,7 @@ use std::sync::{atomic::AtomicUsize, Arc};
 
 use indexmap::IndexMap;
 use indextree::{Arena, Node, NodeId};
-use tokio::sync::RwLock;
+use std::sync::RwLock;
 
 /// The implementation utilizes the indexmap and indextree libraries for data storage,
 /// while keeping these dependencies internal and not exposed to the user. The typedefs
@@ -31,13 +31,9 @@ impl<V: Send + Sync> TreeStorage<V> {
     pub fn new() -> Self {
         Default::default()
     }
-    pub async fn insert(&self, value: V) -> TreeStorageId {
-        let mut data = self.data.write().await;
-        data.new_node(value)
-    }
 
     pub fn insert_sync(&self, value: V) -> TreeStorageId {
-        let mut data = self.data.blocking_write();
+        let mut data = self.data.write().unwrap();
         data.new_node(value)
     }
 
@@ -45,23 +41,18 @@ impl<V: Send + Sync> TreeStorage<V> {
         self.data.clone()
     }
 
-    pub async fn remove_at(&self, id: &TreeStorageId) {
-        let mut data = self.data.write().await;
-        id.remove_subtree(&mut data);
-    }
-
     pub fn remove_at_sync(&self, id: &TreeStorageId) {
-        let mut data = self.data.blocking_write();
+        let mut data = self.data.write().unwrap();
         id.remove_subtree(&mut data);
     }
 
-    pub async fn with_data<T>(&self, f: impl FnOnce(&TreeStorageData<V>) -> T) -> T {
-        let guard = self.data.read().await;
+    pub fn with_data<T>(&self, f: impl FnOnce(&TreeStorageData<V>) -> T) -> T {
+        let guard = self.data.read().unwrap();
         f(&guard)
     }
 
-    pub async fn with_data_mut<T>(&self, f: impl FnOnce(&mut TreeStorageData<V>) -> T) -> T {
-        let mut guard = self.data.write().await;
+    pub fn with_data_mut<T>(&self, f: impl FnOnce(&mut TreeStorageData<V>) -> T) -> T {
+        let mut guard = self.data.write().unwrap();
         f(&mut guard)
     }
 }
@@ -90,12 +81,12 @@ impl<V: Clone + Send + Sync> FlatStorage<V> {
         id
     }
     pub fn insert_with_id(&self, value: V, id: FlatStorageId) -> FlatStorageId {
-        let mut data = self.data.blocking_write();
+        let mut data = self.data.write().unwrap();
         data.insert(id, value);
         id
     }
     pub fn get(&self, id: &FlatStorageId) -> Option<V> {
-        let data = self.data.blocking_read();
+        let data = self.data.read().unwrap();
         data.get(id).cloned()
     }
 
@@ -104,12 +95,12 @@ impl<V: Clone + Send + Sync> FlatStorage<V> {
     }
 
     pub fn remove_at(&self, id: &FlatStorageId) {
-        let mut data = self.data.blocking_write();
+        let mut data = self.data.write().unwrap();
         data.remove(id);
     }
 
     pub fn with_data<T>(&self, f: impl FnOnce(&FlatStorageData<V>) -> T) -> T {
-        let data = self.data.blocking_read();
+        let data = self.data.read().unwrap();
         f(&data)
     }
 
@@ -119,7 +110,7 @@ impl<V: Clone + Send + Sync> FlatStorage<V> {
     }
 
     pub fn with_data_mut<T>(&self, f: impl FnOnce(&mut FlatStorageData<V>) -> T) -> T {
-        let mut data = self.data.blocking_write();
+        let mut data = self.data.write().unwrap();
         f(&mut data)
     }
 }

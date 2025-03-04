@@ -4,11 +4,9 @@
 //! The scene is a tree of renderable nodes (implementing the `Renderable` trait).
 //! The tree is stored in a memory arena using IndexTree, which allow fast read/write and thread safe parallel iterations.
 
+use crate::prelude::Point;
 use indextree::Arena;
 use std::sync::{Arc, RwLock};
-use tokio::{runtime::Handle, task::JoinError};
-
-use crate::prelude::Point;
 
 use super::{
     node::{RenderableFlags, SceneNode},
@@ -136,7 +134,7 @@ impl Scene {
         let id = id.into();
 
         let nodes = self.nodes.data();
-        let nodes = nodes.blocking_read();
+        let nodes = nodes.read().unwrap();
 
         nodes
             .get(id)
@@ -150,30 +148,30 @@ impl Scene {
             })
             .unwrap_or(true)
     }
-    pub async fn with_arena_async<T, F>(&self, f: F) -> Result<T, JoinError>
-    where
-        T: Send + Sync + 'static,
-        F: FnOnce(&Arena<SceneNode>) -> T + Send + 'static,
-    {
-        let arena_guard = self.nodes.data();
-        let handle = Handle::current();
-        let join = tokio::task::spawn_blocking(move || {
-            let arena_guard = handle.block_on(arena_guard.read());
-            f(&arena_guard)
-        });
-        join.await
-    }
+    // pub async fn with_arena_async<T, F>(&self, f: F) -> Result<T, JoinError>
+    // where
+    //     T: Send + Sync + 'static,
+    //     F: FnOnce(&Arena<SceneNode>) -> T + Send + 'static,
+    // {
+    //     let arena_guard = self.nodes.data();
+    //     let handle = Handle::current();
+    //     let join = tokio::task::spawn_blocking(move || {
+    //         let arena_guard = handle.block_on(arena_guard.read());
+    //         f(&arena_guard)
+    //     });
+    //     join.await
+    // }
 
     pub fn with_arena<T: Send + Sync>(&self, f: impl FnOnce(&Arena<SceneNode>) -> T) -> T {
         let arena_guard = self.nodes.data();
 
-        let arena = arena_guard.blocking_read();
+        let arena = arena_guard.read().unwrap();
         f(&arena)
     }
 
     pub(crate) fn with_arena_mut<T>(&self, f: impl FnOnce(&mut Arena<SceneNode>) -> T) -> T {
         let arena_guard = self.nodes.data();
-        let mut arena = arena_guard.blocking_write();
+        let mut arena = arena_guard.write().unwrap();
         f(&mut arena)
     }
 }

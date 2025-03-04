@@ -99,12 +99,12 @@ struct AppIconView {
 impl AppIconView {
     pub fn new(state: AppIconState) -> Self {
         let view = View::new(
-            &format!("app_icon_view_{}", state.index),
+            format!("app_icon_view_{}", state.index),
             state,
             view_app_icon,
         );
         // spawn a thread to call update every second using tokio
-        let instance = Self { view: view.clone() };
+
         // task::spawn(async move {
         //     println!("starting tic toc");
         //     let mut interval = time::interval(Duration::from_millis(1000));
@@ -118,7 +118,7 @@ impl AppIconView {
         //         });
         //     }
         // });
-        instance
+        Self { view: view.clone() }
     }
     pub fn update(&self) {
         let state = self.view.get_state();
