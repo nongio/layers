@@ -195,26 +195,58 @@ impl fmt::Debug for LayerTree {
                 .map(|child| child.as_ref().render_layertree())
                 .collect::<Vec<LayerTree>>()
         });
-        f.debug_struct("LayerTree")
-            .field("key", &self.key)
-            .field("background_color", &self.background_color)
-            .field("border_color", &self.border_color)
-            .field("border_width", &self.border_width)
-            .field("border_style", &self.border_style)
-            .field("border_corner_radius", &self.border_corner_radius)
-            .field("size", &self.size)
-            .field("position", &self.position)
-            .field("scale", &self.scale)
-            .field("shadow_offset", &self.shadow_offset)
-            .field("shadow_radius", &self.shadow_radius)
-            .field("shadow_color", &self.shadow_color)
-            .field("shadow_spread", &self.shadow_spread)
-            // .field("content", &self.content)
-            .field("blend_mode", &self.blend_mode)
-            .field("layout_style", &self.layout_style)
-            .field("opacity", &self.opacity)
-            .field("children", &children)
-            .finish()
+        let mut ds = f.debug_struct("LayerTree");
+        ds.field("key", &self.key);
+        if let Some(background_color) = &self.background_color {
+            ds.field("background_color", &background_color);
+        }
+        if let Some(border_color) = &self.border_color {
+            ds.field("border_color", &border_color);
+        }
+        if let Some(border_width) = &self.border_width {
+            ds.field("border_width", &border_width);
+        }
+        if let Some(border_style) = &self.border_style {
+            ds.field("border_style", &border_style);
+        }
+        if let Some(border_corner_radius) = &self.border_corner_radius {
+            ds.field("border_corner_radius", &border_corner_radius);
+        }
+        if let Some(size) = &self.size {
+            ds.field("size", &size);
+        }
+        if let Some(position) = &self.position {
+            ds.field("position", &position);
+        }
+        if let Some(scale) = &self.scale {
+            ds.field("scale", &scale);
+        }
+        if let Some(shadow_offset) = &self.shadow_offset {
+            ds.field("shadow_offset", &shadow_offset);
+        }
+        if let Some(shadow_radius) = &self.shadow_radius {
+            ds.field("shadow_radius", &shadow_radius);
+        }
+        if let Some(shadow_color) = &self.shadow_color {
+            ds.field("shadow_color", &shadow_color);
+        }
+        if let Some(shadow_spread) = &self.shadow_spread {
+            ds.field("shadow_spread", &shadow_spread);
+        }
+        if let Some(blend_mode) = &self.blend_mode {
+            ds.field("blend_mode", &blend_mode);
+        }
+        if let Some(layout_style) = &self.layout_style {
+            ds.field("layout_style", &layout_style);
+        }
+        if let Some(opacity) = &self.opacity {
+            ds.field("opacity", &opacity);
+        }
+        if let Some(children) = &children {
+            ds.field("children", &children);
+        }
+
+        ds.finish()
     }
 }
 
