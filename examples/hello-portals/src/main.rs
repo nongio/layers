@@ -7,7 +7,7 @@ use glutin::event::WindowEvent;
 use glutin::event_loop::{ControlFlow, EventLoop};
 use glutin::window::WindowBuilder;
 use glutin::GlProfile;
-use lay_rs::{drawing::paint_node_tree, layer_trees, prelude::*, skia};
+use lay_rs::{prelude::*, skia};
 use lay_rs::{skia::Canvas, types::Size};
 
 #[allow(unused_assignments)]
@@ -100,7 +100,7 @@ async fn main() {
 
     let layer = engine.new_layer();
     layer.set_anchor_point((0.5, 0.5), None);
-    engine.add_layer(layer.clone());
+    engine.add_layer(&layer);
 
     layer.build_layer_tree(
         LayerTreeBuilder::default()
@@ -148,7 +148,7 @@ async fn main() {
             .unwrap(),
     );
     let layer3 = engine.new_layer();
-    layer.add_sublayer(layer3.clone());
+    layer.add_sublayer(&layer3);
     layer3.build_layer_tree(
         LayerTreeBuilder::default()
             .key("circle")
@@ -175,7 +175,7 @@ async fn main() {
     layer2.set_picture_cached(false);
     layer2.set_draw_content(engine.layer_as_content(&layer));
 
-    engine.add_layer(layer2.clone());
+    engine.add_layer(&layer2);
 
     // engine.start_debugger();
     let mut mass = 1.0;

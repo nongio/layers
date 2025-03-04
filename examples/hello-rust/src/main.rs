@@ -121,7 +121,7 @@ async fn main() {
     );
     layer.set_border_corner_radius(BorderRadius::new_single(50.0), None);
 
-    engine.add_layer(layer.clone());
+    engine.add_layer(&layer);
 
     // engine.start_debugger();
     let mut mass = 1.0;

@@ -112,7 +112,7 @@ fn main() {
         justify_content: Some(taffy::JustifyContent::Center),
         ..Default::default()
     });
-    engine.add_layer(root_layer.clone());
+    engine.add_layer(&root_layer);
 
     let other = engine.new_layer();
     other.set_size(lay_rs::types::Size::points(100.0, 100.0), None);
@@ -127,7 +127,7 @@ fn main() {
         // position: taffy::Position::Absolute,
         ..Default::default()
     });
-    engine.add_layer(other.clone());
+    engine.add_layer(&other);
     let content_layer = engine.new_layer();
     let inner_content_layer = engine.new_layer();
     inner_content_layer.set_position(
@@ -158,8 +158,8 @@ fn main() {
         ..Default::default()
     });
 
-    engine.add_layer(content_layer.clone());
-    engine.append_layer(inner_content_layer.clone(), content_layer.id);
+    engine.add_layer(&content_layer);
+    engine.append_layer(&inner_content_layer, content_layer.id);
     inner_content_layer.set_draw_content(
         |canvas: &lay_rs::skia::Canvas, width, height| -> lay_rs::skia::Rect {
             draw(canvas, width, height);
