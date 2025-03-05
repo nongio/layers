@@ -1,0 +1,56 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Layers Engine"><title>lay_rs - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../static.files/rustdoc-492a78a4a87dcc01.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="lay_rs" data-themes="" data-resource-suffix="" data-rustdoc-version="1.82.0 (f6e511eec 2024-10-15)" data-channel="1.82.0" data-search-js="search-a99f1315e7cc5121.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-921df33f47b8780c.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-3b12f09e550e0385.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../lay_rs/index.html"><img src="https://raw.githubusercontent.com/nongio/layers/refs/heads/main/assets/LayersEngine-dark.png" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../lay_rs/index.html"><img src="https://raw.githubusercontent.com/nongio/layers/refs/heads/main/assets/LayersEngine-dark.png" alt="logo"></a><h2><a href="../lay_rs/index.html">lay_rs</a><span class="version">0.6.0</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section><ul class="block"><li><a href="#reexports">Re-exports</a></li><li><a href="#modules">Modules</a></li><li><a href="#macros">Macros</a></li></ul></section></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Crate <a class="mod" href="#">lay_rs</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../src/lay_rs/lib.rs.html#1-74">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="layers-engine"><a class="doc-anchor" href="#layers-engine">§</a>Layers Engine</h2>
+<p><strong>Layers</strong> is an animation and rendering engine designed for user interfaces.
+It utilizes a scene graph for efficient, retained mode rendering of UI elements,
+optimizing common interpolations such as opacity, 2D transformations, and blending.</p>
+<h3 id="key-features"><a class="doc-anchor" href="#key-features">§</a>Key Features</h3>
+<ul>
+<li><strong>Scene Graph</strong>: Manages nodes (graphical layers) including text, simple shapes (e.g., rectangles), and external textures.</li>
+<li><strong>Animatable Properties</strong>: Nodes have properties that can be animated, with changes scheduled and executed by the engine using a Command pattern. This ensures a consistent API for both immediate and animated changes.</li>
+<li><strong>Optimized Rendering</strong>: Uses a display list for efficient rendering commands.</li>
+<li><strong>Animation Hooks</strong>: The API exposes hooks at different stages of the animation progress.</li>
+<li><strong>Layout Engine</strong>: Uses the Taffy library for layout calculations.</li>
+<li><strong>Multi-threaded</strong>: Supports concurrent updates to layer properties.</li>
+<li><strong>Spring Physics Animations</strong>: Supports spring physics for animations.</li>
+<li><strong>Easing Functions</strong>: Includes a variety of easing functions for animations.</li>
+<li><strong>Incremental Rendering</strong>: Only redraws the portions of the scene that have changed.</li>
+<li><strong>Debugger</strong>: The engine has a built-in debugger for visualizing the scene graph</li>
+</ul>
+<h3 id="layer"><a class="doc-anchor" href="#layer">§</a>Layer</h3>
+<p>A <code>Layer</code> is a 2D object in the engine with the following capabilities:</p>
+<ul>
+<li><strong>Rasterized Content</strong>: Can contain rasterized images or be a container for other layers.</li>
+<li><strong>Transformations</strong>: Supports positioning, rotation, scaling, and animation.</li>
+<li><strong>Nesting</strong>: Layers can be nested to create complex 2D objects, similar to the DOM in web browsers.</li>
+<li><strong>Drawing Properties</strong>: Includes properties such as border, background, shadow, and opacity.</li>
+</ul>
+<h3 id="rendering-model"><a class="doc-anchor" href="#rendering-model">§</a>Rendering Model</h3>
+<ul>
+<li><strong>Retained Mode</strong>: The engine maintains a tree of layers and only redraws those that have changed.</li>
+<li><strong>Display List</strong>: Uses a display list to optimize rendering commands.</li>
+<li><strong>Damage tracking</strong>: On every update, the damage of the scene is calculated.</li>
+</ul>
+<h3 id="multi-threaded-support"><a class="doc-anchor" href="#multi-threaded-support">§</a>Multi-threaded Support</h3>
+<ul>
+<li><strong>Concurrent Updates</strong>: Layer properties are updated across multiple threads.</li>
+</ul>
+<h3 id="backend-support-skia"><a class="doc-anchor" href="#backend-support-skia">§</a>Backend Support (Skia)</h3>
+<ul>
+<li><strong>Drawing Library</strong>: Uses the Skia library.</li>
+<li><strong>Supported Backends</strong>:
+<ul>
+<li><strong>OpenGL</strong>: Using FBO (Framebuffer Objects)</li>
+<li><strong>EGL</strong>: For OpenGL ES contexts</li>
+<li><strong>Image</strong>: For testing purposes</li>
+</ul>
+</li>
+</ul>
+<h3 id="taffy-layout"><a class="doc-anchor" href="#taffy-layout">§</a>Taffy Layout</h3>
+<ul>
+<li><strong>Layout Engine</strong>: Utilizes the Taffy library, based on the Flexbox model.</li>
+</ul>
+</div></details><h2 id="reexports" class="section-header">Re-exports<a href="#reexports" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><code>pub extern crate skia_bindings as sb;</code></div></li><li><div class="item-name"><code>pub extern crate skia_safe as skia;</code></div></li><li><div class="item-name"><code>pub extern crate taffy;</code></div></li></ul><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="mod" href="api/index.html" title="mod lay_rs::api">api</a></div><div class="desc docblock-short">Safe interface to C API (under development)</div></li><li><div class="item-name"><a class="mod" href="drawing/index.html" title="mod lay_rs::drawing">drawing</a></div><div class="desc docblock-short">Drawing related code for Layer, Scene, and Text.
+The functions in this module are used to draw into a Skia canvas
+independent from the backend</div></li><li><div class="item-name"><a class="mod" href="engine/index.html" title="mod lay_rs::engine">engine</a></div><div class="desc docblock-short">Contains all the logic for running the animations, execute the scheduled changes
+to the models, and prepare the render tree
+The scene is drawn in 4 stages:</div></li><li><div class="item-name"><a class="mod" href="prelude/index.html" title="mod lay_rs::prelude">prelude</a></div></li><li><div class="item-name"><a class="mod" href="renderer/index.html" title="mod lay_rs::renderer">renderer</a></div><div class="desc docblock-short">Renderers that use skia to draw the models to different backends.
+currently the backends available are gl framebuffer objects and images.</div></li><li><div class="item-name"><a class="mod" href="types/index.html" title="mod lay_rs::types">types</a></div><div class="desc docblock-short">Types used in the library to describe Layers properties</div></li><li><div class="item-name"><a class="mod" href="utils/index.html" title="mod lay_rs::utils">utils</a></div></li><li><div class="item-name"><a class="mod" href="view/index.html" title="mod lay_rs::view">view</a></div><div class="desc docblock-short">Helper struct to build complex layer hierarchies that change over time</div></li></ul><h2 id="macros" class="section-header">Macros<a href="#macros" class="anchor">§</a></h2><ul class="item-table"><li><div class="item-name"><a class="macro" href="macro.layer_trees.html" title="macro lay_rs::layer_trees">layer_<wbr>trees</a></div></li><li><div class="item-name"><a class="macro" href="macro.layer_trees_opt.html" title="macro lay_rs::layer_trees_opt">layer_<wbr>trees_<wbr>opt</a></div></li></ul></section></div></main></body></html>

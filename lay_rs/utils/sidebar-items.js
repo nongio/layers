@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["draw_image_content","load_svg_image","save_image"]};

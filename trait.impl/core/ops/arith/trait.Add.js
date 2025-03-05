@@ -1,0 +1,9 @@
+(function() {
+    var implementors = Object.fromEntries([["lay_rs",[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.82.0/core/ops/arith/trait.Add.html\" title=\"trait core::ops::arith::Add\">Add</a> for <a class=\"enum\" href=\"lay_rs/types/enum.PaintColor.html\" title=\"enum lay_rs::types::PaintColor\">PaintColor</a>"],["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.82.0/core/ops/arith/trait.Add.html\" title=\"trait core::ops::arith::Add\">Add</a> for <a class=\"struct\" href=\"lay_rs/types/struct.BorderRadius.html\" title=\"struct lay_rs::types::BorderRadius\">BorderRadius</a>"],["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.82.0/core/ops/arith/trait.Add.html\" title=\"trait core::ops::arith::Add\">Add</a> for <a class=\"struct\" href=\"lay_rs/types/struct.Color.html\" title=\"struct lay_rs::types::Color\">Color</a>"],["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.82.0/core/ops/arith/trait.Add.html\" title=\"trait core::ops::arith::Add\">Add</a> for <a class=\"struct\" href=\"lay_rs/types/struct.Point.html\" title=\"struct lay_rs::types::Point\">Point</a>"],["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.82.0/core/ops/arith/trait.Add.html\" title=\"trait core::ops::arith::Add\">Add</a> for <a class=\"struct\" href=\"lay_rs/types/struct.Point3d.html\" title=\"struct lay_rs::types::Point3d\">Point3d</a>"]]]]);
+    if (window.register_implementors) {
+        window.register_implementors(implementors);
+    } else {
+        window.pending_implementors = implementors;
+    }
+})()
+//{"start":57,"fragment_lengths":[1338]}
