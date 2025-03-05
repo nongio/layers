@@ -1,16 +1,16 @@
 use std::sync::{Arc, RwLock};
 
-use lay_rs::engine::LayersEngine;
+use lay_rs::prelude::*;
 use lay_rs::types::Size;
 
 /// it should call the pointer move handler
 #[test]
 pub fn pointer_move() {
-    let engine = LayersEngine::new(1000.0, 1000.0);
+    let engine = Engine::create(1000.0, 1000.0);
     let layer = engine.new_layer();
     layer.set_size(Size::points(200.0, 200.0), None);
     layer.set_position((0.0, 0.0), None);
-    engine.add_layer(layer.clone());
+    engine.add_layer(&layer);
 
     engine.update(0.016);
     let called = Arc::new(RwLock::new(0));
@@ -31,11 +31,11 @@ pub fn pointer_move() {
 /// it should not call the pointer move handler
 #[test]
 pub fn pointer_doesnt_move() {
-    let engine = LayersEngine::new(1000.0, 1000.0);
+    let engine = Engine::create(1000.0, 1000.0);
     let layer = engine.new_layer();
     layer.set_size(Size::points(200.0, 200.0), None);
     layer.set_position((200.0, 200.0), None);
-    engine.add_layer(layer.clone());
+    engine.add_layer(&layer);
     engine.update(0.016);
 
     let called = Arc::new(RwLock::new(0));
@@ -56,16 +56,16 @@ pub fn pointer_doesnt_move() {
 /// it should not call the pointer move handler
 #[test]
 pub fn pointer_move_nested() {
-    let engine = LayersEngine::new(1000.0, 1000.0);
+    let engine = Engine::create(1000.0, 1000.0);
     let layer = engine.new_layer();
     layer.set_size(Size::points(200.0, 200.0), None);
     layer.set_position((200.0, 200.0), None);
-    engine.add_layer(layer.clone());
+    engine.add_layer(&layer);
 
     let layer2 = engine.new_layer();
     layer2.set_size(Size::points(200.0, 200.0), None);
     layer2.set_position((200.0, 200.0), None);
-    engine.append_layer_to(layer2.clone(), layer.id());
+    engine.append_layer(&layer2, layer.id);
 
     engine.update(0.016);
 
@@ -88,16 +88,16 @@ pub fn pointer_move_nested() {
 /// it should not call the pointer move handler
 #[test]
 pub fn pointer_move_nested_parent() {
-    let engine = LayersEngine::new(1000.0, 1000.0);
+    let engine = Engine::create(1000.0, 1000.0);
     let layer = engine.new_layer();
     layer.set_size(Size::points(200.0, 200.0), None);
     layer.set_position((200.0, 200.0), None);
-    engine.add_layer(layer.clone());
+    engine.add_layer(&layer);
 
     let layer2 = engine.new_layer();
     layer2.set_size(Size::points(200.0, 200.0), None);
     layer2.set_position((200.0, 200.0), None);
-    engine.append_layer_to(layer2.clone(), layer.id());
+    engine.append_layer(&layer2, layer.id);
 
     engine.update(0.016);
 
@@ -119,16 +119,16 @@ pub fn pointer_move_nested_parent() {
 /// it should not call the pointer move handler
 #[test]
 pub fn pointer_doesnt_move_nested() {
-    let engine = LayersEngine::new(1000.0, 1000.0);
+    let engine = Engine::create(1000.0, 1000.0);
     let layer = engine.new_layer();
     layer.set_size(Size::points(200.0, 200.0), None);
     layer.set_position((200.0, 200.0), None);
-    engine.add_layer(layer.clone());
+    engine.add_layer(&layer);
 
     let layer2 = engine.new_layer();
     layer2.set_size(Size::points(200.0, 200.0), None);
     layer2.set_position((200.0, 200.0), None);
-    engine.append_layer_to(layer2.clone(), layer.id());
+    engine.append_layer(&layer2, layer.id);
 
     engine.update(0.016);
 
@@ -151,12 +151,12 @@ pub fn pointer_doesnt_move_nested() {
 /// it should not call the pointer move handler
 #[test]
 pub fn pointer_remove() {
-    let engine = LayersEngine::new(1000.0, 1000.0);
+    let engine = Engine::create(1000.0, 1000.0);
     let layer = engine.new_layer();
     layer.set_size(Size::points(200.0, 200.0), None);
     layer.set_position((0.0, 0.0), None);
 
-    engine.add_layer(layer.clone());
+    engine.add_layer(&layer);
 
     engine.update(0.016);
     let called = Arc::new(RwLock::new(0));
@@ -180,16 +180,16 @@ pub fn pointer_remove() {
 /// it should not call the pointer move handler
 #[test]
 pub fn pointer_in_out_nested_parent() {
-    let engine = LayersEngine::new(1000.0, 1000.0);
+    let engine = Engine::create(1000.0, 1000.0);
     let layer = engine.new_layer();
     layer.set_size(Size::points(200.0, 200.0), None);
     layer.set_position((200.0, 200.0), None);
-    engine.add_layer(layer.clone());
+    engine.add_layer(&layer);
 
     let layer2 = engine.new_layer();
     layer2.set_size(Size::points(200.0, 200.0), None);
     layer2.set_position((200.0, 200.0), None);
-    engine.append_layer_to(layer2.clone(), layer.id());
+    engine.append_layer(&layer2, layer.id);
 
     engine.update(0.016);
 

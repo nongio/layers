@@ -1,6 +1,6 @@
-# LayersEngine Debugger Client
+# Engine Debugger Client
 
-This project is a React application that serves as the client code for the debugger to interact with a LayersEngine. 
+This project is a React application that serves as the client code for the debugger to interact with a Engine. 
 
 It was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
 
@@ -29,6 +29,6 @@ It correctly bundles React in production mode and optimizes the build for the be
 The build is minified and the filenames include the hashes.\
 Your app is ready to be deployed!
 
-## Interacting with LayersEngine
+## Interacting with Engine
 
-This client application is designed to interact with a LayersEngine instance. Ensure that your LayersEngine server is running and properly configured to accept connections from this client.
+This client application is designed to interact with a Engine instance. Ensure that your Engine server is running and properly configured to accept connections from this client.

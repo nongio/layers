@@ -1,0 +1,45 @@
+on: [pull_request]
+name: Benchmark
+permissions:
+  pull-requests: write
+
+jobs:
+  benchmark:
+    env:
+      RUSTFLAGS: "-D warnings"
+    name: Run Criterion Benchmarks
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v3
+      - name: Rust toolchain
+        uses: dtolnay/rust-toolchain@1.82.0
+      - name: Get date for registry cache
+        id: date
+        run: echo "::set-output name=date::$(date +'%Y-%m-%d')"
+      - name: Cargo registry cache
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-registry-${{ steps.date.outputs.date }}
+          restore-keys: ${{ runner.os }}-cargo-registry-
+      - name: System dependencies
+        run: sudo apt-get update; sudo apt-get install -y libdrm-dev libudev-dev libgbm-dev libxkbcommon-dev libegl1-mesa-dev libwayland-dev libinput-dev libdbus-1-dev libsystemd-dev libseat-dev
+      - uses: boa-dev/criterion-compare-action@v3
+        with:
+          # cwd: "subDirectory (optional)"
+          # Optional. Compare only this package
+          # package: "example-package"
+          # Optional. Compare only this benchmark target
+          benchName: "my_benchmark"
+          # Optional. Disables the default features of a crate
+          defaultFeatures: true
+          # Optional. Features activated in the benchmark
+          # features: "async,tokio-support"
+          # Needed. The name of the branch to compare with. This default uses the branch which is being pulled against
+          branchName: ${{ github.base_ref }}
+          # Optional. Default is `${{ github.token }}`.
+          token: ${{ secrets.GITHUB_TOKEN }}

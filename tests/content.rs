@@ -1,5 +1,4 @@
-use lay_rs::prelude::Layer;
-// use lay_rs::types::Point;
+use lay_rs::prelude::*;
 use lay_rs::types::Size;
 
 pub fn setup_layer(layer: &Layer) {
@@ -16,7 +15,7 @@ pub fn setup_layer(layer: &Layer) {
 //         "./tests/content/test_scene_node_content_encoded.png".to_string(),
 //     );
 
-//     let engine = LayersEngine::new(1000.0, 1000.0);
+//     let engine = Engine::create(1000.0, 1000.0);
 //     let layer = engine.new_layer();
 //     setup_layer(&layer);
 //     let _id = engine.add_layer(layer.clone());

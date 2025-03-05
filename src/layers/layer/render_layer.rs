@@ -1,10 +1,8 @@
 use super::model::{ContentDrawFunctionInternal, ModelLayer};
-use crate::{
-    engine::SceneNode,
-    types::{BlendMode, Color, Point, *},
-};
-use indextree::Arena;
+use crate::types::{BlendMode, Color, Point, *};
+
 use serde::{ser::SerializeStruct, Serialize};
+use skia::{ColorFilter, ImageFilter};
 
 #[derive(Clone, Debug)]
 #[repr(C)]
@@ -29,6 +27,7 @@ pub struct RenderLayer {
     pub shadow_spread: f32,
     pub transform: M44,
     pub local_transform: M44,
+    pub transform_33: Matrix,
     pub blend_mode: BlendMode,
     pub opacity: f32,
     pub premultiplied_opacity: f32,
@@ -37,18 +36,20 @@ pub struct RenderLayer {
     pub content_damage: skia_safe::Rect,
     pub clip_content: bool,
     pub clip_children: bool,
+    pub image_filter: Option<ImageFilter>,
+    pub image_filter_bounds: Option<skia::Rect>,
+    pub color_filter: Option<ColorFilter>,
 }
 
 impl RenderLayer {
-    #![allow(unused_variables, dead_code)]
     pub(crate) fn update_with_model_and_layout(
         &mut self,
         model: &ModelLayer,
         layout: &taffy::tree::Layout,
         matrix: Option<&M44>,
         context_opacity: f32,
-        cache_content: bool,
-        arena: &Arena<SceneNode>,
+        // cache_content: bool,
+        // arena: &Arena<SceneNode>,
     ) {
         let key = model.key.read().unwrap().clone();
         let layout_position = layout.location;
@@ -68,7 +69,7 @@ impl RenderLayer {
 
         let bounds = skia_safe::Rect::from_xywh(0.0, 0.0, size.width, size.height);
 
-        let rotation = model.rotation.value();
+        // let rotation = model.rotation.value();
         let anchor_point = model.anchor_point.value();
         let scale = model.scale.value();
         let anchor_translate = M44::translate(
@@ -80,30 +81,31 @@ impl RenderLayer {
         let matrix = matrix.unwrap_or(&identity);
         let translate = M44::translate(position.x, position.y, 0.0);
         let scale = M44::scale(scale.x, scale.y, 1.0);
-        let rotate_x = M44::rotate(
-            V3 {
-                x: 1.0,
-                y: 0.0,
-                z: 0.0,
-            },
-            rotation.x,
-        );
-        let rotate_y = M44::rotate(
-            V3 {
-                x: 0.0,
-                y: 1.0,
-                z: 0.0,
-            },
-            rotation.y,
-        );
-        let rotate_z = M44::rotate(
-            V3 {
-                x: 0.0,
-                y: 0.0,
-                z: 1.0,
-            },
-            rotation.z,
-        );
+
+        // let rotate_x = M44::rotate(
+        //     V3 {
+        //         x: 1.0,
+        //         y: 0.0,
+        //         z: 0.0,
+        //     },
+        //     rotation.x,
+        // );
+        // let rotate_y = M44::rotate(
+        //     V3 {
+        //         x: 0.0,
+        //         y: 1.0,
+        //         z: 0.0,
+        //     },
+        //     rotation.y,
+        // );
+        // let rotate_z = M44::rotate(
+        //     V3 {
+        //         x: 0.0,
+        //         y: 0.0,
+        //         z: 1.0,
+        //     },
+        //     rotation.z,
+        // );
 
         // merge all transforms keeping into account the anchor point
         let mut local_transform = M44::new_identity();
@@ -132,26 +134,27 @@ impl RenderLayer {
         let content_draw_func = model.draw_content.read().unwrap();
         let content_draw_func = content_draw_func.as_ref();
 
-        if cache_content {
-            if content_draw_func.is_some()
-                && ((self.size != size) || (self.content_draw_func.as_ref() != content_draw_func))
-            {
-                let mut recorder = skia_safe::PictureRecorder::new();
-                let canvas = recorder
-                    .begin_recording(skia_safe::Rect::from_wh(size.width, size.height), None);
-                let draw_func = content_draw_func.unwrap();
-                let caller = draw_func.0.as_ref();
-                let content_damage = caller(canvas, size.width, size.height, arena);
-                self.content_damage = content_damage;
-                self.content = recorder.finish_recording_as_picture(None);
-            }
-        } else {
-            self.content = None;
-            if let Some(draw_func) = content_draw_func {
-                let caller = draw_func.0.as_ref();
-                self.content_draw_func = Some(draw_func.clone());
-            }
+        // FIXME: cache content
+        // if cache_content {
+        if content_draw_func.is_some()
+            && ((self.size != size) || (self.content_draw_func.as_ref() != content_draw_func))
+        {
+            let mut recorder = skia_safe::PictureRecorder::new();
+            let canvas =
+                recorder.begin_recording(skia_safe::Rect::from_wh(size.width, size.height), None);
+            let draw_func = content_draw_func.unwrap();
+            let caller = draw_func.0.as_ref();
+            let content_damage = caller(canvas, size.width, size.height);
+            self.content_damage = content_damage;
+            self.content = recorder.finish_recording_as_picture(None);
         }
+        // } else {
+        //     self.content = None;
+        //     if let Some(draw_func) = content_draw_func {
+        //         let caller = draw_func.0.as_ref();
+        //         self.content_draw_func = Some(draw_func.clone());
+        //     }
+        // }
 
         self.key = key;
         self.size = size;
@@ -165,6 +168,7 @@ impl RenderLayer {
         self.shadow_color = shadow_color;
         self.shadow_spread = shadow_spread;
         self.transform = global_transform;
+        self.transform_33 = self.transform.to_m33();
         self.local_transform = local_transform;
         self.blend_mode = blend_mode;
         self.opacity = opacity;
@@ -182,12 +186,12 @@ impl RenderLayer {
         self.clip_children = model.clip_children.value();
     }
 
+    #[allow(dead_code)]
     pub(crate) fn from_model_and_layout(
         model: &ModelLayer,
         layout: &taffy::tree::Layout,
         matrix: Option<&M44>,
         context_opacity: f32,
-        arena: &Arena<SceneNode>,
     ) -> Self {
         let key = model.key.read().unwrap().clone();
         let layout_position = layout.location;
@@ -246,11 +250,13 @@ impl RenderLayer {
         // merge all transforms keeping into account the anchor point
         let mut local_transform = translate;
         local_transform = M44::concat(&local_transform, &scale);
-        // let transform = M44::concat(&transform, &rotate_x);
-        // let transform = M44::concat(&transform, &rotate_y);
-        // let transform = M44::concat(&transform, &rotate_z);
-        // let transform = M44::concat(&transform, &anchor_translate);
+        let transform = M44::concat(matrix, &local_transform);
+        let transform = M44::concat(&transform, &rotate_x);
+        let transform = M44::concat(&transform, &rotate_y);
+        let transform = M44::concat(&transform, &rotate_z);
+        let transform = M44::concat(&transform, &anchor_translate);
 
+        let transform_33 = transform.to_m33();
         // let matrix = transform.to_m33();
         let transform = M44::concat(matrix, &local_transform);
         let (transformed_bounds, _) = transform.to_m33().map_rect(bounds);
@@ -272,7 +278,7 @@ impl RenderLayer {
             let canvas =
                 recorder.begin_recording(skia_safe::Rect::from_wh(size.width, size.height), None);
             let caller = draw_func.0.clone();
-            caller(canvas, size.width, size.height, arena);
+            caller(canvas, size.width, size.height);
             content = recorder.finish_recording_as_picture(None);
             content_draw_func = Some(draw_func.clone());
         }
@@ -298,6 +304,7 @@ impl RenderLayer {
             shadow_spread,
             local_transform,
             transform,
+            transform_33,
             content,
             blend_mode,
             opacity,
@@ -313,6 +320,9 @@ impl RenderLayer {
             global_transformed_rbounds: transformed_rbounds,
             clip_content,
             clip_children,
+            image_filter: model.image_filter.read().unwrap().clone(),
+            image_filter_bounds: *model.filter_bounds.read().unwrap(),
+            color_filter: model.color_filter.read().unwrap().clone(),
         }
     }
 }
@@ -336,6 +346,7 @@ impl Default for RenderLayer {
             shadow_color: Color::new_rgba(0.0, 0.0, 0.0, 0.0),
             shadow_spread: 0.0,
             transform: M44::new_identity(),
+            transform_33: Matrix::default(),
             local_transform: M44::new_identity(),
             content: None,
             blend_mode: BlendMode::Normal,
@@ -352,6 +363,9 @@ impl Default for RenderLayer {
             content_damage: skia_safe::Rect::default(),
             clip_content: false,
             clip_children: false,
+            image_filter: None,
+            image_filter_bounds: None,
+            color_filter: None,
         }
     }
 }

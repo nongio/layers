@@ -1,16 +1,12 @@
-use lay_rs::{
-    engine::{animation::Transition, LayersEngine},
-    prelude::{Layer, Spring},
-};
-use lay_rs::{prelude::TimingFunction, types::Point};
+use lay_rs::prelude::*;
 use std::sync::{Arc, RwLock};
 
 /// it should call the finish handler when the transaction is finished 1 time
 #[test]
 pub fn call_finish_transaction() {
-    let engine = LayersEngine::new(1000.0, 1000.0);
+    let engine = Engine::create(1000.0, 1000.0);
     let layer = engine.new_layer();
-    engine.add_layer(layer.clone());
+    engine.add_layer(&layer);
 
     let transaction = layer.set_position(
         Point { x: 200.0, y: 100.0 },
@@ -43,9 +39,9 @@ pub fn call_finish_transaction() {
 /// it should call the start handler when the transaction is started 1 time
 #[test]
 pub fn call_start_transaction() {
-    let engine = LayersEngine::new(1000.0, 1000.0);
+    let engine = Engine::create(1000.0, 1000.0);
     let layer = engine.new_layer();
-    engine.add_layer(layer.clone());
+    engine.add_layer(&layer);
 
     let transaction = layer.set_position(
         Point { x: 200.0, y: 100.0 },
@@ -87,9 +83,9 @@ pub fn call_start_transaction() {
 /// it should call the update handler on every update until the transaction is finished
 #[test]
 pub fn call_update_transaction() {
-    let engine = LayersEngine::new(1000.0, 1000.0);
+    let engine = Engine::create(1000.0, 1000.0);
     let layer = engine.new_layer();
-    engine.add_layer(layer.clone());
+    engine.add_layer(&layer);
 
     let called = Arc::new(RwLock::new(0.0));
     let c = called.clone();
@@ -118,15 +114,24 @@ pub fn call_update_transaction() {
 /// it should call the finish handler when the spring transaction is finished 1 time
 #[test]
 pub fn call_finish_transaction_spring() {
-    let engine = LayersEngine::new(1000.0, 1000.0);
+    let engine = Engine::create(1000.0, 1000.0);
     let layer = engine.new_layer();
-    engine.add_layer(layer.clone());
+    engine.add_layer(&layer);
+
+    // let s = Spring::with_duration_and_bounce(1.0, 0.2);
+    // println!("spring {:#?}", s);
+    // Spring {
+    //     mass: 1.0,
+    //     stiffness: 39.47842,
+    //     damping: 10.053097,
+    //     ...
+    // }
 
     let transaction = layer.set_position(
         Point { x: 200.0, y: 100.0 },
         Some(Transition {
             delay: 0.0,
-            timing: TimingFunction::Spring(Spring::new(1.0, 100.0, 2.0)),
+            timing: TimingFunction::Spring(Spring::new(1.0, 39.47842, 10.053097)),
         }),
     );
     let called = Arc::new(RwLock::new(0));
@@ -141,13 +146,17 @@ pub fn call_finish_transaction_spring() {
                 Some(Transition::ease_out(0.3)),
             );
             // check we are not in a dead lock
-            // assert!(true);
+            assert!(true);
         },
         true,
     );
-    engine.update(2.0);
-    engine.update(2.0);
-    engine.update(2.0);
+    engine.update(0.5); // 0.5
+    engine.update(0.5); // 1.0
+    engine.update(0.5); // 1.5
+    engine.update(0.5); // 2.0
+    engine.update(0.5); // 2.5
+    engine.update(0.5); // 3.0
+    engine.update(0.5); // 3.5
 
     let called = called.read().unwrap();
     assert_eq!(*called, 1);
@@ -156,15 +165,15 @@ pub fn call_finish_transaction_spring() {
 /// it should call the finish handler when the spring transaction is finished 1 time
 #[test]
 pub fn call_finish_transaction_spring_predictable() {
-    let engine = LayersEngine::new(1000.0, 1000.0);
+    let engine = Engine::create(1000.0, 1000.0);
     let layer = engine.new_layer();
-    engine.add_layer(layer.clone());
+    engine.add_layer(&layer);
 
     let transaction = layer.set_position(
         Point { x: 200.0, y: 100.0 },
         Some(Transition {
             delay: 0.0,
-            timing: TimingFunction::spring(1.0, 0.2),
+            timing: TimingFunction::spring(1.0, 0.1),
         }),
     );
     let called = Arc::new(RwLock::new(0));
@@ -179,11 +188,10 @@ pub fn call_finish_transaction_spring_predictable() {
                 Some(Transition::ease_out(0.3)),
             );
             // check we are not in a dead lock
-            // assert!(true);
+            assert!(true);
         },
         true,
     );
-    engine.update(0.5);
     engine.update(0.5);
     engine.update(0.5);
 
@@ -194,9 +202,9 @@ pub fn call_finish_transaction_spring_predictable() {
 /// it should call the start handler when the transaction is started 1 time
 #[test]
 pub fn call_start_value() {
-    let engine = LayersEngine::new(1000.0, 1000.0);
+    let engine = Engine::create(1000.0, 1000.0);
     let layer = engine.new_layer();
-    engine.add_layer(layer.clone());
+    engine.add_layer(&layer);
 
     layer.set_position(
         Point { x: 200.0, y: 100.0 },
@@ -254,9 +262,9 @@ pub fn call_start_value() {
 /// it should call the finish handler when the transaction is started 1 time
 #[test]
 pub fn call_update_value() {
-    let engine = LayersEngine::new(1000.0, 1000.0);
+    let engine = Engine::create(1000.0, 1000.0);
     let layer = engine.new_layer();
-    engine.add_layer(layer.clone());
+    engine.add_layer(&layer);
 
     layer.set_position(
         Point { x: 200.0, y: 100.0 },

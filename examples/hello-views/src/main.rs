@@ -82,7 +82,7 @@ async fn main() {
 
     let window_width = window_width as f32;
     let window_height = window_height as f32;
-    let engine = LayersEngine::new(window_width * 2.0, window_height * 2.0);
+    let engine = Engine::create(window_width * 2.0, window_height * 2.0);
     let root = engine.new_layer();
     root.set_size(
         Size {
@@ -125,7 +125,7 @@ async fn main() {
         lay_rs::skia::Rect::from_xywh(0.0, 0.0, w, h)
     });
     let layer = engine.new_layer();
-    engine.append_layer_to(layer.clone(), root.id());
+    engine.append_layer(&layer, root.id);
 
     let instant = std::time::Instant::now();
     let mut update_frame = 0;

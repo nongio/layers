@@ -2,7 +2,7 @@ use std::sync::{atomic::AtomicUsize, Arc};
 
 use indexmap::IndexMap;
 use indextree::{Arena, Node, NodeId};
-use tokio::{runtime::Handle, sync::RwLock};
+use std::sync::RwLock;
 
 /// The implementation utilizes the indexmap and indextree libraries for data storage,
 /// while keeping these dependencies internal and not exposed to the user. The typedefs
@@ -22,47 +22,42 @@ pub type FlatStorageData<T> = IndexMap<FlatStorageId, T>;
 /// Storage class. Allows to store and retrieve objects using their unique id.
 /// Supports arena storage for tree based structures and hasmap storage for flat structures.
 ///
-pub struct TreeStorage<V: Clone + Send + Sync> {
+pub struct TreeStorage<V: Send + Sync> {
     data: Arc<RwLock<TreeStorageData<V>>>,
 }
 
-impl<V: Clone + Send + Sync> TreeStorage<V> {
+impl<V: Send + Sync> TreeStorage<V> {
     /// Creates new empty tree storage.
     pub fn new() -> Self {
         Default::default()
     }
-    pub async fn insert(&self, value: V) -> TreeStorageId {
-        let mut data = self.data.write().await;
-        data.new_node(value)
-    }
 
-    pub async fn get(&self, id: impl Into<TreeStorageId>) -> Option<TreeStorageNode<V>> {
-        let id = id.into();
-        let data = self.data.read().await;
-        data.get(id).cloned()
+    pub fn insert_sync(&self, value: V) -> TreeStorageId {
+        let mut data = self.data.write().unwrap();
+        data.new_node(value)
     }
 
     pub fn data(&self) -> Arc<RwLock<TreeStorageData<V>>> {
         self.data.clone()
     }
 
-    pub async fn remove_at(&self, id: &TreeStorageId) {
-        let mut data = self.data.write().await;
+    pub fn remove_at_sync(&self, id: &TreeStorageId) {
+        let mut data = self.data.write().unwrap();
         id.remove_subtree(&mut data);
     }
 
-    pub async fn with_data<T>(&self, f: impl FnOnce(&TreeStorageData<V>) -> T) -> T {
-        let guard = self.data.read().await;
+    pub fn with_data<T>(&self, f: impl FnOnce(&TreeStorageData<V>) -> T) -> T {
+        let guard = self.data.read().unwrap();
         f(&guard)
     }
 
-    pub async fn with_data_mut<T>(&self, f: impl FnOnce(&mut TreeStorageData<V>) -> T) -> T {
-        let mut guard = self.data.write().await;
+    pub fn with_data_mut<T>(&self, f: impl FnOnce(&mut TreeStorageData<V>) -> T) -> T {
+        let mut guard = self.data.write().unwrap();
         f(&mut guard)
     }
 }
 
-impl<V: Clone + Send + Sync> Default for TreeStorage<V> {
+impl<V: Send + Sync> Default for TreeStorage<V> {
     fn default() -> Self {
         Self {
             data: Arc::new(RwLock::new(TreeStorageData::<V>::new())),
@@ -86,19 +81,13 @@ impl<V: Clone + Send + Sync> FlatStorage<V> {
         id
     }
     pub fn insert_with_id(&self, value: V, id: FlatStorageId) -> FlatStorageId {
-        let handle = Handle::current();
-        tokio::task::block_in_place(|| {
-            let mut data = handle.block_on(self.data.write());
-            data.insert(id, value);
-        });
+        let mut data = self.data.write().unwrap();
+        data.insert(id, value);
         id
     }
     pub fn get(&self, id: &FlatStorageId) -> Option<V> {
-        let handle = Handle::current();
-        tokio::task::block_in_place(|| {
-            let data = handle.block_on(self.data.read());
-            data.get(id).cloned()
-        })
+        let data = self.data.read().unwrap();
+        data.get(id).cloned()
     }
 
     pub fn data(&self) -> Arc<RwLock<FlatStorageData<V>>> {
@@ -106,19 +95,13 @@ impl<V: Clone + Send + Sync> FlatStorage<V> {
     }
 
     pub fn remove_at(&self, id: &FlatStorageId) {
-        let handle = Handle::current();
-        tokio::task::block_in_place(|| {
-            let mut data = handle.block_on(self.data.write());
-            data.remove(id);
-        });
+        let mut data = self.data.write().unwrap();
+        data.remove(id);
     }
 
     pub fn with_data<T>(&self, f: impl FnOnce(&FlatStorageData<V>) -> T) -> T {
-        let handle = Handle::current();
-        tokio::task::block_in_place(|| {
-            let guard = handle.block_on(self.data.read());
-            f(&guard)
-        })
+        let data = self.data.read().unwrap();
+        f(&data)
     }
 
     pub fn with_data_cloned<T>(&self, f: impl FnOnce(&FlatStorageData<V>) -> T) -> T {
@@ -127,11 +110,8 @@ impl<V: Clone + Send + Sync> FlatStorage<V> {
     }
 
     pub fn with_data_mut<T>(&self, f: impl FnOnce(&mut FlatStorageData<V>) -> T) -> T {
-        let handle = Handle::current();
-        tokio::task::block_in_place(|| {
-            let mut guard = handle.block_on(self.data.write());
-            f(&mut guard)
-        })
+        let mut data = self.data.write().unwrap();
+        f(&mut data)
     }
 }
 

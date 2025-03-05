@@ -49,6 +49,15 @@ impl<V: Sync + Clone + std::fmt::Debug> Attribute<V> {
             transition,
         }
     }
+    #[allow(clippy::wrong_self_convention)]
+    pub fn from_to(&self, from: V, to: V, transition: Option<Transition>) -> AttributeChange<V> {
+        AttributeChange {
+            from,
+            to,
+            target: self.clone(),
+            transition,
+        }
+    }
 }
 
 /// A representation of a change to a property, including an optional transition
@@ -153,51 +162,40 @@ macro_rules! change_model {
                     flag: flags,
                 });
                 // }
-                let mut tr = crate::engine::TransactionRef {
-                    id: 0,
-                    value_id: 0,
-                    engine_id: self.engine.id,
-                };
-                let node_id:Option<NodeRef> = *self.id.read().unwrap();
-                if let Some(node_id) = node_id {
-                        let animation = transition.map(|t| {
-                            // if there is a transition
-                            let merged_timing = if let TimingFunction::Spring(mut spring) = t.timing {
-                                // and the transition is a spring, check if there is already a running transaction
-                                let velocity = self.engine.get_transaction_for_value(value_id)
-                                    .map(|running_transaction| {
-                                        if let Some(animation_id) = running_transaction.animation_id {
-                                            let animation_state = self.engine.get_animation(animation_id).unwrap();
-                                            let animation = animation_state.animation;
-                                            match animation.timing {
-                                                TimingFunction::Spring(s) => {
-                                                    let (_current_position, current_velocity) =
-                                                        s.update_pos_vel_at(animation_state.time);
-                                                    current_velocity
-                                                }
-                                                _ => 0.0,
-                                            }
-                                        } else {
-                                            0.0
+
+                let animation = transition.map(|t| {
+                    // if there is a transition
+                    let merged_timing = if let TimingFunction::Spring(mut spring) = t.timing {
+                        // and the transition is a spring, check if there is already a running transaction
+                        let velocity = self.engine.get_transaction_for_value(value_id)
+                            .map(|running_transaction| {
+                                if let Some(animation_id) = running_transaction.animation_id {
+                                    let animation_state = self.engine.get_animation(animation_id).unwrap();
+                                    let animation = animation_state.animation;
+                                    match animation.timing {
+                                        TimingFunction::Spring(s) => {
+                                            let (_current_position, current_velocity) =
+                                                s.update_pos_vel_at(animation_state.time);
+                                            current_velocity
                                         }
-                                    }).unwrap_or(0.0);
-                                spring.initial_velocity = velocity;
-                                TimingFunction::Spring(spring)
-                            } else {
-                                t.timing
-                            };
-                            self.engine.add_animation(Animation {
-                                timing: merged_timing,
-                                start: t.delay + self.engine.now(),
-                            }, true)
-                        });
+                                        _ => 0.0,
+                                    }
+                                } else {
+                                    0.0
+                                }
+                            }).unwrap_or(0.0);
+                        spring.initial_velocity = velocity;
+                        TimingFunction::Spring(spring)
+                    } else {
+                        t.timing
+                    };
+                    self.engine.add_animation(Animation {
+                        timing: merged_timing,
+                        start: t.delay + self.engine.now(),
+                    }, true)
+                });
 
-                        tr = self.engine.schedule_change(node_id, change, animation);
-                } else {
-                    self.model.$variable_name.set(value.clone());
-                }
-
-                tr
+                self.engine.schedule_change(self.id, change, animation)
             }
             pub fn $variable_name(&self) -> $variable_type {
                 self.model.$variable_name.value()
@@ -212,11 +210,10 @@ macro_rules! change_model {
                     value_change: self.model.$variable_name.to(value, None),
                     flag: flags,
                 });
-                let node_id = self.id().unwrap();
                 AnimatedNodeChange {
                     animation_id: None,
                     change,
-                    node_id,
+                    node_id: self.id,
                 }
             }
         }

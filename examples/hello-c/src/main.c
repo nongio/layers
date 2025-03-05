@@ -29,7 +29,7 @@ int main(int argc, char **argv) {
   struct window_context *win =
       create_window_with_egl_context(wl, "Nya", 1280, 720);
 
-  const struct LayersEngine *engine = create_engine(1280, 720);
+  const struct Engine *engine = create_engine(1280, 720);
 
   GLint drawFboId = 0;
   glGetIntegerv(GL_FRAMEBUFFER_BINDING, &drawFboId);
@@ -39,7 +39,6 @@ int main(int argc, char **argv) {
 
   struct Layer *root_layer = engine_create_layer(engine);
   engine_add_layer_to_scene(engine, root_layer);
-  
   struct Layer *layers[100];
   // Easing ease_out = {.x1 = 0.0, .y1 = 0.0, .x2 = 0.0, .y2 = 1.0};
   // Transition_Easing timing = {

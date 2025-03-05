@@ -73,7 +73,7 @@ async fn main() {
 
     let window_width = window_width as f32;
     let window_height = window_height as f32;
-    let engine = LayersEngine::new(window_width * 6.0, window_height * 6.0);
+    let engine = Engine::create(window_width * 6.0, window_height * 6.0);
     let root = engine.new_layer();
     root.set_size(
         Size {
@@ -121,7 +121,7 @@ async fn main() {
     );
     layer.set_border_corner_radius(BorderRadius::new_single(50.0), None);
 
-    engine.add_layer(layer.clone());
+    engine.add_layer(&layer);
 
     // engine.start_debugger();
     let mut mass = 1.0;

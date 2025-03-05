@@ -14,6 +14,7 @@ pub fn render_one_child_view(state: &bool, _view: &View<bool>) -> LayerTree {
         .children(layer_trees_opt!(if *state {
             Some(
                 LayerTreeBuilder::default()
+                    .key("child_view")
                     .position((Point { x: 0.0, y: 0.0 }, None))
                     .size((
                         Size {
@@ -80,10 +81,10 @@ pub fn render_main_view(state: &bool, view: &View<bool>) -> LayerTree {
 
 #[test]
 pub fn simple_build() {
-    let engine = LayersEngine::new(1000.0, 1000.0);
+    let engine = Engine::create(1000.0, 1000.0);
     let layer = engine.new_layer();
 
-    engine.add_layer(layer.clone());
+    engine.add_layer(&layer);
 
     let lt = LayerTreeBuilder::default()
         .children(vec![LayerTreeBuilder::default().build().unwrap()])
@@ -96,16 +97,17 @@ pub fn simple_build() {
 
 #[test]
 pub fn build_a_view() {
-    let engine = LayersEngine::new(1000.0, 1000.0);
+    let engine = Engine::create(1000.0, 1000.0);
     let layer = engine.new_layer();
 
-    engine.add_layer(layer.clone());
+    engine.add_layer(&layer);
 
     let initial = false;
     let view = View::new("test_view", initial, render_one_child_view);
     view.mount_layer(layer);
 
     engine.update(0.016);
+    let layer = view.layer.read().unwrap().clone().unwrap();
 
     // let x = view.layer.unwrap().render_position().x;
     print_scene(engine.scene(), engine.scene_root().unwrap());
@@ -114,17 +116,16 @@ pub fn build_a_view() {
 
 #[test]
 pub fn rebuild_a_view() {
-    let engine = LayersEngine::new(1000.0, 1000.0);
+    let engine = Engine::create(1000.0, 1000.0);
     let layer = engine.new_layer();
 
-    engine.add_layer(layer.clone());
+    engine.add_layer(&layer);
 
     let initial = false;
     let view = View::new("test_view", initial, render_one_child_view);
-    view.mount_layer(layer);
+    view.mount_layer(layer.clone());
 
     engine.update(0.016);
-    let layer = view.layer.read().unwrap().clone().unwrap();
 
     print_scene(engine.scene(), engine.scene_root().unwrap());
     let num_children = layer.children_nodes().len();
@@ -151,10 +152,10 @@ pub fn rebuild_a_view() {
 
 #[test]
 pub fn nested_views() {
-    let engine = LayersEngine::new(1000.0, 1000.0);
+    let engine = Engine::create(1000.0, 1000.0);
     let layer = engine.new_layer();
 
-    engine.add_layer(layer.clone());
+    engine.add_layer(&layer);
 
     let initial = false;
     let view = View::new("parent_view", initial, render_main_view);
@@ -188,10 +189,10 @@ pub fn nested_views() {
 
 // #[test]
 // pub fn layer_tree_from_css() {
-//     // let engine = LayersEngine::new(1000.0, 1000.0);
+//     // let engine = Engine::create(1000.0, 1000.0);
 //     // let layer = engine.new_layer();
 
-//     // engine.add_layer(layer.clone());
+//     // engine.add_layer(&layer);
 
 //     let layer_tree = LayerTreeBuilder::default()
 //         .key("test_layer")

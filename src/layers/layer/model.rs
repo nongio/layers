@@ -1,15 +1,14 @@
 use std::{
     error::Error,
     hash::{Hash, Hasher},
-    sync::{Arc, RwLock},
+    sync::{atomic::AtomicBool, Arc, RwLock},
 };
 
-use indextree::Arena;
 use skia::{ColorFilter, ImageFilter};
 use taffy::style::Display;
 
 use crate::{
-    engine::{command::Attribute, SceneNode},
+    engine::command::Attribute,
     types::{BlendMode, Color, Point, *},
 };
 
@@ -34,12 +33,7 @@ impl fmt::Debug for ContentDrawFunction {
 #[allow(clippy::type_complexity)]
 #[derive(Clone)]
 pub struct ContentDrawFunctionInternal(
-    pub  Arc<
-        dyn 'static
-            + Send
-            + Sync
-            + Fn(&skia_safe::Canvas, f32, f32, &Arena<SceneNode>) -> skia_safe::Rect,
-    >,
+    pub Arc<dyn 'static + Send + Sync + Fn(&skia_safe::Canvas, f32, f32) -> skia_safe::Rect>,
 );
 
 impl<F: Fn(&skia_safe::Canvas, f32, f32) -> skia_safe::Rect + Send + Sync + 'static> From<F>
@@ -52,10 +46,7 @@ impl<F: Fn(&skia_safe::Canvas, f32, f32) -> skia_safe::Rect + Send + Sync + 'sta
 
 impl<F> From<F> for ContentDrawFunctionInternal
 where
-    F: Fn(&skia_safe::Canvas, f32, f32, &Arena<SceneNode>) -> skia_safe::Rect
-        + Send
-        + Sync
-        + 'static,
+    F: Fn(&skia_safe::Canvas, f32, f32) -> skia_safe::Rect + Send + Sync + 'static,
 {
     fn from(f: F) -> Self {
         ContentDrawFunctionInternal(Arc::new(f))
@@ -64,7 +55,7 @@ where
 
 impl From<ContentDrawFunction> for ContentDrawFunctionInternal {
     fn from(value: ContentDrawFunction) -> Self {
-        ContentDrawFunctionInternal(Arc::new(move |canvas, x, y, _| (value.0)(canvas, x, y)))
+        ContentDrawFunctionInternal(Arc::new(move |canvas, x, y| (value.0)(canvas, x, y)))
     }
 }
 
@@ -107,7 +98,10 @@ impl<F: Fn(Layer, f32, f32) + Send + Sync + 'static> From<F> for PointerHandlerF
 }
 
 pub(crate) struct ModelLayer {
-    pub key: RwLock<String>,
+    pub(crate) key: RwLock<String>,
+
+    pub(crate) pointer_events: Arc<AtomicBool>,
+
     pub display: Attribute<Display>,
     pub anchor_point: Attribute<Point>,
     pub position: Attribute<Point>,
@@ -131,6 +125,9 @@ pub(crate) struct ModelLayer {
     pub image_filter_progress: Attribute<f32>,
     pub clip_content: Attribute<bool>,
     pub clip_children: Attribute<bool>,
+
+    pub image_cached: Arc<AtomicBool>,
+    pub picture_cached: Arc<AtomicBool>,
 }
 
 impl Default for ModelLayer {
@@ -169,8 +166,17 @@ impl Default for ModelLayer {
         let filter_bounds = Arc::new(RwLock::new(None));
         let clip_content = Attribute::new(false);
         let clip_children = Attribute::new(false);
+        let pointer_events = Arc::new(AtomicBool::new(true));
+        // let hidden = Arc::new(AtomicBool::new(false));
+        let image_cached = Arc::new(AtomicBool::new(true));
+        let picture_cached = Arc::new(AtomicBool::new(true));
+
         Self {
             key: RwLock::new(String::new()),
+            pointer_events,
+            // hidden,
+            image_cached,
+            picture_cached,
             display,
             anchor_point,
             position,

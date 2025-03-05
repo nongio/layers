@@ -136,13 +136,19 @@ impl<S: Hash + Clone> View<S> {
             .get(id)
             .and_then(|v| v.front())
             .and_then(|node| {
-                if let Some(root) = &*self.layer.read().unwrap() {
-                    if let Some(node) = root.engine.scene_get_node(node) {
-                        let scene_node = node.get();
-                        return Some(scene_node.layer.clone());
-                    }
-                }
-                None
+                // FIXME
+                self.layer
+                    .read()
+                    .unwrap()
+                    .clone()
+                    .and_then(|layer| layer.engine.get_layer(node))
+                // if let Some(root) = &*self.layer.read().unwrap() {
+                // if let Some(node) = root.engine.scene_get_node(node) {
+                // let scene_node = node.get();
+                // return Some(scene_node.layer.clone());
+                // }
+                // }
+                // None
             })
             .or_else(|| {
                 println!("layer_by_key not found {}", id);

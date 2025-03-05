@@ -73,7 +73,7 @@ async fn main() {
 
     let window_width = window_width as f32;
     let window_height = window_height as f32;
-    let engine = LayersEngine::new(window_width * 6.0, window_height * 6.0);
+    let engine = Engine::create(window_width * 6.0, window_height * 6.0);
     let root = engine.new_layer();
     root.set_size(
         Size {
@@ -97,7 +97,7 @@ async fn main() {
     engine.scene_set_root(root.clone());
 
     let layer = engine.new_layer();
-    engine.append_layer_to(layer.clone(), root.id());
+    engine.append_layer(&layer, root.id);
 
     let instant = std::time::Instant::now();
     let mut update_frame = 0;
@@ -105,7 +105,7 @@ async fn main() {
     let last_instant = instant;
 
     let test_layer = engine.new_layer();
-    engine.append_layer_to(test_layer.clone(), root.id());
+    engine.append_layer(&test_layer, root.id);
     test_layer.set_anchor_point((0.0, 0.0), None);
     test_layer.set_size(Size::points(500.0, 900.0), None);
     test_layer.set_background_color(
@@ -114,7 +114,7 @@ async fn main() {
         },
         None,
     );
-    test_layer.set_image_cache(true);
+    test_layer.set_image_cached(true);
     test_layer.set_border_corner_radius(50.0, None);
     test_layer.set_border_width(100.0, None);
     test_layer.set_border_color(
@@ -125,7 +125,7 @@ async fn main() {
     );
 
     let test2 = engine.new_layer();
-    engine.append_layer_to(test2.clone(), test_layer.id());
+    engine.append_layer(&test2, test_layer.id);
     test2.set_anchor_point((0.0, 0.0), None);
     test2.set_size(Size::points(100.0, 100.0), None);
     test2.set_background_color(

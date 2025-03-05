@@ -8,24 +8,25 @@
 //! - The *render* step uses the displaylist to generate a texture of the node
 //! - The *compose* step generates the final image using the textures
 //!
-//! The `LayersEngine` is the main engine responsible for managing layers and rendering.
+//! The `Engine` is the main engine responsible for managing layers and rendering.
 //!
 //! # Usage:
 //!
 //! ```
-//! let engine = LayersEngine::new();
-//! engine.add_layer(Layer::new());
-//! engine.render();
+//! use lay_rs::prelude::*;
+//!
+//! let engine = Engine::create(500.0, 500.0);
+//! let layer = engine.new_layer();
+//! engine.add_layer(&layer);
 //! ```
-pub use layers_engine::LayersEngine;
 pub use node::SceneNode;
 
-mod layers_engine;
+mod debug_server;
+
 mod stages;
 
 pub(crate) mod command;
 pub(crate) mod draw_to_picture;
-pub(crate) mod rendering;
 pub(crate) mod scene;
 
 pub mod animation;
@@ -34,11 +35,9 @@ pub(crate) mod storage;
 
 use core::fmt;
 use indextree::NodeId;
-use layers_engine::{initialize_engines, ENGINES, INIT};
+
 use node::ContainsPoint;
 
-#[cfg(feature = "debugger")]
-use layers_debug_server::DebugServerError;
 #[cfg(feature = "debugger")]
 #[allow(unused_imports)]
 use stages::send_debugger;
@@ -50,22 +49,29 @@ use std::{
     collections::HashMap,
     hash::Hash,
     ops::Deref,
-    sync::{atomic::AtomicUsize, Arc, RwLock},
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc, Once,
+    },
 };
+
+use std::sync::RwLock;
 
 use self::{
     animation::{Animation, Transition},
-    command::NoopChange,
-    node::{DrawCacheManagement, RenderableFlags},
+    // command::NoopChange,
+    node::RenderableFlags,
     scene::Scene,
     stages::{
         cleanup_animations, cleanup_nodes, cleanup_transactions, execute_transactions,
         update_animations, update_layout_tree,
     },
-    storage::{FlatStorage, FlatStorageId, TreeStorageId, TreeStorageNode},
+    storage::{FlatStorage, FlatStorageId, TreeStorageId},
 };
 use crate::{
-    layers::layer::{model::PointerHandlerFunction, Layer},
+    drawing::render_node_tree,
+    layers::layer::{model::PointerHandlerFunction, render_layer::RenderLayer, Layer},
+    prelude::ContentDrawFunction,
     types::Point,
 };
 
@@ -215,13 +221,50 @@ pub enum PointerEventType {
     Down,
     Up,
 }
+/// Public API for the Layers Engine
+/// ## Usage: Setup a basic scene with a root layer
+/// ```rust
+/// use lay_rs::prelude::*;
+///
+/// let engine = Engine::create(800.0, 600.0);
+/// let layer = engine.new_layer();
+/// let engine = Engine::create(1024.0, 768.0);
+/// let root_layer = engine.new_layer();
+/// root_layer.set_position(Point { x: 0.0, y: 0.0 }, None);
 
-pub(crate) struct Engine {
+/// root_layer.set_background_color(
+///     PaintColor::Solid {
+///         color: Color::new_rgba255(180, 180, 180, 255),
+///     },
+///    None,
+/// );
+/// root_layer.set_border_corner_radius(10.0, None);
+/// root_layer.set_layout_style(taffy::Style {
+///     position: taffy::Position::Absolute,
+///     display: taffy::Display::Flex,
+///     flex_direction: taffy::FlexDirection::Column,
+///     justify_content: Some(taffy::JustifyContent::Center),
+///     align_items: Some(taffy::AlignItems::Center),
+///     ..Default::default()
+/// });
+/// engine.add_layer(&root_layer);
+/// ```
+/// ## Usage: Update the engine
+/// ```rust
+/// use lay_rs::prelude::*;
+///
+/// let engine = Engine::create(800.0, 600.0);
+/// // setup the scene...
+/// engine.update(0.016);
+/// ```
+pub struct Engine {
     pub id: usize,
     /// The scene is a tree of nodes
     pub(crate) scene: Arc<Scene>,
     /// The root node of the scene
     scene_root: RwLock<Option<NodeRef>>,
+
+    layers: RwLock<HashMap<NodeRef, Layer>>,
 
     pub(crate) values_transactions: RwLock<HashMap<usize, usize>>,
     /// The transactions (node changes) that are scheduled to be executed
@@ -267,7 +310,10 @@ impl TransactionRef {
             ENGINES.as_ref().unwrap()
         };
         let engines = engines.read().unwrap();
-        engines.get(&self.engine_id).unwrap().clone()
+        engines
+            .get(&self.engine_id)
+            .expect("no engine found")
+            .clone()
     }
     /// Add a callback that is triggered when the transaction is started.
     /// The callback is removed when the transaction is finished.
@@ -335,14 +381,76 @@ impl From<NodeRef> for TreeStorageId {
         node_ref.0
     }
 }
+impl From<&NodeRef> for TreeStorageId {
+    fn from(node_ref: &NodeRef) -> Self {
+        node_ref.0
+    }
+}
+
 impl From<NodeRef> for usize {
     fn from(node_ref: NodeRef) -> Self {
         node_ref.0.into()
     }
 }
+impl From<TreeStorageId> for NodeRef {
+    fn from(val: TreeStorageId) -> Self {
+        NodeRef(val)
+    }
+}
+
+impl From<&TreeStorageId> for NodeRef {
+    fn from(val: &TreeStorageId) -> Self {
+        NodeRef(*val)
+    }
+}
 
 static UNIQ_POINTER_HANDLER_ID: AtomicUsize = AtomicUsize::new(0);
 
+pub(crate) static INIT: Once = Once::new();
+pub(crate) static ENGINE_ID: AtomicUsize = AtomicUsize::new(0);
+pub(crate) static mut ENGINES: Option<std::sync::RwLock<HashMap<usize, Arc<Engine>>>> = None;
+
+/// Initializes the ENGINES static variable.
+fn initialize_engines() {
+    INIT.call_once(|| unsafe {
+        ENGINES = Some(std::sync::RwLock::new(HashMap::new()));
+    });
+}
+
+/// Adds an engine to the ENGINES map and returns its ID.
+fn add_engine(engine: Arc<Engine>) -> usize {
+    initialize_engines();
+    let id = engine.id;
+    ENGINE_ID.store(id, Ordering::SeqCst);
+    unsafe {
+        if let Some(ref engines) = ENGINES {
+            let mut engines = engines.write().unwrap();
+            engines.insert(id, engine);
+        }
+    }
+    id
+}
+/// Adds an engine to the ENGINES map and returns its ID.
+fn next_engine_id() -> usize {
+    initialize_engines();
+    let id = ENGINE_ID.load(Ordering::SeqCst);
+
+    id + 1
+}
+/// Retrieves an engine by its ID.
+fn get_engine_ref(id: usize) -> Arc<Engine> {
+    initialize_engines();
+    unsafe {
+        let engines = ENGINES.as_ref().unwrap();
+        let engines = engines.read().unwrap();
+        return engines.get(&id).unwrap().clone();
+    }
+}
+impl fmt::Debug for Engine {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Engine({})", self.id)
+    }
+}
 impl Engine {
     fn new(id: usize, width: f32, height: f32) -> Self {
         // rayon::ThreadPoolBuilder::new()
@@ -363,9 +471,13 @@ impl Engine {
         let scene = Scene::create(width, height);
         let scene_root = RwLock::new(None);
         let damage = Arc::new(RwLock::new(skia_safe::Rect::default()));
+
+        let layers = RwLock::new(HashMap::new());
+
         Engine {
             id,
             scene,
+            layers,
             transactions: FlatStorage::new(),
             animations: FlatStorage::new(),
             timestamp: RwLock::new(Timestamp(0.0)),
@@ -381,21 +493,24 @@ impl Engine {
             current_hover_node: RwLock::new(None),
         }
     }
-    pub fn create(id: usize, width: f32, height: f32) -> Arc<Self> {
-        let new_engine = Self::new(id, width, height);
-        Arc::new(new_engine)
+
+    fn get_arc_ref(&self) -> Arc<Self> {
+        get_engine_ref(self.id)
+    }
+
+    pub fn create(width: f32, height: f32) -> Arc<Self> {
+        initialize_engines();
+        let id = ENGINE_ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let new_engine = Arc::new(Engine::new(id, width, height));
+        add_engine(new_engine.clone());
+
+        new_engine
     }
     /// set the layer as the root of the scene and root of the layout tree
-    pub fn set_root_layer(&self, layer: impl Into<Layer>) -> NodeRef {
+    pub fn scene_set_root(&self, layer: impl Into<Layer>) -> NodeRef {
         let layer: Layer = layer.into();
-        let layout = layer.layout_node_id;
-
-        // append layer if it is not already in the scene
-        let id = layer.id().unwrap_or_else(|| {
-            let id = self.scene.add(layer.clone(), layout);
-            layer.set_id(id);
-            id
-        });
+        let layout = layer.layout_id;
+        let id = layer.id;
         // detach the node from the scene
         {
             self.scene.with_arena_mut(|arena| {
@@ -409,32 +524,67 @@ impl Engine {
         *self.layout_root.write().unwrap() = layout;
         // let mut layout_tree = self.layout_tree.write().unwrap();
 
-        let change = Arc::new(NoopChange::new(id.0.into()));
-        self.schedule_change(id, change, None);
+        // let change = Arc::new(NoopChange::new(id.0.into()));
+        // self.schedule_change(id, change, None);
         id
     }
 
+    /// Set the size of the scene
+    pub fn scene_set_size(&self, width: f32, height: f32) {
+        self.scene.set_size(width, height);
+    }
+
+    /// Create a new layer associated with the engine
+    pub fn new_layer(&self) -> Layer {
+        let mut layout_tree = self.layout_tree.write().unwrap();
+        let layout_id = layout_tree.new_leaf(Style::default()).unwrap();
+
+        let scene_node = SceneNode::new();
+
+        let scene_node_id = self.scene.insert_node(scene_node, None);
+
+        let layer = Layer::with_engine(self.get_arc_ref(), scene_node_id, layout_id);
+        self.layers
+            .write()
+            .unwrap()
+            .insert(scene_node_id, layer.clone());
+
+        layer
+    }
+
+    pub fn get_layer<'a>(&self, node: impl Into<&'a NodeRef>) -> Option<Layer> {
+        let node_id = node.into();
+        self.layers.read().unwrap().get(node_id).cloned()
+    }
+
+    pub fn with_layers(&self, f: impl Fn(&HashMap<NodeRef, Layer>)) {
+        f(&self.layers.read().unwrap());
+    }
+    /// Detach the layer's layout node from the layout tree
     fn layout_detach_layer(&self, layer: &Layer) {
-        let layout = layer.layout_node_id;
+        let layout = layer.layout_id;
 
         {
             // if the layer has an id, then remove it from the layout tree
             let mut layout_tree = self.layout_tree.write().unwrap();
-            if layer.id().is_some() {
-                if let Some(layout_parent) = layout_tree.parent(layout) {
-                    layout_tree.remove_child(layout_parent, layout).unwrap();
-                }
+
+            if let Some(layout_parent) = layout_tree.parent(layout) {
+                layout_tree.remove_child(layout_parent, layout).unwrap();
             }
         }
     }
 
+    /// Append the layer's layout node to the layout tree
     fn layout_append_layer(&self, layer: &Layer, parent: NodeRef) {
-        let layout = layer.layout_node_id;
+        let layout = layer.layout_id;
         let parent_layout = {
-            let parent_node = self.scene.get_node_sync(parent).unwrap();
-            let parent_scenenode = parent_node.get();
-            parent_scenenode.layout_node_id
+            self.get_layer(&parent)
+                .map(|parent_layer| parent_layer.layout_id)
         };
+        if parent_layout.is_none() {
+            return;
+        }
+        let parent_layout = parent_layout.unwrap();
         let mut layout_tree = self.layout_tree.write().unwrap();
         layout_tree.add_child(parent_layout, layout).unwrap();
         let res = layout_tree.mark_dirty(parent_layout);
@@ -443,13 +593,17 @@ impl Engine {
         }
     }
 
+    /// Prepend the layer's layout node to the layout tree
     fn layout_prepend_layer(&self, layer: &Layer, parent: NodeRef) {
-        let layout = layer.layout_node_id;
+        let layout = layer.layout_id;
         let parent_layout = {
-            let parent_node = self.scene.get_node_sync(parent).unwrap();
-            let parent_scenenode = parent_node.get();
-            parent_scenenode.layout_node_id
+            self.get_layer(&parent)
+                .map(|parent_layer| parent_layer.layout_id)
         };
+        if parent_layout.is_none() {
+            return;
+        }
+        let parent_layout = parent_layout.unwrap();
         let mut layout_tree = self.layout_tree.write().unwrap();
         layout_tree
             .insert_child_at_index(parent_layout, 0, layout)
@@ -460,44 +614,48 @@ impl Engine {
         }
     }
 
-    pub fn append_layer(&self, layer: impl Into<Layer>, parent: Option<NodeRef>) -> NodeRef {
-        let layer: Layer = layer.into();
-        let layout = layer.layout_node_id;
+    /// Append the layer's node to the scene tree and layout tree
+    /// the layer is appended to the parent node if it is provided
+    /// otherwise it is appended to the root of the scene
+    pub fn append_layer<'a>(
+        &self,
+        layer_id: impl Into<&'a NodeRef>,
+        parent: impl Into<Option<NodeRef>>,
+    ) {
+        let layer_id = layer_id.into();
+        if let Some(layer) = self.get_layer(layer_id) {
+            let parent = parent.into();
+            self.layout_detach_layer(&layer);
+            let new_parent = parent.or_else(|| {
+                let scene_root = *self.scene_root.read().unwrap();
+                scene_root
+            });
 
-        let layer_id = layer.id().unwrap_or_else(|| {
-            let id = self.scene.add(layer.clone(), layout);
-            layer.set_id(id);
-            id
-        });
+            if new_parent.is_none() {
+                // if we append to a scene without a root, we set the layer as the root
+                self.scene_set_root(layer);
+            } else {
+                let new_parent = new_parent.unwrap();
 
-        self.layout_detach_layer(&layer);
-
-        let new_parent = parent.or_else(|| {
-            let scene_root = *self.scene_root.read().unwrap();
-            scene_root
-        });
-
-        if new_parent.is_none() {
-            // if we append to a scene without a root, we set the layer as the root
-            self.set_root_layer(layer);
-        } else {
-            let new_parent = new_parent.unwrap();
-
-            self.scene.append_node_to(layer_id, new_parent);
-            self.layout_append_layer(&layer, new_parent);
+                self.scene.append_node_to(layer.id, new_parent);
+                self.layout_append_layer(&layer, new_parent);
+            }
         }
-        layer_id
     }
 
-    pub fn prepend_layer(&self, layer: impl Into<Layer>, parent: Option<NodeRef>) -> NodeRef {
-        let layer: Layer = layer.into();
-        let layout = layer.layout_node_id;
+    /// Append the layer to the root of the scene
+    /// alias for append_layer, without a parent
+    pub fn add_layer<'a>(&self, layer: impl Into<&'a NodeRef>) {
+        self.append_layer(layer, None)
+    }
 
-        let layer_id = layer.id().unwrap_or_else(|| {
-            let id = self.scene.add(layer.clone(), layout);
-            layer.set_id(id);
-            id
-        });
+    /// Prepend the layer to the root of the scene or to a parent node
+    /// if the parent is provided
+    pub fn prepend_layer(&self, layer: impl Into<Layer>, parent: impl Into<Option<NodeRef>>) {
+        let layer: Layer = layer.into();
+        let layer_id = layer.id;
+        let parent = parent.into();
+        self.layout_detach_layer(&layer);
 
         self.layout_detach_layer(&layer);
 
@@ -508,21 +666,16 @@ impl Engine {
 
         if new_parent.is_none() {
             // if we append to a scene without a root, we set the layer as the root
-            self.set_root_layer(layer);
+            self.scene_set_root(layer);
         } else {
             let new_parent = new_parent.unwrap();
 
             self.scene.prepend_node_to(layer_id, new_parent);
             self.layout_prepend_layer(&layer, new_parent);
         }
-        layer_id
     }
 
-    pub fn add_layer_to_positioned(
-        &self,
-        layer: impl Into<Layer>,
-        parent: Option<NodeRef>,
-    ) -> NodeRef {
+    pub fn add_layer_to_positioned(&self, layer: impl Into<Layer>, parent: Option<NodeRef>) {
         // FIXME ensure that newly added layers are layouted
         // update...
         {
@@ -536,9 +689,11 @@ impl Engine {
         let position = layer.render_position();
         let parent_position = parent
             .and_then(|parent| {
-                self.scene_get_node(&parent).map(|parent| {
-                    let b = parent.get().transformed_bounds();
-                    Point { x: b.x(), y: b.y() }
+                self.scene.with_arena(|arena| {
+                    arena.get(parent.0).map(|parent| {
+                        let b = parent.get().transformed_bounds();
+                        Point { x: b.x(), y: b.y() }
+                    })
                 })
             })
             .unwrap_or_default();
@@ -547,7 +702,8 @@ impl Engine {
             y: position.y - parent_position.y,
         };
 
-        let node = self.append_layer(layer.clone(), parent);
+        self.append_layer(&layer.id, parent);
+
         layer.set_position(new_position, None);
         {
             execute_transactions(self);
@@ -561,52 +717,95 @@ impl Engine {
         // println!("new model position {:?}", new_position);
         // let new_position = layer.render_position();
         // println!("new render position {:?}", new_position);
-
-        node
     }
 
     pub fn mark_for_delete(&self, layer: NodeRef) {
-        if let Some(node) = self.scene.get_node_sync(layer) {
-            let node = node.get();
-            node.mark_for_deletion();
-        }
+        self.scene.with_arena_mut(|arena| {
+            if let Some(node) = arena.get_mut(layer.into()) {
+                let node = node.get_mut();
+                node.mark_for_deletion();
+            }
+        });
     }
 
-    pub(crate) fn scene_remove_layer(&self, layer: impl Into<Option<NodeRef>>) {
-        let layer_id: Option<NodeRef> = layer.into();
-        if let Some(layer_id) = layer_id {
-            {
-                if let Some(node) = self.scene.get_node_sync(layer_id) {
-                    let parent = node.parent();
-                    let node = node.get();
-                    self.scene.remove(layer_id);
-                    if let Some(parent) = parent {
-                        if let Some(parent) = self.scene.get_node_sync(parent) {
-                            let parent = parent.get();
-                            parent.set_need_layout(true);
+    // FIXME: quite convoluted logic.. move main logic into scene
+    pub(crate) fn scene_remove_layer<'a>(&self, layer: impl Into<&'a NodeRef>) {
+        // Scene object is responsible for removing the node and its children
+        // Engine is responsible for removing the layout node,
+        // and mark the scene node for relayout?
+        self.scene.with_arena_mut(|arena| {
+            let layer_id = layer.into();
+            if let Some(node) = arena.get_mut(layer_id.into()) {
+                let layer = self.get_layer(layer_id).unwrap();
+                let layout_id = layer.layout_id;
+                let parent_id = node.parent();
 
-                            let mut layout = self.layout_tree.write().unwrap();
-                            let res = layout.mark_dirty(parent.layout_node_id);
-                            if let Some(err) = res.err() {
-                                println!("layout err {}", err);
-                            }
+                if let Some(parent_id) = parent_id {
+                    if let Some(parent_node) = arena.get_mut(parent_id) {
+                        let parent = parent_node.get_mut();
+                        let parent_layer = self.get_layer(&NodeRef(parent_id)).unwrap();
+                        let parent_layout_id = parent_layer.layout_id;
+                        parent.set_need_layout(true);
+
+                        let mut layout = self.layout_tree.write().unwrap();
+                        let res = layout.mark_dirty(parent_layout_id);
+                        if let Some(err) = res.err() {
+                            println!("layout err {}", err);
                         }
                     }
-                    // remove layout node
-                    let mut layout_tree = self.layout_tree.write().unwrap();
-                    layout_tree.remove(node.layout_node_id).unwrap();
                 }
+                // remove layout node
+                let mut layout_tree = self.layout_tree.write().unwrap();
+                layout_tree.remove(layout_id).unwrap();
+                // remove layers subtree
+                layer_id.remove_subtree(arena);
             }
-        }
+        });
     }
-    pub fn scene_get_node(&self, node: &NodeRef) -> Option<TreeStorageNode<SceneNode>> {
-        self.scene.get_node_sync(*node)
+    pub fn scene(&self) -> Arc<Scene> {
+        self.scene.clone()
     }
-    pub fn scene_get_node_parent(&self, node: &NodeRef) -> Option<NodeRef> {
-        let node = self.scene.get_node_sync(*node)?;
-        let parent = node.parent();
-        parent.map(NodeRef)
+    pub fn scene_root(&self) -> Option<NodeRef> {
+        *self.scene_root.read().unwrap()
     }
+
+    pub fn node_children(&self, node_ref: &NodeRef) -> Vec<NodeRef> {
+        let mut children = Vec::new();
+        self.scene.with_arena(|arena| {
+            node_ref.0.children(arena).for_each(|child| {
+                children.push(NodeRef(child));
+            });
+        });
+        children
+    }
+
+    pub fn node_descendants(&self, node_ref: &NodeRef) -> Vec<NodeRef> {
+        let mut descendants = Vec::new();
+        self.scene.with_arena(|arena| {
+            node_ref.0.descendants(arena).for_each(|descendant| {
+                descendants.push(NodeRef(descendant));
+            });
+        });
+        descendants
+    }
+
+    pub fn render_layer<'a>(&self, node_ref: impl Into<&'a NodeRef>) -> Option<RenderLayer> {
+        let node_ref = node_ref.into();
+        self.scene.with_arena(|arena| {
+            let node = arena.get(node_ref.into())?;
+            let node = node.get().render_layer().clone();
+            Some(node)
+        })
+    }
+
+    pub fn scene_get_node_parent(&self, node_ref: NodeRef) -> Option<NodeRef> {
+        self.scene.with_arena(|arena| {
+            let node = arena.get(node_ref.into())?;
+            let parent = node.parent();
+            parent.map(NodeRef)
+        })
+    }
+
     pub fn now(&self) -> f32 {
         self.timestamp.read().unwrap().0
     }
@@ -649,6 +848,9 @@ impl Engine {
         });
     }
 
+    pub fn get_transaction(&self, tref: TransactionRef) -> Option<AnimatedNodeChange> {
+        self.transactions.get(&tref.id)
+    }
     pub fn get_transaction_for_value(&self, value_id: usize) -> Option<AnimatedNodeChange> {
         self.values_transactions
             .read()
@@ -665,8 +867,10 @@ impl Engine {
         change: Arc<dyn SyncCommand>,
         animation_id: Option<AnimationRef>,
     ) -> TransactionRef {
-        let node = self.scene.get_node_sync(target_id.0);
-        if node.is_some() {
+        let node_is_some = self
+            .scene
+            .with_arena(|arena| arena.get(target_id.into()).is_some());
+        if node_is_some {
             let value_id: usize = change.value_id();
 
             let animated_node_change = AnimatedNodeChange {
@@ -690,10 +894,7 @@ impl Engine {
                 engine_id: self.id,
             }
         } else {
-            println!(
-                "Attention! Adding a change on a node not found {:?}",
-                target_id
-            );
+            tracing::warn!("Adding a change on a node not found {:?}", target_id);
             TransactionRef {
                 id: 0,
                 value_id: FlatStorageId::default(),
@@ -709,6 +910,7 @@ impl Engine {
         let animation = animation.into();
         let mut inserted_transactions = Vec::with_capacity(animated_changes.len());
         for animated_node_change in animated_changes {
+            // FIXME
             // let mut animated_node_change = animated_node_change.clone();
             // if animation.is_some() {
             //     animated_node_change.animation_id = animation;
@@ -808,10 +1010,10 @@ impl Engine {
         // repaint if necessary
         let layout = self.layout_tree.read().unwrap();
         let mut damage = skia_safe::Rect::default();
-        self.scene.with_arena(|arena| {
+        self.scene.with_arena_mut(|arena| {
             let node = self.scene_root.read().unwrap();
             if let Some(root_id) = *node {
-                let (_, _, d) = update_node(arena, &layout, root_id.0, None, false);
+                let (.., d) = update_node(self, arena, &layout, root_id.0, None, false);
                 damage = d;
             }
         });
@@ -843,7 +1045,7 @@ impl Engine {
         // layout.set_style(node, style).unwrap();
     }
 
-    pub fn layer_at(&self, point: Point) -> Option<NodeRef> {
+    pub fn scene_layer_at(&self, point: Point) -> Option<NodeRef> {
         let mut result = None;
         self.scene.with_arena(|arena| {
             for node in arena.iter() {
@@ -1025,24 +1227,26 @@ impl Engine {
                 .insert_with_id(pointer_callback, node_id);
         }
     }
-    fn bubble_up_event(&self, node_id: NodeRef, event_type: &PointerEventType) {
-        if let Some(node) = self.scene.get_node_sync(node_id.0) {
-            if node.is_removed() {
-                return;
-            }
-            let layer = node.get().layer.clone();
+    fn bubble_up_event(&self, node_ref: NodeRef, event_type: &PointerEventType) {
+        self.scene.with_arena(|arena| {
+            if let Some(node) = arena.get(node_ref.into()) {
+                let layer = self.get_layer(&node_ref).unwrap();
+                if node.is_removed() {
+                    return;
+                }
 
-            if let Some(pointer_handler) = self.pointer_handlers.get(&node_id.0.into()) {
-                let pos = *self.pointer_position.read().unwrap();
-                // trigger node's own handlers
-                for handler in pointer_handler.handlers(event_type) {
-                    handler.0(layer.clone(), pos.x, pos.y);
+                if let Some(pointer_handler) = self.pointer_handlers.get(&node_ref.0.into()) {
+                    let pos = *self.pointer_position.read().unwrap();
+                    // trigger node's own handlers
+                    for handler in pointer_handler.handlers(event_type) {
+                        handler.0(layer.clone(), pos.x, pos.y);
+                    }
+                }
+                if let Some(parent_id) = node.parent() {
+                    self.bubble_up_event(NodeRef(parent_id), event_type);
                 }
             }
-            if let Some(parent_id) = node.parent() {
-                self.bubble_up_event(NodeRef(parent_id), event_type);
-            }
-        }
+        });
     }
     /// Sends pointer move event to the engine
     pub fn pointer_move(
@@ -1062,52 +1266,48 @@ impl Engine {
             root_id = Some(root);
         }
         let root_id = root_id.unwrap();
-        let (root_node, children) = self.scene.with_arena(|arena| {
-            let root_node = arena.get(root_id).unwrap().get().clone();
-            let children: Vec<NodeId> = root_id.children(arena).collect();
-            (root_node, children)
-        });
-
-        let root_node_hover = root_node
-            .pointer_hover
-            .load(std::sync::atomic::Ordering::SeqCst);
-
+        let root_layer = self.get_layer(&NodeRef(root_id)).unwrap();
         let mut hover_self = false;
-        let hidden = root_node.layer.hidden();
-        let pointer_events = root_node.layer.pointer_events();
-        if !hidden && pointer_events && root_node.contains(p) {
-            hover_self = true;
-            root_node
-                .pointer_hover
-                .store(true, std::sync::atomic::Ordering::SeqCst);
-            self.current_hover_node
-                .write()
-                .unwrap()
-                .replace(NodeRef(root_id));
 
-            if !root_node_hover {
+        let (hidden, children) = self.scene.with_arena_mut(|arena| {
+            let children: Vec<NodeId> = root_id.children(arena).collect();
+            let root_node = arena.get_mut(root_id).unwrap().get_mut();
+
+            let root_node_hover = root_node.is_pointer_hover;
+
+            let hidden = root_node.hidden();
+            let pointer_events = root_layer.pointer_events();
+            if !hidden && pointer_events && root_node.contains(p) {
+                hover_self = true;
+                root_node.is_pointer_hover = true;
+                self.current_hover_node
+                    .write()
+                    .unwrap()
+                    .replace(NodeRef(root_id));
+
+                if !root_node_hover {
+                    if let Some(pointer_handler) = self.pointer_handlers.get(&root_id.into()) {
+                        for handler in pointer_handler.on_in.values() {
+                            handler.0(root_layer.clone(), p.x, p.y);
+                        }
+                    }
+                }
                 if let Some(pointer_handler) = self.pointer_handlers.get(&root_id.into()) {
-                    for handler in pointer_handler.on_in.values() {
-                        handler.0(root_node.layer.clone(), p.x, p.y);
+                    for handler in pointer_handler.on_move.values() {
+                        handler.0(root_layer.clone(), p.x, p.y);
+                    }
+                }
+            } else if root_node_hover {
+                root_node.is_pointer_hover = false;
+                self.current_hover_node.write().unwrap().take();
+                if let Some(pointer_handler) = self.pointer_handlers.get(&root_id.into()) {
+                    for handler in pointer_handler.on_out.values() {
+                        handler.0(root_layer.clone(), p.x, p.y);
                     }
                 }
             }
-            if let Some(pointer_handler) = self.pointer_handlers.get(&root_id.into()) {
-                for handler in pointer_handler.on_move.values() {
-                    handler.0(root_node.layer.clone(), p.x, p.y);
-                }
-            }
-        } else if root_node_hover {
-            root_node
-                .pointer_hover
-                .store(false, std::sync::atomic::Ordering::SeqCst);
-            self.current_hover_node.write().unwrap().take();
-            if let Some(pointer_handler) = self.pointer_handlers.get(&root_id.into()) {
-                for handler in pointer_handler.on_out.values() {
-                    handler.0(root_node.layer.clone(), p.x, p.y);
-                }
-            }
-        }
+            (hidden, children)
+        });
         let mut hover_children = false;
         if !hidden {
             for node_id in children {
@@ -1116,14 +1316,18 @@ impl Engine {
                         hover_children = true;
                     }
                 } else {
-                    let node = self.scene.get_node_sync(node_id).unwrap().get().clone();
-                    if node.change_hover(false) {
-                        if let Some(pointer_handler) = self.pointer_handlers.get(&node_id.into()) {
-                            for handler in pointer_handler.on_out.values() {
-                                handler.0(root_node.layer.clone(), p.x, p.y);
+                    self.scene.with_arena_mut(|arena| {
+                        let node = arena.get_mut(node_id).unwrap().get_mut();
+                        if node.change_hover(false) {
+                            if let Some(pointer_handler) =
+                                self.pointer_handlers.get(&node_id.into())
+                            {
+                                for handler in pointer_handler.on_out.values() {
+                                    handler.0(root_layer.clone(), p.x, p.y);
+                                }
                             }
                         }
-                    }
+                    });
                 }
             }
         }
@@ -1145,6 +1349,26 @@ impl Engine {
     pub fn get_pointer_position(&self) -> Point {
         *self.pointer_position.read().unwrap()
     }
+
+    pub fn layer_as_content(&self, layer: &Layer) -> ContentDrawFunction {
+        let engine_ref = self.get_arc_ref();
+        let layer_id = layer.id;
+        let draw_function = move |c: &skia::Canvas, w: f32, h: f32| {
+            let scene = engine_ref.scene.clone();
+            scene.with_arena(|arena| {
+                render_node_tree(layer_id, arena, c, 1.0);
+            });
+            skia::Rect::from_xywh(0.0, 0.0, w, h)
+        };
+        ContentDrawFunction::from(draw_function)
+    }
+    pub fn damage(&self) -> skia_safe::Rect {
+        *self.damage.read().unwrap()
+    }
+    pub fn clear_damage(&self) {
+        let mut damage = self.damage.write().unwrap();
+        *damage = skia_safe::Rect::default();
+    }
 }
 
 impl Deref for NodeRef {
@@ -1152,42 +1376,5 @@ impl Deref for NodeRef {
 
     fn deref(&self) -> &Self::Target {
         &self.0
-    }
-}
-
-#[cfg(feature = "debugger")]
-impl layers_debug_server::DebugServer for Engine {
-    fn handle_message(&self, result: std::result::Result<String, DebugServerError>) {
-        match result {
-            Ok(msg) => {
-                if let Ok((command, node_id)) =
-                    serde_json::from_str::<(String, NodeId)>(msg.as_str())
-                {
-                    match command.as_str() {
-                        "highlight" => {
-                            self.scene.with_arena(|arena| {
-                                let node = arena.get(node_id).unwrap();
-                                let scene_node: &crate::engine::node::SceneNode = node.get();
-                                scene_node.set_debug_info(true);
-                            });
-                        }
-                        "unhighlight" => {
-                            self.scene.with_arena(|arena| {
-                                let node = arena.get(node_id).unwrap();
-                                let scene_node: &crate::engine::node::SceneNode = node.get();
-                                scene_node.set_debug_info(false);
-                            });
-                        }
-
-                        _ => {
-                            println!("Unknown command: {}", command);
-                        }
-                    }
-                }
-            }
-            Err(_) => {
-                eprintln!("error receiving websocket msg");
-            }
-        }
     }
 }

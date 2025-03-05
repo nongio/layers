@@ -47,7 +47,12 @@ impl SkiaImageRenderer {
 }
 
 impl DrawScene for SkiaImageRenderer {
-    fn draw_scene(&self, scene: &Scene, root_id: NodeRef, _damage: Option<skia_safe::Rect>) {
+    fn draw_scene(
+        &self,
+        scene: std::sync::Arc<Scene>,
+        root_id: NodeRef,
+        _damage: Option<skia_safe::Rect>,
+    ) {
         let mut surface = self.surface();
 
         let c = surface.canvas();

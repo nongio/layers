@@ -5,11 +5,7 @@ mod tests {
         dpi::LogicalSize, event_loop::EventLoop, platform::unix::EventLoopBuilderExtUnix,
         window::WindowBuilder, GlProfile,
     };
-    use lay_rs::{
-        engine::LayersEngine,
-        prelude::{DrawScene, Layer, TimingFunction, Transition},
-        types::*,
-    };
+    use lay_rs::{prelude::*, types::*};
     type WindowedContext = glutin::ContextWrapper<glutin::PossiblyCurrent, glutin::window::Window>;
 
     fn initialize_opengl() -> (WindowedContext, EventLoop<()>) {
@@ -51,14 +47,14 @@ mod tests {
     }
     #[test]
     pub fn update_multiple_children() {
-        let engine = LayersEngine::new(1000.0, 1000.0);
+        let engine = Engine::create(1000.0, 1000.0);
 
         let root = engine.new_layer();
         engine.scene_set_root(root);
         let mut layers = Vec::<Layer>::new();
         for _ in 0..1000 {
             let layer = engine.new_layer();
-            engine.add_layer(layer.clone());
+            engine.add_layer(&layer);
             layers.push(layer);
         }
 
@@ -88,7 +84,7 @@ mod tests {
         let size = windowed_context.window().inner_size();
         let sample_count: usize = pixel_format.multisampling.map(|s| s.into()).unwrap_or(0);
         let pixel_format: usize = pixel_format.stencil_bits.into();
-        let engine = LayersEngine::new(1000.0, 1000.0);
+        let engine = Engine::create(1000.0, 1000.0);
         let mut skia_renderer = lay_rs::renderer::skia_fbo::SkiaFboRenderer::create(
             size.width as i32,
             size.height as i32,
@@ -108,7 +104,7 @@ mod tests {
             layer.set_background_color(Color::new_rgba(1.0, 0.0, 0.0, 1.0), None);
             let i = i as f32;
             layer.set_position((i * 10.0, i * 10.0), None);
-            engine.add_layer(layer.clone());
+            engine.add_layer(&layer);
             layers.push(layer);
         }
 

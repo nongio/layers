@@ -1,8 +1,8 @@
-use lay_rs::engine::LayersEngine;
+use lay_rs::prelude::*;
 
 #[test]
 pub fn state_for_layer() {
-    let engine = LayersEngine::new(1000.0, 1000.0);
+    let engine = Engine::create(1000.0, 1000.0);
     let layer = engine.new_layer();
     layer.with_mut_state(|state| {
         state.insert("age", 33);
