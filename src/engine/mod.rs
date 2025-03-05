@@ -767,6 +767,26 @@ impl Engine {
         *self.scene_root.read().unwrap()
     }
 
+    pub fn node_children(&self, node_ref: &NodeRef) -> Vec<NodeRef> {
+        let mut children = Vec::new();
+        self.scene.with_arena(|arena| {
+            node_ref.0.children(arena).for_each(|child| {
+                children.push(NodeRef(child));
+            });
+        });
+        children
+    }
+
+    pub fn node_descendants(&self, node_ref: &NodeRef) -> Vec<NodeRef> {
+        let mut descendants = Vec::new();
+        self.scene.with_arena(|arena| {
+            node_ref.0.descendants(arena).for_each(|descendant| {
+                descendants.push(NodeRef(descendant));
+            });
+        });
+        descendants
+    }
+
     pub fn render_layer<'a>(&self, node_ref: impl Into<&'a NodeRef>) -> Option<RenderLayer> {
         let node_ref = node_ref.into();
         self.scene.with_arena(|arena| {

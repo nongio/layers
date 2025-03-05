@@ -57,6 +57,9 @@ impl Layer {
             effect: Arc::new(RwLock::new(None)),
         }
     }
+    pub fn id(&self) -> NodeRef {
+        self.id
+    }
     pub fn set_key(&self, key: impl Into<String>) {
         let key = key.into();
         *self.model.key.write().unwrap() = key;
@@ -98,6 +101,13 @@ impl Layer {
             }
         });
     }
+    pub fn hidden(&self) -> bool {
+        self.engine.scene.with_arena(|a| {
+            let node = a.get(self.id.into()).unwrap();
+            let node = node.get();
+            node.hidden
+        })
+    }
     pub fn set_pointer_events(&self, pointer_events: bool) {
         self.model
             .pointer_events
@@ -128,9 +138,9 @@ impl Layer {
     change_model!(shadow_radius, f32, RenderableFlags::NEEDS_LAYOUT);
     change_model!(shadow_spread, f32, RenderableFlags::NEEDS_LAYOUT);
     change_model!(shadow_color, Color, RenderableFlags::NEEDS_LAYOUT);
-    change_model!(image_filter_progress, f32, RenderableFlags::NEEDS_PAINT);
-    change_model!(clip_content, bool, RenderableFlags::NEEDS_PAINT);
-    change_model!(clip_children, bool, RenderableFlags::NEEDS_PAINT);
+    change_model!(image_filter_progress, f32, RenderableFlags::NEEDS_LAYOUT);
+    change_model!(clip_content, bool, RenderableFlags::NEEDS_LAYOUT);
+    change_model!(clip_children, bool, RenderableFlags::NEEDS_LAYOUT);
 
     pub fn change_size(&self, value: Size) -> AnimatedNodeChange {
         let flags = RenderableFlags::NEEDS_LAYOUT;
@@ -232,13 +242,13 @@ impl Layer {
         *model_content = Some(content_handler.into());
 
         self.engine
-            .set_node_flags(self.id, RenderableFlags::NEEDS_PAINT);
+            .set_node_flags(self.id, RenderableFlags::NEEDS_LAYOUT);
     }
     pub fn remove_draw_content(&self) {
         let mut model_content = self.model.draw_content.write().unwrap();
         *model_content = None;
         self.engine
-            .set_node_flags(self.id, RenderableFlags::NEEDS_PAINT);
+            .set_node_flags(self.id, RenderableFlags::NEEDS_LAYOUT);
     }
     pub fn add_sublayer<'a>(&self, layer: impl Into<&'a NodeRef>) {
         self.engine.append_layer(layer, self.id)
