@@ -152,8 +152,8 @@ pub(crate) fn nodes_for_layout(engine: &Engine) -> Vec<NodeRef> {
                     // let layer = engine.get_layer(node_ref).unwrap();
                     // let layout = engine.get_node_layout_style(layer.layout_id);
                     // if layout.position != taffy::style::Position::Absolute {
-                    scene_node.set_need_layout(true);
                     // }
+                    scene_node.set_need_layout(true);
                     //     FIXME: replicated NODE
                     // follow a replicated node
                     //     // it will paint continuosly
@@ -165,41 +165,12 @@ pub(crate) fn nodes_for_layout(engine: &Engine) -> Vec<NodeRef> {
                     //         }
                     //     }
 
-                    Some(node_ref.clone())
+                    Some(*node_ref)
                 });
 
                 node
             })
             .collect()
-        // engine.scene.with_arena(|arena| {
-        //     let id = root_node.0;
-        //     id.descendants(arena)
-        //         .map(|node_id| node_id.into())
-        //         // FIXME: should returns less nodes to layout
-        //         .filter_map(|node_id| {
-        //             let node = arena.get_mut(node_id).unwrap(); //.get();
-        //             let layer = engine.get_layer(node_id).unwrap();
-        //             if node.is_removed() {
-        //                 return None;
-        //             }
-        //             //     let scene_node = node.get_mut();
-        //             //     let layout = engine.get_node_layout_style(layer.layout_id);
-        //             //     if layout.position != taffy::style::Position::Absolute {
-        //             //         scene_node.set_need_layout(true);
-        //             //     }
-        //             //     // follow a replicated node
-        //             //     // it will paint continuosly
-        //             //     if let Some(follow) = &*scene_node._follow_node.read().unwrap() {
-        //             //         if let Some(_follow_node) = arena.get(follow.0) {
-        //             //             // let follow_node = _follow_node.get();
-        //             //             // scene_node.set_need_repaint(follow_node.needs_repaint());
-        //             //             // scene_node.set_need_repaint(true);
-        //             //         }
-        //             //     }
-        //             Some(node_id.into())
-        //         })
-        //         .collect()
-        // })
     } else {
         vec![]
     }

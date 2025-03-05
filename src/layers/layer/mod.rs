@@ -21,7 +21,6 @@ use crate::engine::{command::*, PointerEventType};
 use crate::engine::{node::RenderableFlags, TransactionCallback};
 use crate::engine::{Engine, NodeRef, TransactionRef};
 use crate::types::*;
-
 #[allow(private_interfaces)]
 #[repr(C)]
 #[derive(Clone)]
@@ -524,5 +523,11 @@ impl From<&Layer> for NodeRef {
 impl<'a> From<&'a Layer> for &'a NodeRef {
     fn from(val: &'a Layer) -> Self {
         &val.id
+    }
+}
+
+impl From<Layer> for Option<NodeRef> {
+    fn from(val: Layer) -> Self {
+        Some(val.id)
     }
 }

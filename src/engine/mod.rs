@@ -657,6 +657,8 @@ impl Engine {
         let parent = parent.into();
         self.layout_detach_layer(&layer);
 
+        self.layout_detach_layer(&layer);
+
         let new_parent = parent.or_else(|| {
             let scene_root = *self.scene_root.read().unwrap();
             scene_root

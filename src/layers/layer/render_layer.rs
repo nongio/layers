@@ -258,6 +258,7 @@ impl RenderLayer {
 
         let transform_33 = transform.to_m33();
         // let matrix = transform.to_m33();
+        let transform = M44::concat(matrix, &local_transform);
         let (transformed_bounds, _) = transform.to_m33().map_rect(bounds);
         let (local_transformed_bounds, _) = local_transform.to_m33().map_rect(bounds);
         let transformed_rbounds =

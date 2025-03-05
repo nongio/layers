@@ -311,6 +311,7 @@ impl SceneNode {
                 );
             }
             self.set_need_layout(false);
+            // self.increase_frame();
             return true;
         }
         false

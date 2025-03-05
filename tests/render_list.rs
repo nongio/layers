@@ -26,7 +26,6 @@ mod tests {
             assert_eq!(nodes.len(), 3);
         });
     }
-
     #[test]
     pub fn render_list_opacity() {
         let engine = Engine::create(1000.0, 1000.0);

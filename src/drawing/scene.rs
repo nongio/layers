@@ -159,7 +159,6 @@ pub fn surface_for_node(
     }
     None
 }
-
 pub fn create_surface_for_node(
     node: &SceneNode,
     render_layer: &RenderLayer,
@@ -404,7 +403,6 @@ pub fn render_node_tree(
 
     render_canvas.restore_to_count(restore_point);
 }
-
 pub(crate) const BACKGROUND_BLUR_SIGMA: f32 = 25.0;
 
 // paint a single node in the provided canvas
