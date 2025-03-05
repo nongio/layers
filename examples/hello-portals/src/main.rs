@@ -100,7 +100,7 @@ async fn main() {
 
     let layer = engine.new_layer();
     layer.set_anchor_point((0.5, 0.5), None);
-    engine.scene_add_layer(layer.clone());
+    engine.add_layer(layer.clone());
 
     layer.build_layer_tree(
         LayerTreeBuilder::default()
@@ -175,7 +175,7 @@ async fn main() {
     layer2.set_content_cache(false);
     layer2.set_draw_content(engine.layer_as_content(&layer));
 
-    engine.scene_add_layer(layer2.clone());
+    engine.add_layer(layer2.clone());
 
     // engine.start_debugger();
     let mut mass = 1.0;

@@ -129,8 +129,8 @@ impl AppIconView {
     }
 }
 impl lay_rs::prelude::RenderLayerTree for AppIconView {
-    fn key(&self) -> String {
-        self.view.key()
+    fn get_key(&self) -> String {
+        self.view.get_key()
     }
     fn mount_layer(&self, layer: Layer) {
         self.view.set_layer(layer);
