@@ -16,7 +16,7 @@ pub fn pointer_move() {
     let called = Arc::new(RwLock::new(0));
     let c = called.clone();
 
-    layer.add_on_pointer_move(move |_, _, _| {
+    layer.add_on_pointer_move(move |_: &Layer, _, _| {
         let mut c = c.write().unwrap();
         *c += 1;
         println!("pointer move!!");
@@ -41,7 +41,7 @@ pub fn pointer_doesnt_move() {
     let called = Arc::new(RwLock::new(0));
     let c = called.clone();
 
-    layer.add_on_pointer_move(move |_, _, _| {
+    layer.add_on_pointer_move(move |_: &Layer, _, _| {
         let mut c = c.write().unwrap();
         *c += 1;
         println!("pointer move!!");
@@ -72,7 +72,7 @@ pub fn pointer_move_nested() {
     let called = Arc::new(RwLock::new(0));
     let c = called.clone();
 
-    layer2.add_on_pointer_move(move |_, _, _| {
+    layer2.add_on_pointer_move(move |_: &Layer, _, _| {
         let mut c = c.write().unwrap();
         *c += 1;
         println!("pointer move!!");
@@ -104,7 +104,7 @@ pub fn pointer_move_nested_parent() {
     let called = Arc::new(RwLock::new(0));
     let c = called.clone();
 
-    layer.add_on_pointer_move(move |_, _, _| {
+    layer.add_on_pointer_move(move |_: &Layer, _, _| {
         let mut c = c.write().unwrap();
         *c += 1;
         println!("pointer move!!");
@@ -135,7 +135,7 @@ pub fn pointer_doesnt_move_nested() {
     let called = Arc::new(RwLock::new(0));
     let c = called.clone();
 
-    layer2.add_on_pointer_move(move |_, _, _| {
+    layer2.add_on_pointer_move(move |_: &Layer, _, _| {
         let mut c = c.write().unwrap();
         *c += 1;
         println!("pointer move!!");
@@ -162,7 +162,7 @@ pub fn pointer_remove() {
     let called = Arc::new(RwLock::new(0));
     let c = called.clone();
 
-    let handler_id = layer.add_on_pointer_move(move |_, _, _| {
+    let handler_id = layer.add_on_pointer_move(move |_: &Layer, _, _| {
         let mut c = c.write().unwrap();
         *c += 1;
         println!("**** pointer move!!");
@@ -198,14 +198,14 @@ pub fn pointer_in_out_nested_parent() {
     let root_id = engine.scene_root().unwrap();
 
     let c = called.clone();
-    layer.add_on_pointer_in(move |_, _, _| {
+    layer.add_on_pointer_in(move |_: &Layer, _, _| {
         let mut c = c.write().unwrap();
         *c += 1;
         println!("pointer in!!");
     });
 
     let c = called.clone();
-    layer.add_on_pointer_out(move |_, _, _| {
+    layer.add_on_pointer_out(move |_: &Layer, _, _| {
         let mut c = c.write().unwrap();
         *c += 1;
         println!("pointer out!!");

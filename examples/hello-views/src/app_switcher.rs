@@ -41,19 +41,26 @@ pub fn view_app_icon(state: &AppIconState, view: &View<AppIconState>) -> LayerTr
     let index = state.index;
     let val = layer.with_state(|state| state.get::<i32>("notification").unwrap_or_default());
     let id: usize = layer.id.0.into();
+    let font_mgr = lay_rs::skia::FontMgr::default();
+    let typeface = font_mgr
+        .match_family_style("Inter", lay_rs::skia::FontStyle::default())
+        .unwrap();
+
     let draw_picture = move |canvas: &lay_rs::skia::Canvas, w: f32, h: f32| -> lay_rs::skia::Rect {
-        let paint = skia::Paint::new(Color4f::new(1.0, 1.0, 0.0, 1.0), None);
+        let paint = skia::Paint::new(Color4f::new(1.0, 1.0, 0.0, 0.5), None);
         let width = (w - PADDING * 2.0).max(0.0);
-        canvas.draw_rect(
-            skia::Rect::from_xywh(PADDING, PADDING, width, width),
+        canvas.draw_rrect(
+            skia::RRect::new_rect_xy(
+                skia::Rect::from_xywh(PADDING, PADDING, width, width),
+                80.0,
+                80.0,
+            ),
             &paint,
         );
-        // let typeface = Typeface::("HelveticaNeue", FontStyle::normal()).unwrap();
-        let font = Font::default();
+        let font = lay_rs::skia::Font::from_typeface_with_params(typeface.clone(), 30.0, 1.0, 0.0);
         let paint = skia::Paint::new(Color4f::new(0.0, 0.0, 0.0, 1.0), None);
-
-        let text = format!("i:{} l:{} v:{}", index, id, val);
-        canvas.draw_str(text, (w / 2.0 - 20.0, h / 2.0 - 30.0), &font, &paint);
+        let text = format!("index:{} id:{} state:{}", index, id, val);
+        canvas.draw_str(text, (60.0, width + 100.0), &font, &paint);
         skia::Rect::from_xywh(0.0, 0.0, width, width)
     };
     // let index = state.index;
@@ -76,13 +83,13 @@ pub fn view_app_icon(state: &AppIconState, view: &View<AppIconState>) -> LayerTr
         // ))
         // .border_corner_radius((BorderRadius::new_single(20.0), None))
         .content(Some(draw_picture))
-        .on_pointer_in(move |layer: Layer, x, _y| {
+        .on_pointer_in(move |layer: &Layer, x, _y| {
             println!("pointer in");
             // let val = layer.with_state(|state| state.get::<i32>("notification").unwrap_or(0));
             layer.with_mut_state(|state| state.insert("notification", x as i32));
             view1.render(&layer);
         })
-        .on_pointer_out(move |layer: Layer, x, _y| {
+        .on_pointer_out(move |layer: &Layer, x, _y| {
             println!("pointer out");
             // let val = layer.with_state(|state| state.get::<i32>("notification").unwrap_or(0));
             layer.with_mut_state(|state| state.insert("notification", x as i32));
@@ -206,7 +213,7 @@ pub fn view_app_switcher(state: &AppSwitcherState, _view: &View<AppSwitcherState
                 width: taffy::Dimension::Length(component_width),
                 height: taffy::Dimension::Length(component_height),
             },
-            Some(Transition::ease_in_quad(1.0)),
+            Some(Transition::spring(0.3, 0.3)),
             // None,
         ))
         .blend_mode(BlendMode::BackgroundBlur)
@@ -221,7 +228,8 @@ pub fn view_app_switcher(state: &AppSwitcherState, _view: &View<AppSwitcherState
         .shadow_offset(((0.0, -10.0).into(), None))
         .shadow_radius((20.0, None))
         .border_corner_radius((BorderRadius::new_single(50.0), None))
-        .border_width((10.0, None))
+        .border_width((4.0, None))
+        .border_color(Color::new_rgba(1.0, 1.0, 1.0, 0.2))
         .layout_style(taffy::Style {
             position: taffy::Position::Relative,
             display: taffy::Display::Flex,
@@ -237,14 +245,20 @@ pub fn view_app_switcher(state: &AppSwitcherState, _view: &View<AppSwitcherState
                     width: taffy::Dimension::Auto,
                     height: taffy::Dimension::Length(component_height),
                 },
-                Some(Transition::ease_in_quad(2.0)),
+                Some(Transition::spring(0.8, 0.5)),
+            ))
+            .background_color((
+                PaintColor::Solid {
+                    color: Color::new_hex("ffffff00"),
+                },
+                None,
             ))
             .layout_style(taffy::Style {
                 position: taffy::Position::Absolute,
                 display: taffy::Display::Flex,
                 justify_content: Some(taffy::JustifyContent::Center),
                 justify_items: Some(taffy::JustifyItems::Center),
-                align_items: Some(taffy::AlignItems::Baseline),
+                align_items: Some(taffy::AlignItems::Center),
                 ..Default::default()
             })
             .children(

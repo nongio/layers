@@ -55,7 +55,7 @@ pub fn render_main_view(state: &bool, view: &View<bool>) -> LayerTree {
             },
             None,
         ))
-        .on_pointer_move(move |_, _, _| {
+        .on_pointer_move(move |_: &Layer, _, _| {
             println!("pointer move!!!!");
             view.update_state(&true);
         })
