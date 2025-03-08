@@ -230,7 +230,7 @@ impl Layer {
         *model_content = Some(draw.into());
 
         self.engine
-            .set_node_flags(self.id, RenderableFlags::NEEDS_LAYOUT);
+            .schedule_change(self.id, Arc::new(NoopChange::new(self.id.0.into())), None);
     }
     #[allow(unused)]
     pub(crate) fn set_draw_content_internal<F: Into<ContentDrawFunctionInternal>>(

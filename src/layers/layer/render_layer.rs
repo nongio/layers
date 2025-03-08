@@ -39,6 +39,7 @@ pub struct RenderLayer {
     pub image_filter: Option<ImageFilter>,
     pub image_filter_bounds: Option<skia::Rect>,
     pub color_filter: Option<ColorFilter>,
+    pub pointer_events: bool,
 }
 
 impl RenderLayer {
@@ -184,6 +185,9 @@ impl RenderLayer {
 
         self.clip_content = model.clip_content.value();
         self.clip_children = model.clip_children.value();
+        self.pointer_events = model
+            .pointer_events
+            .load(std::sync::atomic::Ordering::Relaxed);
     }
 
     #[allow(dead_code)]
@@ -323,6 +327,9 @@ impl RenderLayer {
             image_filter: model.image_filter.read().unwrap().clone(),
             image_filter_bounds: *model.filter_bounds.read().unwrap(),
             color_filter: model.color_filter.read().unwrap().clone(),
+            pointer_events: model
+                .pointer_events
+                .load(std::sync::atomic::Ordering::Relaxed),
         }
     }
 }
@@ -366,6 +373,7 @@ impl Default for RenderLayer {
             image_filter: None,
             image_filter_bounds: None,
             color_filter: None,
+            pointer_events: false,
         }
     }
 }

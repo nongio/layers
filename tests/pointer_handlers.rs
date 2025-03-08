@@ -22,7 +22,7 @@ pub fn pointer_move() {
         println!("pointer move!!");
     });
     let root_id = engine.scene_root().unwrap();
-    engine.pointer_move((0.0, 0.0), root_id.0);
+    engine.pointer_move(&(0.0, 0.0).into(), root_id.0);
 
     let called = called.read().unwrap();
     assert_eq!(*called, 1);
@@ -47,7 +47,7 @@ pub fn pointer_doesnt_move() {
         println!("pointer move!!");
     });
     let root_id = engine.scene_root().unwrap();
-    engine.pointer_move((0.0, 0.0), root_id.0);
+    engine.pointer_move(&(0.0, 0.0).into(), root_id.0);
 
     let called = called.read().unwrap();
     assert_eq!(*called, 0);
@@ -79,7 +79,7 @@ pub fn pointer_move_nested() {
     });
     let root_id = engine.scene_root().unwrap();
 
-    engine.pointer_move((400.0, 400.0), root_id.0);
+    engine.pointer_move(&(400.0, 400.0).into(), root_id.0);
 
     let called = called.read().unwrap();
     assert_eq!(*called, 1);
@@ -111,7 +111,7 @@ pub fn pointer_move_nested_parent() {
     });
     let root_id = engine.scene_root().unwrap();
 
-    engine.pointer_move((210.0, 210.0), root_id.0);
+    engine.pointer_move(&(210.0, 210.0).into(), root_id.0);
 
     let called = called.read().unwrap();
     assert_eq!(*called, 1);
@@ -142,7 +142,7 @@ pub fn pointer_doesnt_move_nested() {
     });
     let root_id = engine.scene_root().unwrap();
 
-    engine.pointer_move((100.0, 100.0), root_id.0);
+    engine.pointer_move(&(100.0, 100.0).into(), root_id.0);
 
     let called = called.read().unwrap();
     assert_eq!(*called, 0);
@@ -171,7 +171,7 @@ pub fn pointer_remove() {
     layer.remove_on_pointer_move(handler_id);
     let root_id = engine.scene_root().unwrap();
 
-    engine.pointer_move((0.0, 0.0), root_id.0);
+    engine.pointer_move(&(0.0, 0.0).into(), root_id.0);
 
     let called = called.read().unwrap();
     assert_eq!(*called, 0);
@@ -213,15 +213,15 @@ pub fn pointer_in_out_nested_parent() {
 
     let _c = called.clone();
 
-    engine.pointer_move((210.0, 210.0), root_id.0);
+    engine.pointer_move(&(210.0, 210.0).into(), root_id.0);
     {
         let called = called.read().unwrap();
         assert_eq!(*called, 1);
     }
 
-    engine.pointer_move((400.0, 400.0), root_id.0);
+    engine.pointer_move(&(400.0, 400.0).into(), root_id.0);
     {
         let called = called.read().unwrap();
-        assert_eq!(*called, 2);
+        assert_eq!(*called, 3);
     }
 }

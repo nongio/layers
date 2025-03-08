@@ -1,4 +1,5 @@
 use bitflags::bitflags;
+use skia::Contains;
 
 use std::{
     cell::RefCell,
@@ -80,7 +81,6 @@ pub struct SceneNode {
     pub(crate) image_cached: bool,
     pub(crate) picture_cached: bool,
     pub(crate) is_deleted: bool,
-    pub(crate) is_pointer_hover: bool,
     pub(crate) frame_number: usize,
     pub(crate) draw_cache: Option<DrawCache>,
     pub(crate) _debug_info: Option<DrawDebugInfo>,
@@ -98,7 +98,6 @@ impl Default for SceneNode {
             image_cached: false,
             picture_cached: false,
             is_deleted: false,
-            is_pointer_hover: false,
             frame_number: 0,
             draw_cache: None,
             _debug_info: None,
@@ -189,14 +188,7 @@ impl SceneNode {
             }
         }
     }
-    pub(crate) fn change_hover(&mut self, value: bool) -> bool {
-        // let hover = self.is_pointer_hover;
-        if self.is_pointer_hover != value {
-            self.is_pointer_hover = value;
-            return true;
-        }
-        false
-    }
+
     pub(crate) fn follow_node(&mut self, nodeid: &Option<NodeRef>) {
         // let mut _follow_node = self._follow_node.write().unwrap();
         self._follow_node = *nodeid;
@@ -341,5 +333,11 @@ impl SceneNode {
 
     pub fn is_picture_cached(&self) -> bool {
         self.picture_cached
+    }
+    pub fn pointer_events(&self) -> bool {
+        self.render_layer.pointer_events
+    }
+    pub fn contains_point(&self, point: &skia::Point) -> bool {
+        self.render_layer.global_transformed_bounds.contains(point)
     }
 }

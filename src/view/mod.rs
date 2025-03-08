@@ -100,10 +100,13 @@ impl<S: Hash + Clone> View<S> {
         false
     }
 
-    pub fn contains_point(&self, point: Point) -> bool {
+    pub fn contains_point(&self, point: skia::Point) -> bool {
         if let Some(layer) = &*self.layer.read().unwrap() {
-            let point = skia::Point::new(point.x, point.y);
-            return layer.cointains_point(point);
+            return layer.engine.scene.with_arena(|arena| {
+                let node = arena.get(layer.id.into()).unwrap();
+                let node = node.get();
+                node.contains_point(&point)
+            });
         }
         false
     }

@@ -107,8 +107,6 @@ pub fn build_a_view() {
     view.mount_layer(layer);
 
     engine.update(0.016);
-    let layer = view.layer.read().unwrap().clone().unwrap();
-
     // let x = view.layer.unwrap().render_position().x;
     print_scene(engine.scene(), engine.scene_root().unwrap());
     // assert!(x == 0.0);
