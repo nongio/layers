@@ -42,10 +42,12 @@ pub fn draw(canvas: &skia::Canvas, width: f32, _height: f32) {
     paragraph.paint(canvas, (0.0, 0.0));
 }
 
-fn main() {
+#[allow(unused_assignments)]
+#[tokio::main]
+async fn main() {
     type WindowedContext = glutin::ContextWrapper<glutin::PossiblyCurrent, glutin::window::Window>;
 
-    use winit::dpi::LogicalSize;
+    use glutin::dpi::LogicalSize;
     let window_width = 800;
     let window_height = 600;
 
@@ -208,8 +210,8 @@ fn main() {
                     #[allow(clippy::single_match)]
                     match input.virtual_keycode {
                         Some(keycode) => match keycode {
-                            winit::event::VirtualKeyCode::Space => {
-                                if input.state == winit::event::ElementState::Released {
+                            glutin::event::VirtualKeyCode::Space => {
+                                if input.state == glutin::event::ElementState::Released {
                                     let dt = 0.016;
                                     let needs_redraw = engine.update(dt);
                                     if needs_redraw {
@@ -218,32 +220,32 @@ fn main() {
                                     }
                                 }
                             }
-                            winit::event::VirtualKeyCode::A => {
+                            glutin::event::VirtualKeyCode::A => {
                                 content_layer.set_position(
                                     Point { x: 0.0, y: 0.0 },
                                     Some(Transition::ease_in_quad(2.0)),
                                 );
                             }
-                            winit::event::VirtualKeyCode::W => {
+                            glutin::event::VirtualKeyCode::W => {
                                 content_layer.set_scale(
                                     Point { x: 0.5, y: 0.5 },
                                     Some(Transition::ease_in_quad(2.0)),
                                 );
                             }
-                            winit::event::VirtualKeyCode::S => {
+                            glutin::event::VirtualKeyCode::S => {
                                 content_layer.set_scale(
                                     Point { x: 2.0, y: 2.0 },
                                     Some(Transition::ease_in_quad(2.0)),
                                 );
                             }
 
-                            winit::event::VirtualKeyCode::D => {
+                            glutin::event::VirtualKeyCode::D => {
                                 content_layer.set_position(
                                     Point { x: 600.0, y: 600.0 },
                                     Some(Transition::ease_in_quad(2.0)),
                                 );
                             }
-                            winit::event::VirtualKeyCode::E => {
+                            glutin::event::VirtualKeyCode::E => {
                                 w += 10.0;
                                 h += 10.0;
                                 content_layer.set_position(
@@ -257,7 +259,7 @@ fn main() {
                                     },
                                 );
                             }
-                            winit::event::VirtualKeyCode::Escape => {
+                            glutin::event::VirtualKeyCode::Escape => {
                                 *control_flow = ControlFlow::Exit;
                             }
                             _ => (),
