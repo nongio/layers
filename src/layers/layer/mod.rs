@@ -122,24 +122,24 @@ impl Layer {
     change_model!(scale, Point, RenderableFlags::NEEDS_LAYOUT);
     change_model!(rotation, Point3d, RenderableFlags::NEEDS_LAYOUT);
     change_model!(anchor_point, Point, RenderableFlags::NEEDS_LAYOUT);
-    change_model!(opacity, f32, RenderableFlags::NEEDS_LAYOUT);
+    change_model!(opacity, f32, RenderableFlags::NEEDS_PAINT);
 
-    change_model!(background_color, PaintColor, RenderableFlags::NEEDS_LAYOUT);
+    change_model!(background_color, PaintColor, RenderableFlags::NEEDS_PAINT);
     change_model!(
         border_corner_radius,
         BorderRadius,
-        RenderableFlags::NEEDS_LAYOUT
+        RenderableFlags::NEEDS_PAINT
     );
 
-    change_model!(border_color, PaintColor, RenderableFlags::NEEDS_LAYOUT);
-    change_model!(border_width, f32, RenderableFlags::NEEDS_LAYOUT);
-    change_model!(shadow_offset, Point, RenderableFlags::NEEDS_LAYOUT);
-    change_model!(shadow_radius, f32, RenderableFlags::NEEDS_LAYOUT);
-    change_model!(shadow_spread, f32, RenderableFlags::NEEDS_LAYOUT);
-    change_model!(shadow_color, Color, RenderableFlags::NEEDS_LAYOUT);
-    change_model!(image_filter_progress, f32, RenderableFlags::NEEDS_LAYOUT);
-    change_model!(clip_content, bool, RenderableFlags::NEEDS_LAYOUT);
-    change_model!(clip_children, bool, RenderableFlags::NEEDS_LAYOUT);
+    change_model!(border_color, PaintColor, RenderableFlags::NEEDS_PAINT);
+    change_model!(border_width, f32, RenderableFlags::NEEDS_PAINT);
+    change_model!(shadow_offset, Point, RenderableFlags::NEEDS_PAINT);
+    change_model!(shadow_radius, f32, RenderableFlags::NEEDS_PAINT);
+    change_model!(shadow_spread, f32, RenderableFlags::NEEDS_PAINT);
+    change_model!(shadow_color, Color, RenderableFlags::NEEDS_PAINT);
+    change_model!(image_filter_progress, f32, RenderableFlags::NEEDS_PAINT);
+    change_model!(clip_content, bool, RenderableFlags::NEEDS_PAINT);
+    change_model!(clip_children, bool, RenderableFlags::NEEDS_PAINT);
 
     pub fn change_size(&self, value: Size) -> AnimatedNodeChange {
         let flags = RenderableFlags::NEEDS_LAYOUT;
@@ -241,13 +241,13 @@ impl Layer {
         *model_content = Some(content_handler.into());
 
         self.engine
-            .set_node_flags(self.id, RenderableFlags::NEEDS_LAYOUT);
+            .set_node_flags(self.id, RenderableFlags::NEEDS_PAINT);
     }
     pub fn remove_draw_content(&self) {
         let mut model_content = self.model.draw_content.write().unwrap();
         *model_content = None;
         self.engine
-            .set_node_flags(self.id, RenderableFlags::NEEDS_LAYOUT);
+            .set_node_flags(self.id, RenderableFlags::NEEDS_PAINT);
     }
     pub fn add_sublayer<'a>(&self, layer: impl Into<&'a NodeRef>) {
         self.engine.append_layer(layer, self.id)

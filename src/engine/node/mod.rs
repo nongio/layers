@@ -60,19 +60,23 @@ impl DrawCache {
     }
 }
 
+// The RenderableFlags struct is a bitflags struct that is used to manage the rendering states of a SceneNode.
+// Changing a Layer property will set the corresponding flag in the SceneNode.
+// Noop has no effect on the layer.
+// NeedsLayout will sync with the layout node properties might trigger a layout tree compute
+// NeedsPaint will trigger a repaint of the layer
+
 bitflags! {
     pub struct RenderableFlags: u32 {
         const NOOP = 1 << 0;
         const NEEDS_LAYOUT = 1 << 1;
         const NEEDS_PAINT = 1 << 2;
-        const ANIMATING = 1 << 3;
     }
 }
 
 /// The SceneNode struct represents a node in the scene graph.
 /// It contains a Layer and manages rendering states, caching and interactions.
 /// It provides methods for managing rendering and pointer events.
-// #[derive(Clone)]
 pub struct SceneNode {
     pub(crate) render_layer: RenderLayer,
     rendering_flags: RenderableFlags,
@@ -158,7 +162,7 @@ impl SceneNode {
             }
         }
         // self.layer.set_opacity(self.layer.opacity(), None);
-        self.set_need_repaint(true);
+        self.set_needs_repaint(true);
     }
     pub fn set_hidden(&mut self, hidden: bool) {
         self.hidden = hidden;
@@ -269,7 +273,7 @@ impl SceneNode {
                     self.repaint_damage = damage;
                     damage.join(previous_damage);
 
-                    self.set_need_repaint(false);
+                    self.set_needs_repaint(false);
                 }
             }
         }
@@ -278,42 +282,37 @@ impl SceneNode {
 
     /// update the renderlayer based on model and layout
     #[profiling::function]
-    pub fn layout_if_needed(
+    pub fn update_render_layer_if_needed(
         &mut self,
         layout: &Layout,
         model: Arc<ModelLayer>,
         matrix: Option<&M44>,
         context_opacity: f32,
-        // arena: &mut Arena<SceneNode>,
     ) -> bool {
         if self.hidden() {
             return false;
         }
 
-        if self.rendering_flags.contains(RenderableFlags::NEEDS_LAYOUT) {
+        if self.rendering_flags.contains(RenderableFlags::NEEDS_PAINT) {
             {
-                // let mut render_layer = self.render_layer.write().unwrap();
                 self.render_layer.update_with_model_and_layout(
                     &model,
                     layout,
                     matrix,
                     context_opacity,
-                    // self.is_picture_cached(),
-                    // arena,
                 );
             }
-            self.set_need_layout(false);
-            // self.increase_frame();
+            self.increase_frame();
             return true;
         }
         false
     }
 
-    pub fn set_need_repaint(&mut self, need_repaint: bool) {
+    pub fn set_needs_repaint(&mut self, need_repaint: bool) {
         self.rendering_flags
             .set(RenderableFlags::NEEDS_PAINT, need_repaint);
     }
-    pub fn set_need_layout(&mut self, need_layout: bool) {
+    pub fn set_needs_layout(&mut self, need_layout: bool) {
         self.rendering_flags
             .set(RenderableFlags::NEEDS_LAYOUT, need_layout);
     }

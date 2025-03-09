@@ -47,10 +47,8 @@ impl RenderLayer {
         &mut self,
         model: &ModelLayer,
         layout: &taffy::tree::Layout,
-        matrix: Option<&M44>,
+        context_transform: Option<&M44>,
         context_opacity: f32,
-        // cache_content: bool,
-        // arena: &Arena<SceneNode>,
     ) {
         let key = model.key.read().unwrap().clone();
         let layout_position = layout.location;
@@ -70,7 +68,6 @@ impl RenderLayer {
 
         let bounds = skia_safe::Rect::from_xywh(0.0, 0.0, size.width, size.height);
 
-        // let rotation = model.rotation.value();
         let anchor_point = model.anchor_point.value();
         let scale = model.scale.value();
         let anchor_translate = M44::translate(
@@ -79,43 +76,44 @@ impl RenderLayer {
             0.0,
         );
         let identity = M44::new_identity();
-        let matrix = matrix.unwrap_or(&identity);
+        let matrix = context_transform.unwrap_or(&identity);
         let translate = M44::translate(position.x, position.y, 0.0);
         let scale = M44::scale(scale.x, scale.y, 1.0);
 
-        // let rotate_x = M44::rotate(
-        //     V3 {
-        //         x: 1.0,
-        //         y: 0.0,
-        //         z: 0.0,
-        //     },
-        //     rotation.x,
-        // );
-        // let rotate_y = M44::rotate(
-        //     V3 {
-        //         x: 0.0,
-        //         y: 1.0,
-        //         z: 0.0,
-        //     },
-        //     rotation.y,
-        // );
-        // let rotate_z = M44::rotate(
-        //     V3 {
-        //         x: 0.0,
-        //         y: 0.0,
-        //         z: 1.0,
-        //     },
-        //     rotation.z,
-        // );
+        let rotation = model.rotation.value();
+        let rotate_x = M44::rotate(
+            V3 {
+                x: 1.0,
+                y: 0.0,
+                z: 0.0,
+            },
+            rotation.x,
+        );
+        let rotate_y = M44::rotate(
+            V3 {
+                x: 0.0,
+                y: 1.0,
+                z: 0.0,
+            },
+            rotation.y,
+        );
+        let rotate_z = M44::rotate(
+            V3 {
+                x: 0.0,
+                y: 0.0,
+                z: 1.0,
+            },
+            rotation.z,
+        );
 
         // merge all transforms keeping into account the anchor point
         let mut local_transform = M44::new_identity();
         local_transform = M44::concat(&local_transform, &translate);
         local_transform = M44::concat(&local_transform, &scale);
-        // let transform = M44::concat(&transform, &rotate_x);
-        // let transform = M44::concat(&transform, &rotate_y);
-        // let transform = M44::concat(&transform, &rotate_z);
-        local_transform = M44::concat(&local_transform, &anchor_translate);
+        let transform = M44::concat(&local_transform, &rotate_x);
+        let transform = M44::concat(&transform, &rotate_y);
+        let transform = M44::concat(&transform, &rotate_z);
+        local_transform = M44::concat(&transform, &anchor_translate);
 
         let global_transform = M44::concat(matrix, &local_transform);
         let (transformed_bounds, _) = global_transform.to_m33().map_rect(bounds);
@@ -175,11 +173,11 @@ impl RenderLayer {
         self.opacity = opacity;
         self.premultiplied_opacity = opacity * context_opacity;
         self.bounds = bounds;
+        self.rbounds = skia_safe::RRect::new_rect_radii(bounds, &border_corner_radius.into());
         self.bounds_with_children = bounds;
         self.local_transformed_bounds = local_transformed_bounds;
         self.global_transformed_bounds = transformed_bounds;
         self.global_transformed_bounds_with_children = transformed_bounds;
-        self.rbounds = skia_safe::RRect::new_rect_radii(bounds, &border_corner_radius.into());
         self.global_transformed_rbounds =
             skia_safe::RRect::new_rect_radii(transformed_bounds, &border_corner_radius.into());
 

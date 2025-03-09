@@ -749,7 +749,7 @@ impl Engine {
                             let parent = parent_node.get_mut();
                             let parent_layer = self.get_layer(&NodeRef(parent_id)).unwrap();
                             let parent_layout_id = parent_layer.layout_id;
-                            parent.set_need_layout(true);
+                            parent.set_needs_layout(true);
 
                             let mut layout = self.layout_tree.write().unwrap();
                             let res = layout.mark_dirty(parent_layout_id);
@@ -964,7 +964,7 @@ impl Engine {
         let needs_draw = !updated_nodes.is_empty();
 
         // merge the updated nodes with the nodes that are part of the layout calculation
-        nodes_for_layout(self);
+        // nodes_for_layout(self);
 
         // 2.0 update the layout tree using taffy
         update_layout_tree(self);
