@@ -90,6 +90,7 @@ pub struct SceneNode {
     pub(crate) _debug_info: Option<DrawDebugInfo>,
     pub(crate) _follow_node: Option<NodeRef>,
 }
+
 impl Default for SceneNode {
     fn default() -> Self {
         Self {
@@ -100,7 +101,7 @@ impl Default for SceneNode {
                 | RenderableFlags::NEEDS_PAINT,
             hidden: false,
             image_cached: false,
-            picture_cached: false,
+            picture_cached: true,
             is_deleted: false,
             frame_number: 0,
             draw_cache: None,
@@ -109,6 +110,7 @@ impl Default for SceneNode {
         }
     }
 }
+
 impl SceneNode {
     pub fn new() -> Self {
         Self::default()
@@ -192,7 +194,6 @@ impl SceneNode {
             }
         }
     }
-
     pub(crate) fn follow_node(&mut self, nodeid: &Option<NodeRef>) {
         // let mut _follow_node = self._follow_node.write().unwrap();
         self._follow_node = *nodeid;
@@ -218,44 +219,32 @@ impl SceneNode {
     //     self.layer.layout_id
     // }
 
-    /// genrate the picture from the renderlayer
+    /// generate the SkPicture from drawing the Renderlayer
+    /// if the layer is not hidden
+    /// if the layer has opacity
+    /// if the layer is marked for needs repaint
+    /// returns the damaged Rect of from drawing the layer, in layers coordinates
     #[profiling::function]
-    pub fn repaint_if_needed(
-        &mut self,
-        // arena: &Arena<SceneNode>
-    ) -> skia_safe::Rect {
+    pub fn repaint_if_needed(&mut self) -> skia_safe::Rect {
         let mut damage = skia_safe::Rect::default();
         let render_layer = &self.render_layer;
-
         if self.hidden() || render_layer.premultiplied_opacity == 0.0 {
             let rd = self.repaint_damage;
             self.repaint_damage = damage;
             return rd;
         }
-        let mut needs_repaint = self.rendering_flags.contains(RenderableFlags::NEEDS_PAINT);
 
-        // if the size has changed from the layout, we need to repaint
-        // the flag want be set if the size has changed from the layout calculations
-        if let Some(dc) = self.draw_cache.as_ref() {
-            if render_layer.size != *dc.size() {
-                needs_repaint = true;
-            }
-        }
-        // FIXME: can this be optimized?
-        if render_layer.blend_mode == BlendMode::BackgroundBlur {
-            needs_repaint = true;
-        }
-        if needs_repaint {
-            let (picture, layer_damage) = draw_layer_to_picture(render_layer);
-            let (layer_damage_transformed, _) = render_layer.transform_33.map_rect(layer_damage);
+        if self.needs_repaint() {
+            let (picture, _layer_damage) = draw_layer_to_picture(render_layer);
+            let (layer_damage_transformed, _) = render_layer.transform_33.map_rect(_layer_damage);
 
             damage.join(layer_damage_transformed);
             if self.is_picture_cached() {
                 if let Some(picture) = picture {
                     // update or create the draw cache
-                    if let Some(dc) = &mut self.draw_cache {
-                        dc.picture = picture;
-                        dc.size = render_layer.size;
+                    if let Some(draw_cache) = &mut self.draw_cache {
+                        draw_cache.picture = picture;
+                        draw_cache.size = render_layer.size;
                     } else {
                         let size = render_layer.size;
 
@@ -279,7 +268,6 @@ impl SceneNode {
         }
         damage
     }
-
     /// update the renderlayer based on model and layout
     #[profiling::function]
     pub fn update_render_layer_if_needed(
@@ -292,7 +280,13 @@ impl SceneNode {
         if self.hidden() {
             return false;
         }
-
+        if self.render_layer.size.width != layout.size.width as f32
+            || self.render_layer.size.height != layout.size.height as f32
+            || self.render_layer.local_transformed_bounds.x() != layout.location.x as f32
+            || self.render_layer.local_transformed_bounds.y() != layout.location.y as f32
+        {
+            self.set_needs_repaint(true);
+        }
         if self.rendering_flags.contains(RenderableFlags::NEEDS_PAINT) {
             {
                 self.render_layer.update_with_model_and_layout(
@@ -307,7 +301,6 @@ impl SceneNode {
         }
         false
     }
-
     pub fn set_needs_repaint(&mut self, need_repaint: bool) {
         self.rendering_flags
             .set(RenderableFlags::NEEDS_PAINT, need_repaint);
@@ -329,7 +322,6 @@ impl SceneNode {
     pub fn needs_layout(&self) -> bool {
         self.rendering_flags.contains(RenderableFlags::NEEDS_LAYOUT)
     }
-
     pub fn is_picture_cached(&self) -> bool {
         self.picture_cached
     }

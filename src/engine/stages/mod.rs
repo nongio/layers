@@ -1,16 +1,15 @@
 use std::sync::{Arc, RwLock};
 
-use indextree::NodeId;
 use rayon::{
     iter::IntoParallelRefIterator,
     prelude::{IntoParallelRefMutIterator, ParallelIterator},
 };
-use taffy::{prelude::Size, style_helpers::length};
+use taffy::{prelude::Size, style_helpers::length, Dimension};
 
 #[cfg(feature = "debugger")]
 use layers_debug_server::send_debugger_message;
 
-use crate::{layers::layer::render_layer::RenderLayer, prelude::Layer};
+use crate::prelude::Layer;
 
 use super::{
     storage::FlatStorageId, AnimationState, Engine, NodeRef, Timestamp, TransactionCallback,
@@ -213,7 +212,9 @@ pub(crate) fn update_layout_tree(engine: &Engine) {
                 if let Some(layer) = layers.get(node_ref) {
                     let size = layer.size();
                     let layout_node_id = layer.layout_id;
-                    engine.set_node_layout_size(layout_node_id, size);
+                    if size.width != Dimension::Auto || size.height != Dimension::Auto {
+                        engine.set_node_layout_size(layout_node_id, size);
+                    }
                 }
             });
             engine.scene.with_arena_mut(|arena| {
@@ -482,6 +483,10 @@ pub(crate) fn cleanup_nodes(engine: &Engine) -> skia_safe::Rect {
 
 #[cfg(feature = "debugger")]
 pub fn send_debugger(scene: Arc<crate::engine::scene::Scene>, scene_root: NodeRef) {
+    use indextree::NodeId;
+
+    use crate::layers::layer::render_layer::RenderLayer;
+
     let s = scene.clone();
     s.with_arena(|arena| {
         let render_layers: std::collections::HashMap<
