@@ -7,39 +7,66 @@ use skia::{ColorFilter, ImageFilter};
 #[derive(Clone, Debug)]
 #[repr(C)]
 pub struct RenderLayer {
+    /// A unique identifier for the layer
     pub key: String,
+    /// The rectangle representing the bounds of the layer
     pub bounds: skia_safe::Rect,
+    /// The rounded rectangle representing the bounds of the layer
     pub rbounds: skia_safe::RRect,
+    /// The transformed bounds of the layer, relative to the parent
     pub local_transformed_bounds: skia_safe::Rect,
+    /// The bounds of the layers, including children bounds
     pub bounds_with_children: skia_safe::Rect,
+    /// The transformed bounds of the layer, relative to the root
     pub global_transformed_bounds: skia_safe::Rect,
+    /// The transformed rounded bounds of the layer, relative to the root
     pub global_transformed_rbounds: skia_safe::RRect,
+    /// The transformed bounds of the layer, including children bounds, relative to the root
     pub global_transformed_bounds_with_children: skia_safe::Rect,
+    /// The background color of the layer
     pub background_color: PaintColor,
+    /// The border color of the layer
     pub border_color: PaintColor,
+    /// The border width of the layer
     pub border_width: f32,
+    /// The border style of the layer
     pub border_style: BorderStyle,
+    /// The border corner radius of the layer
     pub border_corner_radius: BorderRadius,
+    /// The size of the layer
     pub size: skia_safe::Size,
+    /// The shadow offset of the layer
     pub shadow_offset: Point,
+    /// The shadow radius of the layer
     pub shadow_radius: f32,
+    /// The shadow color of the layer
     pub shadow_color: Color,
+    /// The shadow spread of the layer
     pub shadow_spread: f32,
+    /// The transform of the layer relative to the root (4x4)
     pub transform: M44,
-    pub local_transform: M44,
+    /// The transform of the layer relative to the root (3x3)
     pub transform_33: Matrix,
+    /// The transform of the layer relative to the parent (4x4)
+    pub local_transform: M44,
+    /// The blend mode of the layer
     pub blend_mode: BlendMode,
+    /// The opacity of the layer, 0.0 is transparent, 1.0 is opaque
     pub opacity: f32,
+    /// The premultiplied opacity of the layer, 0.0 is transparent, 1.0 is opaque
     pub premultiplied_opacity: f32,
+    /// Is the content drawn clipped to the bounds of the layer
+    pub clip_content: bool,
+    /// Are the children drawn clipped to the bounds of the layer
+    pub clip_children: bool,
+    /// Are the pointer events enabled for the layer
+    pub pointer_events: bool,
     pub content_draw_func: Option<ContentDrawFunctionInternal>,
     pub content: Option<Picture>,
     pub content_damage: skia_safe::Rect,
-    pub clip_content: bool,
-    pub clip_children: bool,
     pub image_filter: Option<ImageFilter>,
     pub image_filter_bounds: Option<skia::Rect>,
     pub color_filter: Option<ColorFilter>,
-    pub pointer_events: bool,
 }
 
 impl RenderLayer {
@@ -405,10 +432,10 @@ impl Serialize for RenderLayer {
         seq.serialize_field("shadow_radius", &self.shadow_radius)?;
         seq.serialize_field("shadow_color", &self.shadow_color)?;
         seq.serialize_field("shadow_spread", &self.shadow_spread)?;
-        // seq.serialize_element(&self.transform)?;
         seq.serialize_field("blend_mode", &self.blend_mode)?;
         seq.serialize_field("opacity", &self.opacity)?;
         // seq.serialize_element(&self.content)?;
+        // seq.serialize_element(&self.transform)?;
         seq.end()
     }
 }
