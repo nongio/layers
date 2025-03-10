@@ -223,26 +223,26 @@ async fn main() {
                             glutin::event::VirtualKeyCode::A => {
                                 content_layer.set_position(
                                     Point { x: 0.0, y: 0.0 },
-                                    Some(Transition::ease_in_quad(2.0)),
+                                    Some(Transition::spring(0.5, 0.5)),
                                 );
                             }
                             glutin::event::VirtualKeyCode::W => {
                                 content_layer.set_scale(
                                     Point { x: 0.5, y: 0.5 },
-                                    Some(Transition::ease_in_quad(2.0)),
+                                    Some(Transition::spring(0.5, 0.5)),
                                 );
                             }
                             glutin::event::VirtualKeyCode::S => {
                                 content_layer.set_scale(
                                     Point { x: 2.0, y: 2.0 },
-                                    Some(Transition::ease_in_quad(2.0)),
+                                    Some(Transition::spring(0.5, 0.5)),
                                 );
                             }
 
                             glutin::event::VirtualKeyCode::D => {
                                 content_layer.set_position(
                                     Point { x: 600.0, y: 600.0 },
-                                    Some(Transition::ease_in_quad(2.0)),
+                                    Some(Transition::spring(0.5, 0.5)),
                                 );
                             }
                             glutin::event::VirtualKeyCode::E => {
@@ -250,7 +250,7 @@ async fn main() {
                                 h += 10.0;
                                 content_layer.set_position(
                                     Point { x: 0.0, y: 0.0 },
-                                    Some(Transition::ease_in_quad(2.0)),
+                                    Some(Transition::spring(0.5, 0.5)),
                                 );
                                 inner_content_layer.set_draw_content(
                                     move |canvas: &lay_rs::skia::Canvas, width, height| -> lay_rs::skia::Rect {
@@ -292,19 +292,19 @@ async fn main() {
                 if draw_frame != update_frame {
                     if let Some(root) = engine.scene_root() {
                         let skia_renderer = skia_renderer.get_mut();
-                        let damage_rect = engine.damage();
+                        // let damage_rect = engine.damage();
 
                         skia_renderer.draw_scene(engine.scene(), root, None);
 
-                        let mut surface = skia_renderer.surface();
-                        let canvas = surface.canvas();
-                        let mut paint = skia::Paint::new(Color4f::new(1.0, 0.0, 0.0, 1.0), None);
-                        paint.set_stroke(true);
-                        paint.set_stroke_width(10.0);
-                        canvas.draw_rect(damage_rect, &paint);
+                        // let mut surface = skia_renderer.surface();
+                        // let canvas = surface.canvas();
+                        // let mut paint = skia::Paint::new(Color4f::new(1.0, 0.0, 0.0, 1.0), None);
+                        // paint.set_stroke(true);
+                        // paint.set_stroke_width(10.0);
+                        // canvas.draw_rect(damage_rect, &paint);
                         skia_renderer.gr_context.flush_and_submit();
                     }
-                    engine.clear_damage();
+                    // engine.clear_damage();
                     // this will be blocking until the GPU is done with the frame
                     env.windowed_context.swap_buffers().unwrap();
                     draw_frame = update_frame;

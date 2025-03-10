@@ -77,7 +77,7 @@ pub fn view_app_icon(state: &AppIconState, view: &View<AppIconState>) -> LayerTr
         ))
         // .background_color((
         //     PaintColor::Solid {
-        //         color: Color::new_rgba(1.0, name_color, 0.0, 1.0),
+        //         color: Color::new_rgba(1.0, 0.0, 0.0, 0.1),
         //     },
         //     Some(Transition::default()),
         // ))
@@ -213,7 +213,7 @@ pub fn view_app_switcher(state: &AppSwitcherState, _view: &View<AppSwitcherState
                 width: taffy::Dimension::Length(component_width),
                 height: taffy::Dimension::Length(component_height),
             },
-            Some(Transition::spring(0.3, 0.3)),
+            Some(Transition::spring(1.3, 0.3)),
             // None,
         ))
         .blend_mode(BlendMode::BackgroundBlur)
@@ -242,14 +242,14 @@ pub fn view_app_switcher(state: &AppSwitcherState, _view: &View<AppSwitcherState
             .key("apps_container")
             .size((
                 Size {
-                    width: taffy::Dimension::Auto,
+                    width: taffy::Dimension::Length(component_width),
                     height: taffy::Dimension::Length(component_height),
                 },
                 Some(Transition::spring(0.8, 0.5)),
             ))
             .background_color((
                 PaintColor::Solid {
-                    color: Color::new_hex("ffffff00"),
+                    color: Color::new_rgba(0.0, 1.0, 0.0, 0.2),
                 },
                 None,
             ))
