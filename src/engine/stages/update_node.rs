@@ -51,7 +51,7 @@ pub(crate) fn update_node(
         let cumulative_transform = parent.map(|p| &p.transform);
         let context_opacity = parent.map(|p| p.premultiplied_opacity).unwrap_or(1.0);
 
-        let changed_render_layer = node.update_render_layer_if_needed(
+        let _changed_render_layer = node.update_render_layer_if_needed(
             node_layout,
             layer.model.clone(),
             cumulative_transform,
@@ -60,11 +60,6 @@ pub(crate) fn update_node(
 
         // update the picture of the node
         node_damage = node.repaint_if_needed();
-
-        if !changed_render_layer {
-            // early return if the node has not changed
-            return (false, node_damage);
-        }
 
         let render_layer = node.render_layer();
 
