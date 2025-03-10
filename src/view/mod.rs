@@ -111,6 +111,7 @@ impl<S: Hash + Clone> View<S> {
         false
     }
 
+    #[cfg(feature = "layer_state")]
     pub fn get_internal_state<T: Clone + 'static>(&self, name: impl AsRef<str>) -> Option<T> {
         self.layer
             .read()
@@ -119,6 +120,7 @@ impl<S: Hash + Clone> View<S> {
             .and_then(|l| l.with_state(|state| state.get::<T>(name)))
     }
 
+    #[cfg(feature = "layer_state")]
     pub fn set_internal_state<T: Clone + Send + Sync + 'static>(
         &self,
         name: impl AsRef<str>,

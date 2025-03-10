@@ -88,6 +88,7 @@ profile-with-puffin = ["profiling/profile-with-puffin", "puffin_http"]
 default = ["export-skia", "export-taffy"]
 debugger = ["layers-debug-server"]
 debug_cmd = ["layers_debug"]
+layer_state = []
 
 [[bench]]
 name = "my_benchmark"

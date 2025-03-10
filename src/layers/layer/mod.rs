@@ -5,7 +5,6 @@ pub(crate) use self::model::ModelLayer;
 
 use model::ContentDrawFunctionInternal;
 use skia::{ColorFilter, Contains, ImageFilter};
-use state::LayerDataProps;
 use std::{fmt, sync::Arc};
 use std::{
     hash::{Hash, Hasher},
@@ -21,6 +20,10 @@ use crate::engine::{command::*, PointerEventType};
 use crate::engine::{node::RenderableFlags, TransactionCallback};
 use crate::engine::{Engine, NodeRef, TransactionRef};
 use crate::types::*;
+
+#[cfg(feature = "layer_state")]
+use state::LayerDataProps;
+
 #[allow(private_interfaces)]
 #[repr(C)]
 #[derive(Clone)]
@@ -28,9 +31,10 @@ pub struct Layer {
     pub engine: Arc<Engine>,
     pub id: NodeRef,
     pub layout_id: taffy::tree::NodeId,
-
     pub(crate) model: Arc<ModelLayer>,
     pub(crate) effect: Arc<RwLock<Option<Arc<dyn Effect>>>>,
+
+    #[cfg(feature = "layer_state")]
     pub(crate) state: Arc<RwLock<LayerDataProps>>,
 }
 
@@ -52,8 +56,9 @@ impl Layer {
             layout_id,
             engine: engine.clone(),
             model: Arc::new(ModelLayer::default()),
-            state: Arc::new(RwLock::new(LayerDataProps::new())),
             effect: Arc::new(RwLock::new(None)),
+            #[cfg(feature = "layer_state")]
+            state: Arc::new(RwLock::new(LayerDataProps::new())),
         }
     }
     pub fn id(&self) -> NodeRef {
@@ -393,6 +398,7 @@ impl Layer {
             })
         };
     }
+    #[cfg(feature = "layer_state")]
     pub fn with_state<F, T>(&self, f: F) -> T
     where
         F: FnOnce(&LayerDataProps) -> T,
@@ -400,6 +406,7 @@ impl Layer {
         let data = self.state.read().unwrap();
         f(&data)
     }
+    #[cfg(feature = "layer_state")]
     pub fn with_mut_state<F, T>(&self, f: F) -> T
     where
         F: FnOnce(&mut LayerDataProps) -> T,
