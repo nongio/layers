@@ -802,7 +802,17 @@ impl Engine {
             Some(node)
         })
     }
-
+    pub fn node_render_size<'a>(&self, node_ref: impl Into<&'a NodeRef>) -> (f32, f32) {
+        let node_ref = node_ref.into();
+        self.scene.with_arena(|a| {
+            a.get(node_ref.0)
+                .map(|node| {
+                    let node = node.get();
+                    (node.render_layer.size.width, node.render_layer.size.height)
+                })
+                .unwrap_or((0.0, 0.0))
+        })
+    }
     pub fn scene_get_node_parent(&self, node_ref: NodeRef) -> Option<NodeRef> {
         self.scene.with_arena(|arena| {
             let node = arena.get(node_ref.into())?;
@@ -810,11 +820,9 @@ impl Engine {
             parent.map(NodeRef)
         })
     }
-
     pub fn now(&self) -> f32 {
         self.timestamp.read().unwrap().0
     }
-
     pub fn add_animation_from_transition(
         &self,
         transition: Transition,
@@ -830,7 +838,6 @@ impl Engine {
             autostart,
         )
     }
-
     pub fn add_animation(&self, animation: Animation, autostart: bool) -> AnimationRef {
         let aid = self.animations.insert(AnimationState {
             animation,
