@@ -134,8 +134,8 @@ impl Default for ModelLayer {
     fn default() -> Self {
         let position = Attribute::new(Point { x: 0.0, y: 0.0 });
         let size = Attribute::new(Size {
-            width: taffy::style::Dimension::Length(0.0),
-            height: taffy::style::Dimension::Length(0.0),
+            width: taffy::style::Dimension::Auto,
+            height: taffy::style::Dimension::Auto,
         });
         let anchor_point = Attribute::new(Point { x: 0.0, y: 0.0 });
         let scale = Attribute::new(Point { x: 1.0, y: 1.0 });
