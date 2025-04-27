@@ -34,7 +34,6 @@ pub(crate) mod node;
 pub(crate) mod storage;
 
 use core::fmt;
-use indextree::NodeId;
 
 use node::ContainsPoint;
 
@@ -51,11 +50,11 @@ use std::{
     ops::Deref,
     sync::{
         atomic::{AtomicUsize, Ordering},
-        Arc, Once,
+        Arc, RwLock,
     },
 };
 
-use std::sync::RwLock;
+use once_cell::sync::Lazy;
 
 use self::{
     animation::{Animation, Transition},
@@ -306,15 +305,9 @@ pub struct TransactionRef {
 #[allow(static_mut_refs)]
 impl TransactionRef {
     pub(crate) fn engine(&self) -> Arc<Engine> {
-        let engines = unsafe {
-            INIT.call_once(initialize_engines);
-            ENGINES.as_ref().unwrap()
-        };
-        let engines = engines.read().unwrap();
-        engines
-            .get(&self.engine_id)
+        ENGINE_REGISTRY
+            .get(self.engine_id)
             .expect("no engine found")
-            .clone()
     }
     /// Add a callback that is triggered when the transaction is started.
     /// The callback is removed when the transaction is finished.
@@ -398,7 +391,6 @@ impl From<TreeStorageId> for NodeRef {
         NodeRef(val)
     }
 }
-
 impl From<&TreeStorageId> for NodeRef {
     fn from(val: &TreeStorageId) -> Self {
         NodeRef(*val)
@@ -407,47 +399,38 @@ impl From<&TreeStorageId> for NodeRef {
 
 static UNIQ_POINTER_HANDLER_ID: AtomicUsize = AtomicUsize::new(0);
 
-pub(crate) static INIT: Once = Once::new();
-pub(crate) static ENGINE_ID: AtomicUsize = AtomicUsize::new(0);
-pub(crate) static mut ENGINES: Option<std::sync::RwLock<HashMap<usize, Arc<Engine>>>> = None;
+// Global instance of the engine registry
+static ENGINE_REGISTRY: Lazy<EngineRegistry> = Lazy::new(|| EngineRegistry::new());
 
-/// Initializes the ENGINES static variable.
-fn initialize_engines() {
-    INIT.call_once(|| unsafe {
-        ENGINES = Some(std::sync::RwLock::new(HashMap::new()));
-    });
+/// Thread-safe registry for managing Engine instances
+struct EngineRegistry {
+    engines: RwLock<HashMap<usize, Arc<Engine>>>,
+    next_id: AtomicUsize,
 }
 
-/// Adds an engine to the ENGINES map and returns its ID.
-fn add_engine(engine: Arc<Engine>) -> usize {
-    initialize_engines();
-    let id = engine.id;
-    ENGINE_ID.store(id, Ordering::SeqCst);
-    unsafe {
-        if let Some(ref engines) = ENGINES {
-            let mut engines = engines.write().unwrap();
-            engines.insert(id, engine);
+impl EngineRegistry {
+    fn new() -> Self {
+        Self {
+            engines: RwLock::new(HashMap::new()),
+            next_id: AtomicUsize::new(0),
         }
     }
-    id
-}
-/// Adds an engine to the ENGINES map and returns its ID.
-fn next_engine_id() -> usize {
-    initialize_engines();
-    let id = ENGINE_ID.load(Ordering::SeqCst);
 
-    id + 1
-}
-/// Retrieves an engine by its ID.
-#[allow(static_mut_refs)]
-fn get_engine_ref(id: usize) -> Arc<Engine> {
-    initialize_engines();
-    unsafe {
-        let engines = ENGINES.as_ref().unwrap();
-        let engines = engines.read().unwrap();
-        return engines.get(&id).unwrap().clone();
+    fn next_id(&self) -> usize {
+        self.next_id.fetch_add(1, Ordering::SeqCst)
+    }
+
+    fn register(&self, engine: Arc<Engine>) -> usize {
+        let id = engine.id;
+        self.engines.write().unwrap().insert(id, engine);
+        id
+    }
+
+    fn get(&self, id: usize) -> Option<Arc<Engine>> {
+        self.engines.read().unwrap().get(&id).cloned()
     }
 }
+
 impl fmt::Debug for Engine {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Engine({})", self.id)
@@ -455,10 +438,6 @@ impl fmt::Debug for Engine {
 }
 impl Engine {
     fn new(id: usize, width: f32, height: f32) -> Self {
-        // rayon::ThreadPoolBuilder::new()
-        //     .num_threads(2)
-        //     .build_global()
-        //     .unwrap();
         let mut layout_tree = TaffyTree::new();
         let layout_root = RwLock::new(
             layout_tree
@@ -497,14 +476,13 @@ impl Engine {
     }
 
     fn get_arc_ref(&self) -> Arc<Self> {
-        get_engine_ref(self.id)
+        ENGINE_REGISTRY.get(self.id).unwrap()
     }
 
     pub fn create(width: f32, height: f32) -> Arc<Self> {
-        initialize_engines();
-        let id = ENGINE_ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let id = ENGINE_REGISTRY.next_id();
         let new_engine = Arc::new(Engine::new(id, width, height));
-        add_engine(new_engine.clone());
+        ENGINE_REGISTRY.register(new_engine.clone());
 
         new_engine
     }
@@ -1247,7 +1225,7 @@ impl Engine {
         }
     }
     /// Sends pointer move event to the engine
-    pub fn pointer_move(&self, p: &skia::Point, root_id: impl Into<Option<NodeId>>) -> bool {
+    pub fn pointer_move(&self, p: &skia::Point, root_id: impl Into<Option<TreeStorageId>>) -> bool {
         *self.pointer_position.write().unwrap() = *p;
 
         // get the starting node
@@ -1261,7 +1239,7 @@ impl Engine {
         let root_id = root_id.unwrap();
 
         let (current_node, in_node, out_node) = self.scene.with_arena(|arena| {
-            let descendants: Vec<NodeId> = root_id.descendants(arena).collect();
+            let descendants: Vec<TreeStorageId> = root_id.descendants(arena).collect();
 
             let mut new_hover = None;
             for node_id in descendants.iter().rev() {
