@@ -20,6 +20,7 @@
 //! engine.add_layer(&layer);
 //! ```
 pub use node::SceneNode;
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 mod debug_server;
 
@@ -41,7 +42,7 @@ use node::ContainsPoint;
 #[allow(unused_imports)]
 use stages::send_debugger;
 
-use stages::{nodes_for_layout, trigger_callbacks, update_node};
+use stages::{nodes_for_layout, trigger_callbacks, update_node_single};
 use taffy::prelude::*;
 
 use std::{
@@ -993,19 +994,111 @@ impl Engine {
     }
     #[profiling::function]
     pub fn update_nodes(&self) -> skia_safe::Rect {
-        // iterate in parallel over the nodes and
-        // repaint if necessary
         let layout = self.layout_tree.read().unwrap();
-        let mut damage = skia_safe::Rect::default();
+        let mut total_damage = skia_safe::Rect::default();
+        let node = self.scene_root.read().unwrap();
+        if let Some(root_id) = *node {
+            // Phase 1: Collect nodes in post-order (children before parents)
+            let nodes_post_order: Vec<_> = self.scene.with_arena(|arena| {
+                let mut result = Vec::new();
+                for edge in root_id.traverse(arena) {
+                    if let indextree::NodeEdge::End(id) = edge {
+                        result.push(id);
+                    }
+                }
+                result
+            });
+
+            // Phase 2: Update nodes in parallel batches by depth level
+            // First, group nodes by depth to ensure parent dependencies
+            let depth_groups = self.scene.with_arena(|arena| {
+                let mut depth_map: std::collections::HashMap<usize, Vec<indextree::NodeId>> =
+                    std::collections::HashMap::new();
+
+                for &node_id in &nodes_post_order {
+                    let depth = node_id.ancestors(arena).skip(1).count();
+                    depth_map.entry(depth).or_default().push(node_id);
+                }
+
+                let mut groups: Vec<_> = depth_map.into_iter().collect();
+                groups.sort_by_key(|(depth, _)| *depth);
+                // groups.reverse(); // Process deepest first (leaves to root)
+                groups
+            });
+
+            // Phase 3: Process each depth level
+            for (_depth, nodes_at_depth) in depth_groups {
+                // Update nodes at this depth in parallel
+                let nad: &Vec<_> = nodes_at_depth.as_ref();
+                let damages: Vec<_> = nad
+                    .into_par_iter()
+                    .map(|node_id| {
+                        let parent_render_layer = self.scene.with_arena(|arena| {
+                            arena[*node_id]
+                                .parent()
+                                .and_then(|parent_id| arena.get(parent_id))
+                                .map(|parent_node| parent_node.get().render_layer().clone())
+                        });
+
+                        let damage = update_node_single(
+                            self,
+                            &layout,
+                            *node_id,
+                            parent_render_layer.as_ref(),
+                            false,
+                        );
+
+                        return damage;
+                    })
+                    .collect();
+
+                // Phase 4: Accumulate child damages to parents (sequential for each depth)
+                for (node_id, node_damage) in nodes_at_depth.iter().zip(damages.iter()) {
+                    if !node_damage.is_empty() {
+                        self.propagate_damage_to_ancestors(*node_id, *node_damage);
+                    }
+                    total_damage.join(*node_damage);
+                }
+            }
+        }
+
+        total_damage
+    }
+
+    /// Helper method to propagate damage up the tree
+    fn propagate_damage_to_ancestors(&self, node_id: indextree::NodeId, damage: skia_safe::Rect) {
         self.scene.with_arena_mut(|arena| {
-            let node = self.scene_root.read().unwrap();
-            if let Some(root_id) = *node {
-                let (.., d) = update_node(self, arena, &layout, root_id.0, None, false);
-                damage = d;
+            let ancestors: Vec<_> = node_id.ancestors(arena).skip(1).collect();
+
+            for ancestor_id in ancestors {
+                if let Some(ancestor_node) = arena.get_mut(ancestor_id) {
+                    let ancestor = ancestor_node.get_mut();
+
+                    // Update the bounds_with_children to include child damage
+                    let child_damage_in_local = {
+                        // Transform damage from global to ancestor's local space
+                        let inverse_transform = ancestor.render_layer.transform_33.invert();
+                        if let Some(inv) = inverse_transform {
+                            inv.map_rect(damage).0
+                        } else {
+                            damage
+                        }
+                    };
+
+                    ancestor
+                        .render_layer
+                        .bounds_with_children
+                        .join(child_damage_in_local);
+                    ancestor
+                        .render_layer
+                        .global_transformed_bounds_with_children
+                        .join(damage);
+
+                    // Mark ancestor for potential repaint
+                    ancestor.repaint_damage.join(damage);
+                }
             }
         });
-
-        damage
     }
     pub fn get_node_layout_style(&self, node: taffy::NodeId) -> Style {
         let layout = self.layout_tree.read().unwrap();
@@ -1219,6 +1312,7 @@ impl Engine {
             let node_id = node_ref.0;
             node_id
                 .ancestors(arena)
+                .skip(1) // Skip the node itself
                 .filter(|node| !node.is_removed(arena))
                 .collect()
         });

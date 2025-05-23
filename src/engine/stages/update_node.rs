@@ -156,27 +156,21 @@ pub(crate) fn update_node_single(
     node_id: NodeId,
     parent: Option<&RenderLayer>,
     parent_changed: bool,
-) -> bool {
-    let mut damaged = false;
-    let mut layout_changed = false;
-    let mut pos_changed = false;
-    let mut node_damage = skia::Rect::default();
-
-    let mut transformed_bounds = skia::Rect::default();
-    let mut new_transformed_bounds = skia::Rect::default();
-    // let mut render_layer = {
+) -> skia::Rect {
     let layer = engine.get_layer(&NodeRef(node_id)).unwrap();
     let node_layout = layout_tree.layout(layer.layout_id).unwrap();
-    damaged = engine.scene.with_arena_mut(|arena| {
+
+    engine.scene.with_arena_mut(|arena| {
         let node = arena.get_mut(node_id);
-        // if node is not found, early return
         if node.is_none() {
-            return false;
+            return skia::Rect::default();
         }
+
         let mut node = node.unwrap();
         let node = node.get_mut();
-        let mut opacity;
-        (transformed_bounds, opacity) = {
+
+        // Store previous state for comparison
+        let (prev_transformed_bounds, prev_opacity) = {
             let render_layer = &node.render_layer;
             (
                 render_layer.global_transformed_bounds,
@@ -184,9 +178,11 @@ pub(crate) fn update_node_single(
             )
         };
 
+        // Get cumulative transform and opacity from parent
         let cumulative_transform = parent.map(|p| &p.transform);
         let context_opacity = parent.map(|p| p.premultiplied_opacity).unwrap_or(1.0);
 
+        // Update the render layer with new transform and layout
         let _changed_render_layer = node.update_render_layer_if_needed(
             node_layout,
             layer.model.clone(),
@@ -194,36 +190,52 @@ pub(crate) fn update_node_single(
             context_opacity,
         );
 
-        // update the picture of the node
-        node_damage = node.repaint_if_needed();
+        // Update the picture/content of the node
+        let content_damage = node.repaint_if_needed();
 
+        // Get updated render layer state
         let render_layer = node.render_layer();
+        let new_transformed_bounds = render_layer.global_transformed_bounds;
 
-        new_transformed_bounds = render_layer.global_transformed_bounds;
+        // Check what changed
+        let content_repainted = !content_damage.is_empty();
+        let layout_changed = prev_transformed_bounds.width() != new_transformed_bounds.width()
+            || prev_transformed_bounds.height() != new_transformed_bounds.height();
+        let position_changed = prev_transformed_bounds.x() != new_transformed_bounds.x()
+            || prev_transformed_bounds.y() != new_transformed_bounds.y();
+        let opacity_changed = prev_opacity != render_layer.premultiplied_opacity;
 
-        let repainted = !node_damage.is_empty();
+        // Calculate total damage for this node
+        let mut total_damage = content_damage;
 
-        layout_changed = transformed_bounds.width() != new_transformed_bounds.width()
-            || transformed_bounds.height() != new_transformed_bounds.height();
-
-        pos_changed = transformed_bounds.x() != new_transformed_bounds.x()
-            || transformed_bounds.y() != new_transformed_bounds.y();
-
-        let opacity_changed = opacity != render_layer.premultiplied_opacity;
-
-        if (pos_changed && !transformed_bounds.is_empty())
+        if position_changed
+            && !prev_transformed_bounds.is_empty()
             && render_layer.premultiplied_opacity > 0.0
-            || opacity_changed
         {
-            node_damage.join(node.repaint_damage);
-            node_damage.join(new_transformed_bounds);
-
-            node.repaint_damage = new_transformed_bounds;
+            // Include both old and new bounds when position changes
+            total_damage.join(prev_transformed_bounds);
+            total_damage.join(new_transformed_bounds);
         }
-        damaged = layout_changed || repainted || parent_changed;
 
-        damaged
-    });
+        // if layout_changed || opacity_changed {
+        //     total_damage.join(new_transformed_bounds);
+        // }
 
-    return damaged;
+        // Store damage in the node for propagation
+        // if !total_damage.is_empty() {
+        //     node.repaint_damage = total_damage;
+        // }
+
+        let damaged = layout_changed
+            || content_repainted
+            || position_changed
+            || opacity_changed
+            || parent_changed;
+
+        if damaged {
+            node.increase_frame();
+        }
+
+        total_damage
+    })
 }
