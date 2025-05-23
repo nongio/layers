@@ -100,14 +100,18 @@ impl<S: Hash + Clone> View<S> {
         false
     }
 
-    pub fn contains_point(&self, point: Point) -> bool {
+    pub fn contains_point(&self, point: skia::Point) -> bool {
         if let Some(layer) = &*self.layer.read().unwrap() {
-            let point = skia::Point::new(point.x, point.y);
-            return layer.cointains_point(point);
+            return layer.engine.scene.with_arena(|arena| {
+                let node = arena.get(layer.id.into()).unwrap();
+                let node = node.get();
+                node.contains_point(&point)
+            });
         }
         false
     }
 
+    #[cfg(feature = "layer_state")]
     pub fn get_internal_state<T: Clone + 'static>(&self, name: impl AsRef<str>) -> Option<T> {
         self.layer
             .read()
@@ -116,6 +120,7 @@ impl<S: Hash + Clone> View<S> {
             .and_then(|l| l.with_state(|state| state.get::<T>(name)))
     }
 
+    #[cfg(feature = "layer_state")]
     pub fn set_internal_state<T: Clone + Send + Sync + 'static>(
         &self,
         name: impl AsRef<str>,

@@ -123,8 +123,8 @@ fn criterion_benchmark_pointer_move(c: &mut Criterion) {
             b.iter(|| {
                 let x = rand::random::<f32>() * 2048.0;
                 let y = rand::random::<f32>() * 2048.0;
-                let p: Point = (x, y).into();
-                engine.pointer_move(p, None);
+                let p: skia_safe::Point = (x, y).into();
+                engine.pointer_move(&p, None);
             });
         });
     }

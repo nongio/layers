@@ -2,9 +2,11 @@ use std::{
     collections::HashMap,
     sync::{
         atomic::{AtomicBool, AtomicUsize},
-        Arc, Once, RwLock,
+        Arc, RwLock,
     },
 };
+
+use once_cell::sync::Lazy;
 
 use indextree::NodeId;
 
@@ -65,25 +67,11 @@ impl std::fmt::Debug for LayersEngine {
         f.debug_struct("LayersEngine").finish()
     }
 }
-pub(crate) static INIT: Once = Once::new();
-pub(crate) static ENGINE_ID: AtomicUsize = AtomicUsize::new(0);
-pub(crate) static mut ENGINES: Option<RwLock<HashMap<usize, Arc<Engine>>>> = None;
 
-pub(crate) fn initialize_engines() {
-    unsafe {
-        ENGINES = Some(RwLock::new(HashMap::new()));
-    }
-}
 impl LayersEngine {
     /// Create a new engine with a scene initialized with the given width and height
     pub fn new(width: f32, height: f32) -> Self {
-        let engines = unsafe {
-            INIT.call_once(initialize_engines);
-            ENGINES.as_ref().unwrap()
-        };
-        let id = ENGINE_ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        let new_engine = Engine::create(id, width, height);
-        engines.write().unwrap().insert(id, new_engine.clone());
+        let new_engine = Engine::create(width, height);
         Self { engine: new_engine }
     }
     /// Set the size of the scene

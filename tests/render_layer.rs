@@ -9,7 +9,7 @@ mod tests {
     pub fn render_layer_size() {
         let engine = Engine::create(1000.0, 1000.0);
         let layer = engine.new_layer();
-        engine.append_layer(&layer.id, None);
+        engine.add_layer(&layer);
 
         let _tr = layer.set_size(Size::points(100.0, 100.0), None);
 
@@ -17,7 +17,7 @@ mod tests {
 
         engine.update(0.016);
 
-        let render_layer = engine.render_layer(&layer.id).unwrap();
+        let render_layer = layer.render_layer();
 
         // test empty layer
         assert_eq!(
@@ -31,13 +31,13 @@ mod tests {
         let engine = Engine::create(1000.0, 1000.0);
         let layer = engine.new_layer();
 
-        engine.append_layer(&layer.id, None);
+        engine.append_layer(&layer, None);
 
         layer.set_position((100.0, 100.0), None);
 
         engine.update(0.016);
 
-        let render_layer = engine.render_layer(&layer.id).unwrap();
+        let render_layer = engine.render_layer(&layer).unwrap();
 
         assert_eq!(
             render_layer.transform_33.map_point((0.0, 0.0)),

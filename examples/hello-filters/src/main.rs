@@ -213,7 +213,7 @@ async fn main() {
                 WindowEvent::CursorMoved { position, .. } => {
                     _mouse_x = position.x;
                     _mouse_y = position.y;
-                    engine.pointer_move((_mouse_x as f32, _mouse_y as f32), None);
+                    engine.pointer_move(&(_mouse_x as f32, _mouse_y as f32).into(), None);
                 }
 
                 WindowEvent::MouseInput {
