@@ -303,6 +303,7 @@ pub struct TransactionRef {
     pub(crate) engine_id: usize,
 }
 
+#[allow(static_mut_refs)]
 impl TransactionRef {
     pub(crate) fn engine(&self) -> Arc<Engine> {
         let engines = unsafe {
@@ -438,6 +439,7 @@ fn next_engine_id() -> usize {
     id + 1
 }
 /// Retrieves an engine by its ID.
+#[allow(static_mut_refs)]
 fn get_engine_ref(id: usize) -> Arc<Engine> {
     initialize_engines();
     unsafe {
