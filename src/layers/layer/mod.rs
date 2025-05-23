@@ -4,6 +4,7 @@ pub(crate) mod state;
 pub(crate) use self::model::ModelLayer;
 
 use model::ContentDrawFunctionInternal;
+use render_layer::RenderLayer;
 use skia::{ColorFilter, Contains, ImageFilter};
 use std::{fmt, sync::Arc};
 use std::{
@@ -323,7 +324,13 @@ impl Layer {
     pub fn remove_all_pointer_handlers(&self) {
         self.engine.remove_all_pointer_handlers(self.id);
     }
-
+    pub fn render_layer(&self) -> RenderLayer {
+        self.engine.scene.with_arena(|arena| {
+            let node = arena.get(self.id.0).unwrap();
+            let node = node.get();
+            node.render_layer.clone()
+        })
+    }
     pub fn render_position(&self) -> Point {
         self.engine.scene.with_arena(|arena| {
             let node = arena.get(self.id.into()).unwrap();

@@ -18,7 +18,9 @@ use super::{
 
 mod update_node;
 
-pub(crate) use update_node::update_node;
+#[allow(unused_imports)]
+pub(crate) use update_node::update_node_recursive;
+pub(crate) use update_node::update_node_single;
 
 #[profiling::function]
 /// This function updates the animations in the engine, in parallel.

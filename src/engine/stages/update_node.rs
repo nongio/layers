@@ -10,7 +10,7 @@ use crate::{
 // and returns the area of pixels that are changed compared to the previeous frame
 #[allow(unused_assignments, unused_mut)]
 #[profiling::function]
-pub(crate) fn update_node(
+pub(crate) fn update_node_recursive(
     engine: &Engine,
     arena: &mut TreeStorageData<SceneNode>,
     layout_tree: &TaffyTree,
@@ -96,7 +96,7 @@ pub(crate) fn update_node(
         .iter()
         .map(|child| {
             // println!("**** map ({}) ", child);
-            let (child_damaged, child_damage) = update_node(
+            let (child_damaged, child_damage) = update_node_recursive(
                 engine,
                 arena,
                 layout_tree,
@@ -144,4 +144,86 @@ pub(crate) fn update_node(
         }
     }
     (damaged, node_damage)
+}
+
+// this function recursively update the node picture and its children
+// and returns the area of pixels that are changed compared to the previeous frame
+#[allow(unused_assignments, unused_mut)]
+#[profiling::function]
+pub(crate) fn update_node_single(
+    engine: &Engine,
+    layout_tree: &TaffyTree,
+    node_id: NodeId,
+    parent: Option<&RenderLayer>,
+    parent_changed: bool,
+) -> bool {
+    let mut damaged = false;
+    let mut layout_changed = false;
+    let mut pos_changed = false;
+    let mut node_damage = skia::Rect::default();
+
+    let mut transformed_bounds = skia::Rect::default();
+    let mut new_transformed_bounds = skia::Rect::default();
+    // let mut render_layer = {
+    let layer = engine.get_layer(&NodeRef(node_id)).unwrap();
+    let node_layout = layout_tree.layout(layer.layout_id).unwrap();
+    damaged = engine.scene.with_arena_mut(|arena| {
+        let node = arena.get_mut(node_id);
+        // if node is not found, early return
+        if node.is_none() {
+            return false;
+        }
+        let mut node = node.unwrap();
+        let node = node.get_mut();
+        let mut opacity;
+        (transformed_bounds, opacity) = {
+            let render_layer = &node.render_layer;
+            (
+                render_layer.global_transformed_bounds,
+                render_layer.premultiplied_opacity,
+            )
+        };
+
+        let cumulative_transform = parent.map(|p| &p.transform);
+        let context_opacity = parent.map(|p| p.premultiplied_opacity).unwrap_or(1.0);
+
+        let _changed_render_layer = node.update_render_layer_if_needed(
+            node_layout,
+            layer.model.clone(),
+            cumulative_transform,
+            context_opacity,
+        );
+
+        // update the picture of the node
+        node_damage = node.repaint_if_needed();
+
+        let render_layer = node.render_layer();
+
+        new_transformed_bounds = render_layer.global_transformed_bounds;
+
+        let repainted = !node_damage.is_empty();
+
+        layout_changed = transformed_bounds.width() != new_transformed_bounds.width()
+            || transformed_bounds.height() != new_transformed_bounds.height();
+
+        pos_changed = transformed_bounds.x() != new_transformed_bounds.x()
+            || transformed_bounds.y() != new_transformed_bounds.y();
+
+        let opacity_changed = opacity != render_layer.premultiplied_opacity;
+
+        if (pos_changed && !transformed_bounds.is_empty())
+            && render_layer.premultiplied_opacity > 0.0
+            || opacity_changed
+        {
+            node_damage.join(node.repaint_damage);
+            node_damage.join(new_transformed_bounds);
+
+            node.repaint_damage = new_transformed_bounds;
+        }
+        damaged = layout_changed || repainted || parent_changed;
+
+        damaged
+    });
+
+    return damaged;
 }

@@ -77,6 +77,7 @@ bitflags! {
 /// The SceneNode struct represents a node in the scene graph.
 /// It contains a Layer and manages rendering states, caching and interactions.
 /// It provides methods for managing rendering and pointer events.
+#[derive(Clone)]
 pub struct SceneNode {
     pub(crate) render_layer: RenderLayer,
     rendering_flags: RenderableFlags,

@@ -791,6 +791,15 @@ impl Engine {
                 .unwrap_or((0.0, 0.0))
         })
     }
+    /// Get a copy of the node
+    pub fn scene_get_node(
+        &self,
+        node_ref: impl Into<NodeRef>,
+    ) -> Option<indextree::Node<SceneNode>> {
+        let node_ref = node_ref.into();
+        self.scene
+            .with_arena(|arena| arena.get(node_ref.into()).map(|node| node.clone()))
+    }
     pub fn scene_get_node_parent(&self, node_ref: NodeRef) -> Option<NodeRef> {
         self.scene.with_arena(|arena| {
             let node = arena.get(node_ref.into())?;
