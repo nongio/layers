@@ -5,7 +5,7 @@
 //! The tree is stored in a memory arena using IndexTree, which allow fast read/write and thread safe parallel iterations.
 
 use crate::prelude::Point;
-use indextree::Arena;
+use indextree::{Arena, NodeId};
 use std::sync::{Arc, RwLock};
 
 use super::{
@@ -50,6 +50,17 @@ impl Scene {
         Arc::new(Self::new(width, height))
     }
 
+    pub(crate) fn update_depth_recursive(nodes: &mut Arena<SceneNode>, node_id: NodeId, depth: usize) {
+        if let Some(node) = nodes.get_mut(node_id) {
+            node.get_mut().depth = depth;
+        }
+        // collect children to avoid borrow issues
+        let children: Vec<_> = node_id.children(nodes).collect();
+        for child in children {
+            Self::update_depth_recursive(nodes, child, depth + 1);
+        }
+    }
+
     /// Append the child node to the parent node.
     ///
     /// The child node is first detached from the scene and then appended the new parent.
@@ -58,15 +69,20 @@ impl Scene {
     pub(crate) fn append_node_to(&self, child: NodeRef, parent: NodeRef) {
         self.with_arena_mut(|nodes| {
             let child = *child;
+            let parent_id = *parent;
             child.detach(nodes);
-            parent.append(child, nodes);
+            parent_id.append(child, nodes);
+            let parent_depth = nodes
+                .get(parent_id)
+                .map(|n| n.get().depth)
+                .unwrap_or(0);
+            Self::update_depth_recursive(nodes, child, parent_depth + 1);
             if let Some(scene_node) = nodes.get_mut(child) {
                 let scene_node = scene_node.get_mut();
                 scene_node.set_needs_repaint(true);
             }
 
-            let parent = *parent;
-            if let Some(new_parent_node) = nodes.get_mut(parent) {
+            if let Some(new_parent_node) = nodes.get_mut(parent_id) {
                 let new_parent_node = new_parent_node.get_mut();
                 //FIXME if the node position is Absolute, we should not need to layout the parent
                 new_parent_node.set_needs_layout(true);
@@ -80,15 +96,20 @@ impl Scene {
     pub(crate) fn prepend_node_to(&self, child: NodeRef, parent: NodeRef) {
         self.with_arena_mut(|nodes| {
             let child = *child;
+            let parent_id = *parent;
             child.detach(nodes);
-            parent.prepend(child, nodes);
+            parent_id.prepend(child, nodes);
+            let parent_depth = nodes
+                .get(parent_id)
+                .map(|n| n.get().depth)
+                .unwrap_or(0);
+            Self::update_depth_recursive(nodes, child, parent_depth + 1);
             if let Some(scene_node) = nodes.get_mut(child) {
                 let scene_node = scene_node.get_mut();
                 scene_node.set_needs_repaint(true);
             }
 
-            let parent = *parent;
-            if let Some(new_parent_node) = nodes.get_mut(parent) {
+            if let Some(new_parent_node) = nodes.get_mut(parent_id) {
                 let new_parent_node = new_parent_node.get_mut();
                 new_parent_node.set_needs_layout(true);
             }

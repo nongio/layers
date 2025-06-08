@@ -499,6 +499,7 @@ impl Engine {
         {
             self.scene.with_arena_mut(|arena| {
                 id.0.detach(arena);
+                Scene::update_depth_recursive(arena, id.into(), 0);
             });
         }
 
@@ -1019,7 +1020,10 @@ impl Engine {
                     std::collections::HashMap::new();
 
                 for &node_id in &nodes_post_order {
-                    let depth = node_id.ancestors(arena).skip(1).count();
+                    let depth = arena
+                        .get(node_id)
+                        .map(|n| n.get().depth)
+                        .unwrap_or(0);
                     depth_map.entry(depth).or_default().push(node_id);
                 }
 

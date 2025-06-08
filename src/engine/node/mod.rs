@@ -83,6 +83,7 @@ pub struct SceneNode {
     rendering_flags: RenderableFlags,
     pub(crate) repaint_damage: skia_safe::Rect,
     pub(crate) hidden: bool,
+    pub(crate) depth: usize,
     pub(crate) image_cached: bool,
     pub(crate) picture_cached: bool,
     pub(crate) is_deleted: bool,
@@ -101,6 +102,7 @@ impl Default for SceneNode {
                 | RenderableFlags::NEEDS_LAYOUT
                 | RenderableFlags::NEEDS_PAINT,
             hidden: false,
+            depth: 0,
             image_cached: false,
             picture_cached: true,
             is_deleted: false,
