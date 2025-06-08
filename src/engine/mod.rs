@@ -501,6 +501,7 @@ impl Engine {
                 id.0.detach(arena);
                 Scene::update_depth_recursive(arena, id.into(), 0);
             });
+            self.scene.invalidate_depth_groups_cache();
         }
 
         // set the new root
@@ -749,6 +750,7 @@ impl Engine {
                 layout_tree.remove(layout_id).unwrap();
             }
         });
+        self.scene.invalidate_depth_groups_cache();
     }
     pub fn scene(&self) -> Arc<Scene> {
         self.scene.clone()
@@ -1002,36 +1004,8 @@ impl Engine {
         let mut total_damage = skia_safe::Rect::default();
         let node = self.scene_root.read().unwrap();
         if let Some(root_id) = *node {
-            // Phase 1: Collect nodes in post-order (children before parents)
-            let nodes_post_order: Vec<_> = self.scene.with_arena(|arena| {
-                let mut result = Vec::new();
-                for edge in root_id.traverse(arena) {
-                    if let indextree::NodeEdge::End(id) = edge {
-                        result.push(id);
-                    }
-                }
-                result
-            });
-
-            // Phase 2: Update nodes in parallel batches by depth level
-            // First, group nodes by depth to ensure parent dependencies
-            let depth_groups = self.scene.with_arena(|arena| {
-                let mut depth_map: std::collections::HashMap<usize, Vec<indextree::NodeId>> =
-                    std::collections::HashMap::new();
-
-                for &node_id in &nodes_post_order {
-                    let depth = arena.get(node_id).map(|n| n.get().depth).unwrap_or(0);
-                    depth_map.entry(depth).or_default().push(node_id);
-                }
-
-                let mut groups: Vec<_> = depth_map.into_iter().collect();
-                groups.sort_by_key(|(depth, _)| *depth);
-                // groups.reverse(); // Process deepest first (leaves to root)
-                groups
-            });
-
-            // Phase 3: Process each depth level
-            for (_depth, nodes_at_depth) in depth_groups {
+            // Phase 1: Update nodes in parallel batches by depth level using cached groups
+            let depth_groups = self.scene.depth_groups(root_id.into());
                 // Update nodes at this depth in parallel
                 let nad: &Vec<_> = nodes_at_depth.as_ref();
                 let damages: Vec<_> = nad

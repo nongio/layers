@@ -26,6 +26,7 @@ impl Engine {
 pub struct Scene {
     pub(crate) nodes: TreeStorage<SceneNode>,
     pub size: RwLock<Point>,
+    depth_groups_cache: RwLock<Option<(NodeId, Vec<(usize, Vec<NodeId>)>)>>,
 }
 
 impl Scene {
@@ -37,6 +38,7 @@ impl Scene {
                 x: width,
                 y: height,
             }),
+            depth_groups_cache: RwLock::new(None),
         }
     }
     pub fn set_size(&self, width: f32, height: f32) {
@@ -55,10 +57,43 @@ impl Scene {
         node_id: NodeId,
         depth: usize,
     ) {
-        if let Some(node) = nodes.get_mut(node_id) {
-            node.get_mut().depth = depth;
+            let parent_depth = nodes.get(parent_id).map(|n| n.get().depth).unwrap_or(0);
+        self.invalidate_depth_groups_cache();
+            let parent_depth = nodes.get(parent_id).map(|n| n.get().depth).unwrap_or(0);
+        self.invalidate_depth_groups_cache();
+        self.invalidate_depth_groups_cache();
+        self.invalidate_depth_groups_cache();
+
+    pub(crate) fn invalidate_depth_groups_cache(&self) {
+        *self.depth_groups_cache.write().unwrap() = None;
+    }
+
+    pub(crate) fn depth_groups(&self, root: NodeId) -> Vec<(usize, Vec<NodeId>)> {
+        let mut cache = self.depth_groups_cache.write().unwrap();
+        if let Some((cached_root, groups)) = cache.clone() {
+            if cached_root == root {
+                return groups;
+            }
         }
-        // collect children to avoid borrow issues
+
+        let groups = self.with_arena(|arena| {
+            let mut depth_map: std::collections::HashMap<usize, Vec<NodeId>> =
+                std::collections::HashMap::new();
+            for edge in root.traverse(arena) {
+                if let indextree::NodeEdge::End(id) = edge {
+                    if let Some(node) = arena.get(id) {
+                        let depth = node.get().depth;
+                        depth_map.entry(depth).or_default().push(id);
+                    }
+                }
+            }
+            let mut groups: Vec<_> = depth_map.into_iter().collect();
+            groups.sort_by(|a, b| b.0.cmp(&a.0));
+            groups
+        });
+        *cache = Some((root, groups.clone()));
+        groups
+    }
         let children: Vec<_> = node_id.children(nodes).collect();
         for child in children {
             Self::update_depth_recursive(nodes, child, depth + 1);
