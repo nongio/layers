@@ -19,6 +19,9 @@
 //! let layer = engine.new_layer();
 //! engine.add_layer(&layer);
 //! ```
+
+#![allow(unused_imports)]
+
 pub use node::SceneNode;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
@@ -1031,7 +1034,7 @@ impl Engine {
                 // Update nodes at this depth in parallel
                 let nad: &Vec<_> = nodes_at_depth.as_ref();
                 let damages: Vec<_> = nad
-                    .into_par_iter()
+                    .iter()
                     .map(|node_id| {
                         let parent_render_layer = self.scene.with_arena(|arena| {
                             arena[*node_id]
