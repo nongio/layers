@@ -50,7 +50,11 @@ impl Scene {
         Arc::new(Self::new(width, height))
     }
 
-    pub(crate) fn update_depth_recursive(nodes: &mut Arena<SceneNode>, node_id: NodeId, depth: usize) {
+    pub(crate) fn update_depth_recursive(
+        nodes: &mut Arena<SceneNode>,
+        node_id: NodeId,
+        depth: usize,
+    ) {
         if let Some(node) = nodes.get_mut(node_id) {
             node.get_mut().depth = depth;
         }
@@ -72,10 +76,7 @@ impl Scene {
             let parent_id = *parent;
             child.detach(nodes);
             parent_id.append(child, nodes);
-            let parent_depth = nodes
-                .get(parent_id)
-                .map(|n| n.get().depth)
-                .unwrap_or(0);
+            let parent_depth = nodes.get(parent_id).map(|n| n.get().depth).unwrap_or(0);
             Self::update_depth_recursive(nodes, child, parent_depth + 1);
             if let Some(scene_node) = nodes.get_mut(child) {
                 let scene_node = scene_node.get_mut();
@@ -99,10 +100,7 @@ impl Scene {
             let parent_id = *parent;
             child.detach(nodes);
             parent_id.prepend(child, nodes);
-            let parent_depth = nodes
-                .get(parent_id)
-                .map(|n| n.get().depth)
-                .unwrap_or(0);
+            let parent_depth = nodes.get(parent_id).map(|n| n.get().depth).unwrap_or(0);
             Self::update_depth_recursive(nodes, child, parent_depth + 1);
             if let Some(scene_node) = nodes.get_mut(child) {
                 let scene_node = scene_node.get_mut();

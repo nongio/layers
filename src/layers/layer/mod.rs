@@ -388,22 +388,22 @@ impl Layer {
     }
     pub fn children_nodes(&self) -> Vec<NodeRef> {
         let node_id: TreeStorageId = self.id.into();
-        return {
+        {
             self.engine
                 .scene
                 .with_arena(|arena| node_id.children(arena).map(NodeRef).collect())
-        };
+        }
     }
     pub fn children(&self) -> Vec<Layer> {
         let node_id: TreeStorageId = self.id.into();
-        return {
+        {
             self.engine.scene.with_arena(|arena| {
                 node_id
                     .children(arena)
                     .filter_map(|cid| self.engine.get_layer(&NodeRef(cid)))
                     .collect()
             })
-        };
+        }
     }
     #[cfg(feature = "layer_state")]
     pub fn with_state<F, T>(&self, f: F) -> T

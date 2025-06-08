@@ -283,10 +283,10 @@ impl SceneNode {
         if self.hidden() {
             return false;
         }
-        if self.render_layer.size.width != layout.size.width as f32
-            || self.render_layer.size.height != layout.size.height as f32
-            || self.render_layer.local_transformed_bounds.x() != layout.location.x as f32
-            || self.render_layer.local_transformed_bounds.y() != layout.location.y as f32
+        if self.render_layer.size.width != layout.size.width
+            || self.render_layer.size.height != layout.size.height
+            || self.render_layer.local_transformed_bounds.x() != layout.location.x
+            || self.render_layer.local_transformed_bounds.y() != layout.location.y
         {
             self.set_needs_repaint(true);
         }

@@ -1,5 +1,3 @@
-use lay_rs::prelude::*;
-
 #[cfg(feature = "layer_state")]
 #[test]
 pub fn state_for_layer() {

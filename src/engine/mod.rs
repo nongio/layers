@@ -234,7 +234,7 @@ pub enum PointerEventType {
 /// let engine = Engine::create(1024.0, 768.0);
 /// let root_layer = engine.new_layer();
 /// root_layer.set_position(Point { x: 0.0, y: 0.0 }, None);
-
+///
 /// root_layer.set_background_color(
 ///     PaintColor::Solid {
 ///         color: Color::new_rgba255(180, 180, 180, 255),
@@ -404,7 +404,7 @@ impl From<&TreeStorageId> for NodeRef {
 static UNIQ_POINTER_HANDLER_ID: AtomicUsize = AtomicUsize::new(0);
 
 // Global instance of the engine registry
-static ENGINE_REGISTRY: Lazy<EngineRegistry> = Lazy::new(|| EngineRegistry::new());
+static ENGINE_REGISTRY: Lazy<EngineRegistry> = Lazy::new(EngineRegistry::new);
 
 /// Thread-safe registry for managing Engine instances
 struct EngineRegistry {
@@ -803,7 +803,7 @@ impl Engine {
     ) -> Option<indextree::Node<SceneNode>> {
         let node_ref = node_ref.into();
         self.scene
-            .with_arena(|arena| arena.get(node_ref.into()).map(|node| node.clone()))
+            .with_arena(|arena| arena.get(node_ref.into()).cloned())
     }
     pub fn scene_get_node_parent(&self, node_ref: NodeRef) -> Option<NodeRef> {
         self.scene.with_arena(|arena| {
@@ -1020,10 +1020,7 @@ impl Engine {
                     std::collections::HashMap::new();
 
                 for &node_id in &nodes_post_order {
-                    let depth = arena
-                        .get(node_id)
-                        .map(|n| n.get().depth)
-                        .unwrap_or(0);
+                    let depth = arena.get(node_id).map(|n| n.get().depth).unwrap_or(0);
                     depth_map.entry(depth).or_default().push(node_id);
                 }
 
@@ -1055,7 +1052,7 @@ impl Engine {
                             false,
                         );
 
-                        return damage;
+                        damage
                     })
                     .collect();
 
