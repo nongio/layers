@@ -234,7 +234,7 @@ pub enum PointerEventType {
 /// let engine = Engine::create(1024.0, 768.0);
 /// let root_layer = engine.new_layer();
 /// root_layer.set_position(Point { x: 0.0, y: 0.0 }, None);
-
+///
 /// root_layer.set_background_color(
 ///     PaintColor::Solid {
 ///         color: Color::new_rgba255(180, 180, 180, 255),
@@ -404,7 +404,7 @@ impl From<&TreeStorageId> for NodeRef {
 static UNIQ_POINTER_HANDLER_ID: AtomicUsize = AtomicUsize::new(0);
 
 // Global instance of the engine registry
-static ENGINE_REGISTRY: Lazy<EngineRegistry> = Lazy::new(|| EngineRegistry::new());
+static ENGINE_REGISTRY: Lazy<EngineRegistry> = Lazy::new(EngineRegistry::new);
 
 /// Thread-safe registry for managing Engine instances
 struct EngineRegistry {
@@ -499,7 +499,9 @@ impl Engine {
         {
             self.scene.with_arena_mut(|arena| {
                 id.0.detach(arena);
+                Scene::update_depth_recursive(arena, id.into(), 0);
             });
+            self.scene.invalidate_depth_groups_cache();
         }
 
         // set the new root
@@ -748,6 +750,7 @@ impl Engine {
                 layout_tree.remove(layout_id).unwrap();
             }
         });
+        self.scene.invalidate_depth_groups_cache();
     }
     pub fn scene(&self) -> Arc<Scene> {
         self.scene.clone()
@@ -802,7 +805,7 @@ impl Engine {
     ) -> Option<indextree::Node<SceneNode>> {
         let node_ref = node_ref.into();
         self.scene
-            .with_arena(|arena| arena.get(node_ref.into()).map(|node| node.clone()))
+            .with_arena(|arena| arena.get(node_ref.into()).cloned())
     }
     pub fn scene_get_node_parent(&self, node_ref: NodeRef) -> Option<NodeRef> {
         self.scene.with_arena(|arena| {
@@ -1001,67 +1004,37 @@ impl Engine {
         let mut total_damage = skia_safe::Rect::default();
         let node = self.scene_root.read().unwrap();
         if let Some(root_id) = *node {
-            // Phase 1: Collect nodes in post-order (children before parents)
-            let nodes_post_order: Vec<_> = self.scene.with_arena(|arena| {
-                let mut result = Vec::new();
-                for edge in root_id.traverse(arena) {
-                    if let indextree::NodeEdge::End(id) = edge {
-                        result.push(id);
-                    }
+            // Phase 1: Update nodes in parallel batches by depth level using cached groups
+            let depth_groups = self.scene.depth_groups(root_id.into());
+            for (_depth, nodes) in depth_groups {
+                let damages: Vec<_> = nodes
+                for (node_id, node_damage) in nodes.iter().zip(damages.iter()) {
+                .map(|node_id| {
+                    let parent_render_layer = self.scene.with_arena(|arena| {
+                        arena[*node_id]
+                            .parent()
+                            .and_then(|parent_id| arena.get(parent_id))
+                            .map(|parent_node| parent_node.get().render_layer().clone())
+                    });
+
+                    let damage = update_node_single(
+                        self,
+                        &layout,
+                        *node_id,
+                        parent_render_layer.as_ref(),
+                        false,
+                    );
+
+                    damage
+                })
+                .collect();
+
+            // Phase 4: Accumulate child damages to parents (sequential for each depth)
+            for (node_id, node_damage) in nodes_at_depth.iter().zip(damages.iter()) {
+                if !node_damage.is_empty() {
+                    self.propagate_damage_to_ancestors(*node_id, *node_damage);
                 }
-                result
-            });
-
-            // Phase 2: Update nodes in parallel batches by depth level
-            // First, group nodes by depth to ensure parent dependencies
-            let depth_groups = self.scene.with_arena(|arena| {
-                let mut depth_map: std::collections::HashMap<usize, Vec<indextree::NodeId>> =
-                    std::collections::HashMap::new();
-
-                for &node_id in &nodes_post_order {
-                    let depth = node_id.ancestors(arena).skip(1).count();
-                    depth_map.entry(depth).or_default().push(node_id);
-                }
-
-                let mut groups: Vec<_> = depth_map.into_iter().collect();
-                groups.sort_by_key(|(depth, _)| *depth);
-                // groups.reverse(); // Process deepest first (leaves to root)
-                groups
-            });
-
-            // Phase 3: Process each depth level
-            for (_depth, nodes_at_depth) in depth_groups {
-                // Update nodes at this depth in parallel
-                let nad: &Vec<_> = nodes_at_depth.as_ref();
-                let damages: Vec<_> = nad
-                    .iter()
-                    .map(|node_id| {
-                        let parent_render_layer = self.scene.with_arena(|arena| {
-                            arena[*node_id]
-                                .parent()
-                                .and_then(|parent_id| arena.get(parent_id))
-                                .map(|parent_node| parent_node.get().render_layer().clone())
-                        });
-
-                        let damage = update_node_single(
-                            self,
-                            &layout,
-                            *node_id,
-                            parent_render_layer.as_ref(),
-                            false,
-                        );
-
-                        return damage;
-                    })
-                    .collect();
-
-                // Phase 4: Accumulate child damages to parents (sequential for each depth)
-                for (node_id, node_damage) in nodes_at_depth.iter().zip(damages.iter()) {
-                    if !node_damage.is_empty() {
-                        self.propagate_damage_to_ancestors(*node_id, *node_damage);
-                    }
-                    total_damage.join(*node_damage);
-                }
+                total_damage.join(*node_damage);
             }
         }
 

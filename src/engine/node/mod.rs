@@ -83,6 +83,7 @@ pub struct SceneNode {
     rendering_flags: RenderableFlags,
     pub(crate) repaint_damage: skia_safe::Rect,
     pub(crate) hidden: bool,
+    pub(crate) depth: usize,
     pub(crate) image_cached: bool,
     pub(crate) picture_cached: bool,
     pub(crate) is_deleted: bool,
@@ -101,6 +102,7 @@ impl Default for SceneNode {
                 | RenderableFlags::NEEDS_LAYOUT
                 | RenderableFlags::NEEDS_PAINT,
             hidden: false,
+            depth: 0,
             image_cached: false,
             picture_cached: true,
             is_deleted: false,
@@ -281,10 +283,10 @@ impl SceneNode {
         if self.hidden() {
             return false;
         }
-        if self.render_layer.size.width != layout.size.width as f32
-            || self.render_layer.size.height != layout.size.height as f32
-            || self.render_layer.local_transformed_bounds.x() != layout.location.x as f32
-            || self.render_layer.local_transformed_bounds.y() != layout.location.y as f32
+        if self.render_layer.size.width != layout.size.width
+            || self.render_layer.size.height != layout.size.height
+            || self.render_layer.local_transformed_bounds.x() != layout.location.x
+            || self.render_layer.local_transformed_bounds.y() != layout.location.y
         {
             self.set_needs_repaint(true);
         }
