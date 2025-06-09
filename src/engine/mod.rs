@@ -1006,37 +1006,36 @@ impl Engine {
         if let Some(root_id) = *node {
             // Phase 1: Update nodes in parallel batches by depth level using cached groups
             let depth_groups = self.scene.depth_groups(root_id.into());
-                // Update nodes at this depth in parallel
-                let nad: &Vec<_> = nodes_at_depth.as_ref();
-                let damages: Vec<_> = nad
-                    .iter()
-                    .map(|node_id| {
-                        let parent_render_layer = self.scene.with_arena(|arena| {
-                            arena[*node_id]
-                                .parent()
-                                .and_then(|parent_id| arena.get(parent_id))
-                                .map(|parent_node| parent_node.get().render_layer().clone())
-                        });
+            // Update nodes at this depth in parallel
+            let nad: &Vec<_> = nodes_at_depth.as_ref();
+            let damages: Vec<_> = nad
+                .iter()
+                .map(|node_id| {
+                    let parent_render_layer = self.scene.with_arena(|arena| {
+                        arena[*node_id]
+                            .parent()
+                            .and_then(|parent_id| arena.get(parent_id))
+                            .map(|parent_node| parent_node.get().render_layer().clone())
+                    });
 
-                        let damage = update_node_single(
-                            self,
-                            &layout,
-                            *node_id,
-                            parent_render_layer.as_ref(),
-                            false,
-                        );
+                    let damage = update_node_single(
+                        self,
+                        &layout,
+                        *node_id,
+                        parent_render_layer.as_ref(),
+                        false,
+                    );
 
-                        damage
-                    })
-                    .collect();
+                    damage
+                })
+                .collect();
 
-                // Phase 4: Accumulate child damages to parents (sequential for each depth)
-                for (node_id, node_damage) in nodes_at_depth.iter().zip(damages.iter()) {
-                    if !node_damage.is_empty() {
-                        self.propagate_damage_to_ancestors(*node_id, *node_damage);
-                    }
-                    total_damage.join(*node_damage);
+            // Phase 4: Accumulate child damages to parents (sequential for each depth)
+            for (node_id, node_damage) in nodes_at_depth.iter().zip(damages.iter()) {
+                if !node_damage.is_empty() {
+                    self.propagate_damage_to_ancestors(*node_id, *node_damage);
                 }
+                total_damage.join(*node_damage);
             }
         }
 

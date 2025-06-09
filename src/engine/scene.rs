@@ -57,12 +57,10 @@ impl Scene {
         node_id: NodeId,
         depth: usize,
     ) {
-            let parent_depth = nodes.get(parent_id).map(|n| n.get().depth).unwrap_or(0);
+        let parent_depth = nodes.get(parent_id).map(|n| n.get().depth).unwrap_or(0);
         self.invalidate_depth_groups_cache();
-            let parent_depth = nodes.get(parent_id).map(|n| n.get().depth).unwrap_or(0);
-        self.invalidate_depth_groups_cache();
-        self.invalidate_depth_groups_cache();
-        self.invalidate_depth_groups_cache();
+        let parent_depth = nodes.get(parent_id).map(|n| n.get().depth).unwrap_or(0);
+    }
 
     pub(crate) fn invalidate_depth_groups_cache(&self) {
         *self.depth_groups_cache.write().unwrap() = None;
@@ -93,11 +91,6 @@ impl Scene {
         });
         *cache = Some((root, groups.clone()));
         groups
-    }
-        let children: Vec<_> = node_id.children(nodes).collect();
-        for child in children {
-            Self::update_depth_recursive(nodes, child, depth + 1);
-        }
     }
 
     /// Append the child node to the parent node.
