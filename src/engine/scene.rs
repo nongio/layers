@@ -180,11 +180,10 @@ impl Scene {
     pub(crate) fn is_node_removed(&self, id: impl Into<TreeStorageId>) -> bool {
         let id = id.into();
 
-        let nodes = self.nodes.data();
-        let nodes = nodes.read().unwrap();
-
-        nodes
-            .get(id)
+        if let Some((cached_root, groups)) = self.depth_groups_cache.read().unwrap().as_ref() {
+            if *cached_root == root {
+                return groups.clone();
+        *self.depth_groups_cache.write().unwrap() = Some((root, groups.clone()));
             .map(|node| {
                 if node.is_removed() {
                     true
