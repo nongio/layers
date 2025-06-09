@@ -1,9 +1,9 @@
 [package]
 name = "lay-rs"
-version = "0.6.0"
+version = "0.6.1"
 edition = "2021"
 build = "build.rs"
-rust-version = "1.82.0"
+rust-version = "1.83.0"
 
 [lib]
 crate-type = ["lib", "cdylib"] # Creates dynamic lib
@@ -39,6 +39,7 @@ tracing = { version = "0.1.37", features = [
     "max_level_trace",
     "release_max_level_debug",
 ] }
+once_cell = "1.18.0"
 
 [dependencies.skia-safe]
 # git = "https://github.com/rust-skia/rust-skia"
@@ -88,6 +89,7 @@ profile-with-puffin = ["profiling/profile-with-puffin", "puffin_http"]
 default = ["export-skia", "export-taffy"]
 debugger = ["layers-debug-server"]
 debug_cmd = ["layers_debug"]
+layer_state = []
 
 [[bench]]
 name = "my_benchmark"

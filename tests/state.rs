@@ -1,5 +1,6 @@
 use lay_rs::prelude::*;
 
+#[cfg(feature = "layer_state")]
 #[test]
 pub fn state_for_layer() {
     let engine = Engine::create(1000.0, 1000.0);

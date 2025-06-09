@@ -4,8 +4,8 @@ pub(crate) mod state;
 pub(crate) use self::model::ModelLayer;
 
 use model::ContentDrawFunctionInternal;
+use render_layer::RenderLayer;
 use skia::{ColorFilter, Contains, ImageFilter};
-use state::LayerDataProps;
 use std::{fmt, sync::Arc};
 use std::{
     hash::{Hash, Hasher},
@@ -21,6 +21,10 @@ use crate::engine::{command::*, PointerEventType};
 use crate::engine::{node::RenderableFlags, TransactionCallback};
 use crate::engine::{Engine, NodeRef, TransactionRef};
 use crate::types::*;
+
+#[cfg(feature = "layer_state")]
+use state::LayerDataProps;
+
 #[allow(private_interfaces)]
 #[repr(C)]
 #[derive(Clone)]
@@ -28,9 +32,10 @@ pub struct Layer {
     pub engine: Arc<Engine>,
     pub id: NodeRef,
     pub layout_id: taffy::tree::NodeId,
-
     pub(crate) model: Arc<ModelLayer>,
     pub(crate) effect: Arc<RwLock<Option<Arc<dyn Effect>>>>,
+
+    #[cfg(feature = "layer_state")]
     pub(crate) state: Arc<RwLock<LayerDataProps>>,
 }
 
@@ -52,8 +57,9 @@ impl Layer {
             layout_id,
             engine: engine.clone(),
             model: Arc::new(ModelLayer::default()),
-            state: Arc::new(RwLock::new(LayerDataProps::new())),
             effect: Arc::new(RwLock::new(None)),
+            #[cfg(feature = "layer_state")]
+            state: Arc::new(RwLock::new(LayerDataProps::new())),
         }
     }
     pub fn id(&self) -> NodeRef {
@@ -122,24 +128,24 @@ impl Layer {
     change_model!(scale, Point, RenderableFlags::NEEDS_LAYOUT);
     change_model!(rotation, Point3d, RenderableFlags::NEEDS_LAYOUT);
     change_model!(anchor_point, Point, RenderableFlags::NEEDS_LAYOUT);
-    change_model!(opacity, f32, RenderableFlags::NEEDS_LAYOUT);
+    change_model!(opacity, f32, RenderableFlags::NEEDS_PAINT);
 
-    change_model!(background_color, PaintColor, RenderableFlags::NEEDS_LAYOUT);
+    change_model!(background_color, PaintColor, RenderableFlags::NEEDS_PAINT);
     change_model!(
         border_corner_radius,
         BorderRadius,
-        RenderableFlags::NEEDS_LAYOUT
+        RenderableFlags::NEEDS_PAINT
     );
 
-    change_model!(border_color, PaintColor, RenderableFlags::NEEDS_LAYOUT);
-    change_model!(border_width, f32, RenderableFlags::NEEDS_LAYOUT);
-    change_model!(shadow_offset, Point, RenderableFlags::NEEDS_LAYOUT);
-    change_model!(shadow_radius, f32, RenderableFlags::NEEDS_LAYOUT);
-    change_model!(shadow_spread, f32, RenderableFlags::NEEDS_LAYOUT);
-    change_model!(shadow_color, Color, RenderableFlags::NEEDS_LAYOUT);
-    change_model!(image_filter_progress, f32, RenderableFlags::NEEDS_LAYOUT);
-    change_model!(clip_content, bool, RenderableFlags::NEEDS_LAYOUT);
-    change_model!(clip_children, bool, RenderableFlags::NEEDS_LAYOUT);
+    change_model!(border_color, PaintColor, RenderableFlags::NEEDS_PAINT);
+    change_model!(border_width, f32, RenderableFlags::NEEDS_PAINT);
+    change_model!(shadow_offset, Point, RenderableFlags::NEEDS_PAINT);
+    change_model!(shadow_radius, f32, RenderableFlags::NEEDS_PAINT);
+    change_model!(shadow_spread, f32, RenderableFlags::NEEDS_PAINT);
+    change_model!(shadow_color, Color, RenderableFlags::NEEDS_PAINT);
+    change_model!(image_filter_progress, f32, RenderableFlags::NEEDS_PAINT);
+    change_model!(clip_content, bool, RenderableFlags::NEEDS_PAINT);
+    change_model!(clip_children, bool, RenderableFlags::NEEDS_PAINT);
 
     pub fn change_size(&self, value: Size) -> AnimatedNodeChange {
         let flags = RenderableFlags::NEEDS_LAYOUT;
@@ -230,7 +236,7 @@ impl Layer {
         *model_content = Some(draw.into());
 
         self.engine
-            .set_node_flags(self.id, RenderableFlags::NEEDS_LAYOUT);
+            .schedule_change(self.id, Arc::new(NoopChange::new(self.id.0.into())), None);
     }
     #[allow(unused)]
     pub(crate) fn set_draw_content_internal<F: Into<ContentDrawFunctionInternal>>(
@@ -241,13 +247,13 @@ impl Layer {
         *model_content = Some(content_handler.into());
 
         self.engine
-            .set_node_flags(self.id, RenderableFlags::NEEDS_LAYOUT);
+            .set_node_flags(self.id, RenderableFlags::NEEDS_PAINT);
     }
     pub fn remove_draw_content(&self) {
         let mut model_content = self.model.draw_content.write().unwrap();
         *model_content = None;
         self.engine
-            .set_node_flags(self.id, RenderableFlags::NEEDS_LAYOUT);
+            .set_node_flags(self.id, RenderableFlags::NEEDS_PAINT);
     }
     pub fn add_sublayer<'a>(&self, layer: impl Into<&'a NodeRef>) {
         self.engine.append_layer(layer, self.id)
@@ -318,7 +324,13 @@ impl Layer {
     pub fn remove_all_pointer_handlers(&self) {
         self.engine.remove_all_pointer_handlers(self.id);
     }
-
+    pub fn render_layer(&self) -> RenderLayer {
+        self.engine.scene.with_arena(|arena| {
+            let node = arena.get(self.id.0).unwrap();
+            let node = node.get();
+            node.render_layer.clone()
+        })
+    }
     pub fn render_position(&self) -> Point {
         self.engine.scene.with_arena(|arena| {
             let node = arena.get(self.id.into()).unwrap();
@@ -393,6 +405,7 @@ impl Layer {
             })
         };
     }
+    #[cfg(feature = "layer_state")]
     pub fn with_state<F, T>(&self, f: F) -> T
     where
         F: FnOnce(&LayerDataProps) -> T,
@@ -400,6 +413,7 @@ impl Layer {
         let data = self.state.read().unwrap();
         f(&data)
     }
+    #[cfg(feature = "layer_state")]
     pub fn with_mut_state<F, T>(&self, f: F) -> T
     where
         F: FnOnce(&mut LayerDataProps) -> T,
