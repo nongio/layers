@@ -1006,10 +1006,9 @@ impl Engine {
         if let Some(root_id) = *node {
             // Phase 1: Update nodes in parallel batches by depth level using cached groups
             let depth_groups = self.scene.depth_groups(root_id.into());
-            // Update nodes at this depth in parallel
-            let nad: &Vec<_> = nodes_at_depth.as_ref();
-            let damages: Vec<_> = nad
-                .iter()
+            for (_depth, nodes) in depth_groups {
+                let damages: Vec<_> = nodes
+                for (node_id, node_damage) in nodes.iter().zip(damages.iter()) {
                 .map(|node_id| {
                     let parent_render_layer = self.scene.with_arena(|arena| {
                         arena[*node_id]
