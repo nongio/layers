@@ -22,6 +22,7 @@ Follow these steps before submitting a pull request.
   ```bash
   RUSTDOCFLAGS=--cfg=docsrs cargo doc --no-deps --features "default" -p lay-rs
   ```
+- Document every new method with a Rust doc comment explaining what it does.
 
 ## Criterion Benchmarks
 - Benchmarks can be executed with Criterion:
