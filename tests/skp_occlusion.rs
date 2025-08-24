@@ -45,8 +45,11 @@ fn record_ops(with_bottom: bool) -> usize {
 }
 
 #[test]
-fn occluded_layer_generates_extra_ops() {
+fn occluded_layer_increases_layer_count() {
     let without_bottom = record_ops(false);
     let with_bottom = record_ops(true);
-    assert!(with_bottom > without_bottom);
+    // Without the covering layer we record two layers: the parent and the top layer.
+    assert_eq!(without_bottom, 2);
+    // Adding a bottom layer that covers the others should still result in three recorded layers.
+    assert_eq!(with_bottom, 3);
 }
