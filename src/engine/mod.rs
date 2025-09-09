@@ -19,7 +19,11 @@
 //! let layer = engine.new_layer();
 //! engine.add_layer(&layer);
 //! ```
+
+#![allow(unused_imports)]
+
 pub use node::SceneNode;
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 mod debug_server;
 
@@ -34,7 +38,6 @@ pub(crate) mod node;
 pub(crate) mod storage;
 
 use core::fmt;
-use indextree::NodeId;
 
 use node::ContainsPoint;
 
@@ -42,7 +45,7 @@ use node::ContainsPoint;
 #[allow(unused_imports)]
 use stages::send_debugger;
 
-use stages::{nodes_for_layout, trigger_callbacks, update_node};
+use stages::{nodes_for_layout, trigger_callbacks, update_node_single};
 use taffy::prelude::*;
 
 use std::{
@@ -51,11 +54,11 @@ use std::{
     ops::Deref,
     sync::{
         atomic::{AtomicUsize, Ordering},
-        Arc, Once,
+        Arc, RwLock,
     },
 };
 
-use std::sync::RwLock;
+use once_cell::sync::Lazy;
 
 use self::{
     animation::{Animation, Transition},
@@ -289,7 +292,7 @@ pub struct Engine {
     /// The damage rect for the current frame
     pub(crate) damage: Arc<RwLock<skia_safe::Rect>>,
     /// The current pointer position
-    pointer_position: RwLock<Point>,
+    pointer_position: RwLock<skia::Point>,
     /// The node that is currently hovered by the pointer
     /// Press, Release and CursorIn, CursorOut events are triggered
     /// based on the current_hover_node
@@ -306,15 +309,9 @@ pub struct TransactionRef {
 #[allow(static_mut_refs)]
 impl TransactionRef {
     pub(crate) fn engine(&self) -> Arc<Engine> {
-        let engines = unsafe {
-            INIT.call_once(initialize_engines);
-            ENGINES.as_ref().unwrap()
-        };
-        let engines = engines.read().unwrap();
-        engines
-            .get(&self.engine_id)
+        ENGINE_REGISTRY
+            .get(self.engine_id)
             .expect("no engine found")
-            .clone()
     }
     /// Add a callback that is triggered when the transaction is started.
     /// The callback is removed when the transaction is finished.
@@ -398,7 +395,6 @@ impl From<TreeStorageId> for NodeRef {
         NodeRef(val)
     }
 }
-
 impl From<&TreeStorageId> for NodeRef {
     fn from(val: &TreeStorageId) -> Self {
         NodeRef(*val)
@@ -407,47 +403,38 @@ impl From<&TreeStorageId> for NodeRef {
 
 static UNIQ_POINTER_HANDLER_ID: AtomicUsize = AtomicUsize::new(0);
 
-pub(crate) static INIT: Once = Once::new();
-pub(crate) static ENGINE_ID: AtomicUsize = AtomicUsize::new(0);
-pub(crate) static mut ENGINES: Option<std::sync::RwLock<HashMap<usize, Arc<Engine>>>> = None;
+// Global instance of the engine registry
+static ENGINE_REGISTRY: Lazy<EngineRegistry> = Lazy::new(|| EngineRegistry::new());
 
-/// Initializes the ENGINES static variable.
-fn initialize_engines() {
-    INIT.call_once(|| unsafe {
-        ENGINES = Some(std::sync::RwLock::new(HashMap::new()));
-    });
+/// Thread-safe registry for managing Engine instances
+struct EngineRegistry {
+    engines: RwLock<HashMap<usize, Arc<Engine>>>,
+    next_id: AtomicUsize,
 }
 
-/// Adds an engine to the ENGINES map and returns its ID.
-fn add_engine(engine: Arc<Engine>) -> usize {
-    initialize_engines();
-    let id = engine.id;
-    ENGINE_ID.store(id, Ordering::SeqCst);
-    unsafe {
-        if let Some(ref engines) = ENGINES {
-            let mut engines = engines.write().unwrap();
-            engines.insert(id, engine);
+impl EngineRegistry {
+    fn new() -> Self {
+        Self {
+            engines: RwLock::new(HashMap::new()),
+            next_id: AtomicUsize::new(0),
         }
     }
-    id
-}
-/// Adds an engine to the ENGINES map and returns its ID.
-fn next_engine_id() -> usize {
-    initialize_engines();
-    let id = ENGINE_ID.load(Ordering::SeqCst);
 
-    id + 1
-}
-/// Retrieves an engine by its ID.
-#[allow(static_mut_refs)]
-fn get_engine_ref(id: usize) -> Arc<Engine> {
-    initialize_engines();
-    unsafe {
-        let engines = ENGINES.as_ref().unwrap();
-        let engines = engines.read().unwrap();
-        return engines.get(&id).unwrap().clone();
+    fn next_id(&self) -> usize {
+        self.next_id.fetch_add(1, Ordering::SeqCst)
+    }
+
+    fn register(&self, engine: Arc<Engine>) -> usize {
+        let id = engine.id;
+        self.engines.write().unwrap().insert(id, engine);
+        id
+    }
+
+    fn get(&self, id: usize) -> Option<Arc<Engine>> {
+        self.engines.read().unwrap().get(&id).cloned()
     }
 }
+
 impl fmt::Debug for Engine {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Engine({})", self.id)
@@ -455,10 +442,6 @@ impl fmt::Debug for Engine {
 }
 impl Engine {
     fn new(id: usize, width: f32, height: f32) -> Self {
-        // rayon::ThreadPoolBuilder::new()
-        //     .num_threads(2)
-        //     .build_global()
-        //     .unwrap();
         let mut layout_tree = TaffyTree::new();
         let layout_root = RwLock::new(
             layout_tree
@@ -491,20 +474,19 @@ impl Engine {
             scene_root,
             damage,
             pointer_handlers: FlatStorage::new(),
-            pointer_position: RwLock::new(Point::default()),
+            pointer_position: RwLock::new(skia::Point::default()),
             current_hover_node: RwLock::new(None),
         }
     }
 
     fn get_arc_ref(&self) -> Arc<Self> {
-        get_engine_ref(self.id)
+        ENGINE_REGISTRY.get(self.id).unwrap()
     }
 
     pub fn create(width: f32, height: f32) -> Arc<Self> {
-        initialize_engines();
-        let id = ENGINE_ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let id = ENGINE_REGISTRY.next_id();
         let new_engine = Arc::new(Engine::new(id, width, height));
-        add_engine(new_engine.clone());
+        ENGINE_REGISTRY.register(new_engine.clone());
 
         new_engine
     }
@@ -743,24 +725,27 @@ impl Engine {
                 let parent_id = node.parent();
 
                 if let Some(parent_id) = parent_id {
-                    if let Some(parent_node) = arena.get_mut(parent_id) {
-                        let parent = parent_node.get_mut();
-                        let parent_layer = self.get_layer(&NodeRef(parent_id)).unwrap();
-                        let parent_layout_id = parent_layer.layout_id;
-                        parent.set_need_layout(true);
+                    // if the parent is already removed, we don't need to do anything
+                    if !parent_id.is_removed(arena) {
+                        if let Some(parent_node) = arena.get_mut(parent_id) {
+                            let parent = parent_node.get_mut();
+                            let parent_layer = self.get_layer(&NodeRef(parent_id)).unwrap();
+                            let parent_layout_id = parent_layer.layout_id;
+                            parent.set_needs_layout(true);
 
-                        let mut layout = self.layout_tree.write().unwrap();
-                        let res = layout.mark_dirty(parent_layout_id);
-                        if let Some(err) = res.err() {
-                            println!("layout err {}", err);
+                            let mut layout = self.layout_tree.write().unwrap();
+                            let res = layout.mark_dirty(parent_layout_id);
+                            if let Some(err) = res.err() {
+                                println!("layout err {}", err);
+                            }
                         }
+                        // remove layers subtree
+                        layer_id.remove_subtree(arena);
                     }
                 }
                 // remove layout node
                 let mut layout_tree = self.layout_tree.write().unwrap();
                 layout_tree.remove(layout_id).unwrap();
-                // remove layers subtree
-                layer_id.remove_subtree(arena);
             }
         });
     }
@@ -799,7 +784,26 @@ impl Engine {
             Some(node)
         })
     }
-
+    pub fn node_render_size<'a>(&self, node_ref: impl Into<&'a NodeRef>) -> (f32, f32) {
+        let node_ref = node_ref.into();
+        self.scene.with_arena(|a| {
+            a.get(node_ref.0)
+                .map(|node| {
+                    let node = node.get();
+                    (node.render_layer.size.width, node.render_layer.size.height)
+                })
+                .unwrap_or((0.0, 0.0))
+        })
+    }
+    /// Get a copy of the node
+    pub fn scene_get_node(
+        &self,
+        node_ref: impl Into<NodeRef>,
+    ) -> Option<indextree::Node<SceneNode>> {
+        let node_ref = node_ref.into();
+        self.scene
+            .with_arena(|arena| arena.get(node_ref.into()).map(|node| node.clone()))
+    }
     pub fn scene_get_node_parent(&self, node_ref: NodeRef) -> Option<NodeRef> {
         self.scene.with_arena(|arena| {
             let node = arena.get(node_ref.into())?;
@@ -807,11 +811,9 @@ impl Engine {
             parent.map(NodeRef)
         })
     }
-
     pub fn now(&self) -> f32 {
         self.timestamp.read().unwrap().0
     }
-
     pub fn add_animation_from_transition(
         &self,
         transition: Transition,
@@ -827,7 +829,6 @@ impl Engine {
             autostart,
         )
     }
-
     pub fn add_animation(&self, animation: Animation, autostart: bool) -> AnimationRef {
         let aid = self.animations.insert(AnimationState {
             animation,
@@ -869,39 +870,27 @@ impl Engine {
         change: Arc<dyn SyncCommand>,
         animation_id: Option<AnimationRef>,
     ) -> TransactionRef {
-        let node_is_some = self
-            .scene
-            .with_arena(|arena| arena.get(target_id.into()).is_some());
-        if node_is_some {
-            let value_id: usize = change.value_id();
+        let value_id: usize = change.value_id();
 
-            let animated_node_change = AnimatedNodeChange {
-                change,
-                animation_id,
-                node_id: target_id,
-            };
-            let transaction_id = self.transactions.insert(animated_node_change);
-            let mut values_transactions = self.values_transactions.write().unwrap();
-            if let Some(existing_transaction) = values_transactions.get(&value_id) {
-                self.cancel_transaction(TransactionRef {
-                    id: *existing_transaction,
-                    value_id,
-                    engine_id: self.id,
-                });
-            }
-            values_transactions.insert(value_id, transaction_id);
-            TransactionRef {
-                id: transaction_id,
+        let animated_node_change = AnimatedNodeChange {
+            change,
+            animation_id,
+            node_id: target_id,
+        };
+        let transaction_id = self.transactions.insert(animated_node_change);
+        let mut values_transactions = self.values_transactions.write().unwrap();
+        if let Some(existing_transaction) = values_transactions.get(&value_id) {
+            self.cancel_transaction(TransactionRef {
+                id: *existing_transaction,
                 value_id,
                 engine_id: self.id,
-            }
-        } else {
-            tracing::warn!("Adding a change on a node not found {:?}", target_id);
-            TransactionRef {
-                id: 0,
-                value_id: FlatStorageId::default(),
-                engine_id: self.id,
-            }
+            });
+        }
+        values_transactions.insert(value_id, transaction_id);
+        TransactionRef {
+            id: transaction_id,
+            value_id,
+            engine_id: self.id,
         }
     }
     pub fn schedule_changes(
@@ -973,7 +962,7 @@ impl Engine {
         let needs_draw = !updated_nodes.is_empty();
 
         // merge the updated nodes with the nodes that are part of the layout calculation
-        nodes_for_layout(self);
+        // nodes_for_layout(self);
 
         // 2.0 update the layout tree using taffy
         update_layout_tree(self);
@@ -1008,19 +997,111 @@ impl Engine {
     }
     #[profiling::function]
     pub fn update_nodes(&self) -> skia_safe::Rect {
-        // iterate in parallel over the nodes and
-        // repaint if necessary
         let layout = self.layout_tree.read().unwrap();
-        let mut damage = skia_safe::Rect::default();
+        let mut total_damage = skia_safe::Rect::default();
+        let node = self.scene_root.read().unwrap();
+        if let Some(root_id) = *node {
+            // Phase 1: Collect nodes in post-order (children before parents)
+            let nodes_post_order: Vec<_> = self.scene.with_arena(|arena| {
+                let mut result = Vec::new();
+                for edge in root_id.traverse(arena) {
+                    if let indextree::NodeEdge::End(id) = edge {
+                        result.push(id);
+                    }
+                }
+                result
+            });
+
+            // Phase 2: Update nodes in parallel batches by depth level
+            // First, group nodes by depth to ensure parent dependencies
+            let depth_groups = self.scene.with_arena(|arena| {
+                let mut depth_map: std::collections::HashMap<usize, Vec<indextree::NodeId>> =
+                    std::collections::HashMap::new();
+
+                for &node_id in &nodes_post_order {
+                    let depth = node_id.ancestors(arena).skip(1).count();
+                    depth_map.entry(depth).or_default().push(node_id);
+                }
+
+                let mut groups: Vec<_> = depth_map.into_iter().collect();
+                groups.sort_by_key(|(depth, _)| *depth);
+                // groups.reverse(); // Process deepest first (leaves to root)
+                groups
+            });
+
+            // Phase 3: Process each depth level
+            for (_depth, nodes_at_depth) in depth_groups {
+                // Update nodes at this depth in parallel
+                let nad: &Vec<_> = nodes_at_depth.as_ref();
+                let damages: Vec<_> = nad
+                    .iter()
+                    .map(|node_id| {
+                        let parent_render_layer = self.scene.with_arena(|arena| {
+                            arena[*node_id]
+                                .parent()
+                                .and_then(|parent_id| arena.get(parent_id))
+                                .map(|parent_node| parent_node.get().render_layer().clone())
+                        });
+
+                        let damage = update_node_single(
+                            self,
+                            &layout,
+                            *node_id,
+                            parent_render_layer.as_ref(),
+                            false,
+                        );
+
+                        return damage;
+                    })
+                    .collect();
+
+                // Phase 4: Accumulate child damages to parents (sequential for each depth)
+                for (node_id, node_damage) in nodes_at_depth.iter().zip(damages.iter()) {
+                    if !node_damage.is_empty() {
+                        self.propagate_damage_to_ancestors(*node_id, *node_damage);
+                    }
+                    total_damage.join(*node_damage);
+                }
+            }
+        }
+
+        total_damage
+    }
+
+    /// Helper method to propagate damage up the tree
+    fn propagate_damage_to_ancestors(&self, node_id: indextree::NodeId, damage: skia_safe::Rect) {
         self.scene.with_arena_mut(|arena| {
-            let node = self.scene_root.read().unwrap();
-            if let Some(root_id) = *node {
-                let (.., d) = update_node(self, arena, &layout, root_id.0, None, false);
-                damage = d;
+            let ancestors: Vec<_> = node_id.ancestors(arena).skip(1).collect();
+
+            for ancestor_id in ancestors {
+                if let Some(ancestor_node) = arena.get_mut(ancestor_id) {
+                    let ancestor = ancestor_node.get_mut();
+
+                    // Update the bounds_with_children to include child damage
+                    let child_damage_in_local = {
+                        // Transform damage from global to ancestor's local space
+                        let inverse_transform = ancestor.render_layer.transform_33.invert();
+                        if let Some(inv) = inverse_transform {
+                            inv.map_rect(damage).0
+                        } else {
+                            damage
+                        }
+                    };
+
+                    ancestor
+                        .render_layer
+                        .bounds_with_children
+                        .join(child_damage_in_local);
+                    ancestor
+                        .render_layer
+                        .global_transformed_bounds_with_children
+                        .join(damage);
+
+                    // Mark ancestor for potential repaint
+                    ancestor.repaint_damage.join(damage);
+                }
             }
         });
-
-        damage
     }
     pub fn get_node_layout_style(&self, node: taffy::NodeId) -> Style {
         let layout = self.layout_tree.read().unwrap();
@@ -1230,110 +1311,86 @@ impl Engine {
         }
     }
     fn bubble_up_event(&self, node_ref: NodeRef, event_type: &PointerEventType) {
-        self.scene.with_arena(|arena| {
-            if let Some(node) = arena.get(node_ref.into()) {
-                let layer = self.get_layer(&node_ref).unwrap();
-                if node.is_removed() {
-                    return;
-                }
-
-                if let Some(pointer_handler) = self.pointer_handlers.get(&node_ref.0.into()) {
-                    let pos = *self.pointer_position.read().unwrap();
-                    // trigger node's own handlers
-                    for handler in pointer_handler.handlers(event_type) {
-                        handler.0(layer.clone(), pos.x, pos.y);
-                    }
-                }
-                if let Some(parent_id) = node.parent() {
-                    self.bubble_up_event(NodeRef(parent_id), event_type);
+        let ancestors: Vec<_> = self.scene.with_arena(|arena| {
+            let node_id = node_ref.0;
+            node_id
+                .ancestors(arena)
+                .skip(1) // Skip the node itself
+                .filter(|node| !node.is_removed(arena))
+                .collect()
+        });
+        let pos = *self.pointer_position.read().unwrap();
+        for ancestor in ancestors.iter().rev() {
+            if let Some(pointer_handler) = self.pointer_handlers.get(&(*ancestor).into()) {
+                // trigger node's own handlers
+                let layer = self.get_layer(&NodeRef(*ancestor)).unwrap();
+                for handler in pointer_handler.handlers(event_type) {
+                    handler.0(&layer, pos.x, pos.y);
                 }
             }
-        });
+        }
     }
     /// Sends pointer move event to the engine
-    pub fn pointer_move(
-        &self,
-        point: impl Into<Point>,
-        root_id: impl Into<Option<NodeId>>,
-    ) -> bool {
-        let p = point.into();
+    pub fn pointer_move(&self, p: &skia::Point, root_id: impl Into<Option<TreeStorageId>>) -> bool {
+        *self.pointer_position.write().unwrap() = *p;
+
+        // get the starting node
         let mut root_id = root_id.into();
 
         if root_id.is_none() {
-            // update engine pointer position
-            *self.pointer_position.write().unwrap() = p;
-
-            // get scene root node
             let root = *self.scene_root.read().unwrap().unwrap();
             root_id = Some(root);
         }
+
         let root_id = root_id.unwrap();
-        let root_layer = self.get_layer(&NodeRef(root_id)).unwrap();
-        let mut hover_self = false;
 
-        let (hidden, children) = self.scene.with_arena_mut(|arena| {
-            let children: Vec<NodeId> = root_id.children(arena).collect();
-            let root_node = arena.get_mut(root_id).unwrap().get_mut();
+        let (current_node, in_node, out_node) = self.scene.with_arena(|arena| {
+            let descendants: Vec<TreeStorageId> = root_id.descendants(arena).collect();
 
-            let root_node_hover = root_node.is_pointer_hover;
-
-            let hidden = root_node.hidden();
-            let pointer_events = root_layer.pointer_events();
-            if !hidden && pointer_events && root_node.contains(p) {
-                hover_self = true;
-                root_node.is_pointer_hover = true;
-                self.current_hover_node
-                    .write()
-                    .unwrap()
-                    .replace(NodeRef(root_id));
-
-                if !root_node_hover {
-                    if let Some(pointer_handler) = self.pointer_handlers.get(&root_id.into()) {
-                        for handler in pointer_handler.on_in.values() {
-                            handler.0(root_layer.clone(), p.x, p.y);
-                        }
-                    }
+            let mut new_hover = None;
+            for node_id in descendants.iter().rev() {
+                let node_id = *node_id;
+                let node = arena.get(node_id).unwrap().get();
+                // let layer = self.get_layer(&NodeRef(node_id)).unwrap();
+                if node.hidden() || !node.pointer_events() {
+                    continue;
                 }
-                if let Some(pointer_handler) = self.pointer_handlers.get(&root_id.into()) {
-                    for handler in pointer_handler.on_move.values() {
-                        handler.0(root_layer.clone(), p.x, p.y);
-                    }
-                }
-            } else if root_node_hover {
-                root_node.is_pointer_hover = false;
-                self.current_hover_node.write().unwrap().take();
-                if let Some(pointer_handler) = self.pointer_handlers.get(&root_id.into()) {
-                    for handler in pointer_handler.on_out.values() {
-                        handler.0(root_layer.clone(), p.x, p.y);
-                    }
+                if node.contains_point(p) {
+                    new_hover = Some(NodeRef(node_id));
+                    break;
                 }
             }
-            (hidden, children)
+            let mut in_node = None;
+            let mut out_node = None;
+
+            if let Some(new_hover_node) = new_hover {
+                let mut current_hover = self.current_hover_node.write().unwrap();
+                let old_hover = current_hover.replace(new_hover_node);
+
+                if old_hover != new_hover {
+                    in_node = Some(new_hover_node);
+                    if old_hover.is_some() {
+                        out_node = old_hover;
+                    }
+                }
+            } else {
+                let mut current_hover = self.current_hover_node.write().unwrap();
+                if let Some(old_hover) = current_hover.take() {
+                    out_node = Some(old_hover);
+                }
+            }
+            (new_hover, in_node, out_node)
         });
-        let mut hover_children = false;
-        if !hidden {
-            for node_id in children {
-                if !hover_children {
-                    if self.pointer_move(p, node_id) {
-                        hover_children = true;
-                    }
-                } else {
-                    self.scene.with_arena_mut(|arena| {
-                        let node = arena.get_mut(node_id).unwrap().get_mut();
-                        if node.change_hover(false) {
-                            if let Some(pointer_handler) =
-                                self.pointer_handlers.get(&node_id.into())
-                            {
-                                for handler in pointer_handler.on_out.values() {
-                                    handler.0(root_layer.clone(), p.x, p.y);
-                                }
-                            }
-                        }
-                    });
-                }
-            }
+        if let Some(node) = current_node {
+            self.bubble_up_event(node, &PointerEventType::Move);
         }
-        hover_self || hover_children
+        if let Some(node) = in_node {
+            self.bubble_up_event(node, &PointerEventType::In);
+        }
+        if let Some(node) = out_node {
+            self.bubble_up_event(node, &PointerEventType::Out);
+        }
+        current_node.is_some()
     }
     pub fn pointer_button_down(&self) {
         if let Some(node) = *self.current_hover_node.read().unwrap() {
@@ -1348,7 +1405,7 @@ impl Engine {
     pub fn current_hover(&self) -> Option<NodeRef> {
         *self.current_hover_node.read().unwrap()
     }
-    pub fn get_pointer_position(&self) -> Point {
+    pub fn get_pointer_position(&self) -> skia::Point {
         *self.pointer_position.read().unwrap()
     }
 

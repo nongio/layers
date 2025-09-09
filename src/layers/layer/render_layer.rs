@@ -7,35 +7,63 @@ use skia::{ColorFilter, ImageFilter};
 #[derive(Clone, Debug)]
 #[repr(C)]
 pub struct RenderLayer {
+    /// A unique identifier for the layer
     pub key: String,
+    /// The rectangle representing the bounds of the layer
     pub bounds: skia_safe::Rect,
+    /// The rounded rectangle representing the bounds of the layer
     pub rbounds: skia_safe::RRect,
+    /// The transformed bounds of the layer, relative to the parent
     pub local_transformed_bounds: skia_safe::Rect,
+    /// The bounds of the layers, including children bounds
     pub bounds_with_children: skia_safe::Rect,
+    /// The transformed bounds of the layer, relative to the root
     pub global_transformed_bounds: skia_safe::Rect,
+    /// The transformed rounded bounds of the layer, relative to the root
     pub global_transformed_rbounds: skia_safe::RRect,
+    /// The transformed bounds of the layer, including children bounds, relative to the root
     pub global_transformed_bounds_with_children: skia_safe::Rect,
+    /// The background color of the layer
     pub background_color: PaintColor,
+    /// The border color of the layer
     pub border_color: PaintColor,
+    /// The border width of the layer
     pub border_width: f32,
+    /// The border style of the layer
     pub border_style: BorderStyle,
+    /// The border corner radius of the layer
     pub border_corner_radius: BorderRadius,
+    /// The size of the layer
     pub size: skia_safe::Size,
+    /// The shadow offset of the layer
     pub shadow_offset: Point,
+    /// The shadow radius of the layer
     pub shadow_radius: f32,
+    /// The shadow color of the layer
     pub shadow_color: Color,
+    /// The shadow spread of the layer
     pub shadow_spread: f32,
+    /// The transform of the layer relative to the root (4x4)
     pub transform: M44,
-    pub local_transform: M44,
+    /// The transform of the layer relative to the root (3x3)
     pub transform_33: Matrix,
+    /// The transform of the layer relative to the parent (4x4)
+    pub local_transform: M44,
+    /// The blend mode of the layer
     pub blend_mode: BlendMode,
+    /// The opacity of the layer, 0.0 is transparent, 1.0 is opaque
     pub opacity: f32,
+    /// The premultiplied opacity of the layer, 0.0 is transparent, 1.0 is opaque
     pub premultiplied_opacity: f32,
+    /// Is the content drawn clipped to the bounds of the layer
+    pub clip_content: bool,
+    /// Are the children drawn clipped to the bounds of the layer
+    pub clip_children: bool,
+    /// Are the pointer events enabled for the layer
+    pub pointer_events: bool,
     pub content_draw_func: Option<ContentDrawFunctionInternal>,
     pub content: Option<Picture>,
     pub content_damage: skia_safe::Rect,
-    pub clip_content: bool,
-    pub clip_children: bool,
     pub image_filter: Option<ImageFilter>,
     pub image_filter_bounds: Option<skia::Rect>,
     pub color_filter: Option<ColorFilter>,
@@ -46,10 +74,8 @@ impl RenderLayer {
         &mut self,
         model: &ModelLayer,
         layout: &taffy::tree::Layout,
-        matrix: Option<&M44>,
+        context_transform: Option<&M44>,
         context_opacity: f32,
-        // cache_content: bool,
-        // arena: &Arena<SceneNode>,
     ) {
         let key = model.key.read().unwrap().clone();
         let layout_position = layout.location;
@@ -69,7 +95,6 @@ impl RenderLayer {
 
         let bounds = skia_safe::Rect::from_xywh(0.0, 0.0, size.width, size.height);
 
-        // let rotation = model.rotation.value();
         let anchor_point = model.anchor_point.value();
         let scale = model.scale.value();
         let anchor_translate = M44::translate(
@@ -78,43 +103,44 @@ impl RenderLayer {
             0.0,
         );
         let identity = M44::new_identity();
-        let matrix = matrix.unwrap_or(&identity);
+        let matrix = context_transform.unwrap_or(&identity);
         let translate = M44::translate(position.x, position.y, 0.0);
         let scale = M44::scale(scale.x, scale.y, 1.0);
 
-        // let rotate_x = M44::rotate(
-        //     V3 {
-        //         x: 1.0,
-        //         y: 0.0,
-        //         z: 0.0,
-        //     },
-        //     rotation.x,
-        // );
-        // let rotate_y = M44::rotate(
-        //     V3 {
-        //         x: 0.0,
-        //         y: 1.0,
-        //         z: 0.0,
-        //     },
-        //     rotation.y,
-        // );
-        // let rotate_z = M44::rotate(
-        //     V3 {
-        //         x: 0.0,
-        //         y: 0.0,
-        //         z: 1.0,
-        //     },
-        //     rotation.z,
-        // );
+        let rotation = model.rotation.value();
+        let rotate_x = M44::rotate(
+            V3 {
+                x: 1.0,
+                y: 0.0,
+                z: 0.0,
+            },
+            rotation.x,
+        );
+        let rotate_y = M44::rotate(
+            V3 {
+                x: 0.0,
+                y: 1.0,
+                z: 0.0,
+            },
+            rotation.y,
+        );
+        let rotate_z = M44::rotate(
+            V3 {
+                x: 0.0,
+                y: 0.0,
+                z: 1.0,
+            },
+            rotation.z,
+        );
 
         // merge all transforms keeping into account the anchor point
         let mut local_transform = M44::new_identity();
         local_transform = M44::concat(&local_transform, &translate);
         local_transform = M44::concat(&local_transform, &scale);
-        // let transform = M44::concat(&transform, &rotate_x);
-        // let transform = M44::concat(&transform, &rotate_y);
-        // let transform = M44::concat(&transform, &rotate_z);
-        local_transform = M44::concat(&local_transform, &anchor_translate);
+        let transform = M44::concat(&local_transform, &rotate_x);
+        let transform = M44::concat(&transform, &rotate_y);
+        let transform = M44::concat(&transform, &rotate_z);
+        local_transform = M44::concat(&transform, &anchor_translate);
 
         let global_transform = M44::concat(matrix, &local_transform);
         let (transformed_bounds, _) = global_transform.to_m33().map_rect(bounds);
@@ -174,16 +200,19 @@ impl RenderLayer {
         self.opacity = opacity;
         self.premultiplied_opacity = opacity * context_opacity;
         self.bounds = bounds;
+        self.rbounds = skia_safe::RRect::new_rect_radii(bounds, &border_corner_radius.into());
         self.bounds_with_children = bounds;
         self.local_transformed_bounds = local_transformed_bounds;
         self.global_transformed_bounds = transformed_bounds;
         self.global_transformed_bounds_with_children = transformed_bounds;
-        self.rbounds = skia_safe::RRect::new_rect_radii(bounds, &border_corner_radius.into());
         self.global_transformed_rbounds =
             skia_safe::RRect::new_rect_radii(transformed_bounds, &border_corner_radius.into());
 
         self.clip_content = model.clip_content.value();
         self.clip_children = model.clip_children.value();
+        self.pointer_events = model
+            .pointer_events
+            .load(std::sync::atomic::Ordering::Relaxed);
     }
 
     #[allow(dead_code)]
@@ -323,6 +352,9 @@ impl RenderLayer {
             image_filter: model.image_filter.read().unwrap().clone(),
             image_filter_bounds: *model.filter_bounds.read().unwrap(),
             color_filter: model.color_filter.read().unwrap().clone(),
+            pointer_events: model
+                .pointer_events
+                .load(std::sync::atomic::Ordering::Relaxed),
         }
     }
 }
@@ -366,6 +398,7 @@ impl Default for RenderLayer {
             image_filter: None,
             image_filter_bounds: None,
             color_filter: None,
+            pointer_events: false,
         }
     }
 }
@@ -399,10 +432,10 @@ impl Serialize for RenderLayer {
         seq.serialize_field("shadow_radius", &self.shadow_radius)?;
         seq.serialize_field("shadow_color", &self.shadow_color)?;
         seq.serialize_field("shadow_spread", &self.shadow_spread)?;
-        // seq.serialize_element(&self.transform)?;
         seq.serialize_field("blend_mode", &self.blend_mode)?;
         seq.serialize_field("opacity", &self.opacity)?;
         // seq.serialize_element(&self.content)?;
+        // seq.serialize_element(&self.transform)?;
         seq.end()
     }
 }

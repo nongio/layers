@@ -1,4 +1,5 @@
 use bitflags::bitflags;
+use skia::Contains;
 
 use std::{
     cell::RefCell,
@@ -59,19 +60,24 @@ impl DrawCache {
     }
 }
 
+// The RenderableFlags struct is a bitflags struct that is used to manage the rendering states of a SceneNode.
+// Changing a Layer property will set the corresponding flag in the SceneNode.
+// Noop has no effect on the layer.
+// NeedsLayout will sync with the layout node properties might trigger a layout tree compute
+// NeedsPaint will trigger a repaint of the layer
+
 bitflags! {
     pub struct RenderableFlags: u32 {
         const NOOP = 1 << 0;
         const NEEDS_LAYOUT = 1 << 1;
         const NEEDS_PAINT = 1 << 2;
-        const ANIMATING = 1 << 3;
     }
 }
 
 /// The SceneNode struct represents a node in the scene graph.
 /// It contains a Layer and manages rendering states, caching and interactions.
 /// It provides methods for managing rendering and pointer events.
-// #[derive(Clone)]
+#[derive(Clone)]
 pub struct SceneNode {
     pub(crate) render_layer: RenderLayer,
     rendering_flags: RenderableFlags,
@@ -80,12 +86,12 @@ pub struct SceneNode {
     pub(crate) image_cached: bool,
     pub(crate) picture_cached: bool,
     pub(crate) is_deleted: bool,
-    pub(crate) is_pointer_hover: bool,
     pub(crate) frame_number: usize,
     pub(crate) draw_cache: Option<DrawCache>,
     pub(crate) _debug_info: Option<DrawDebugInfo>,
     pub(crate) _follow_node: Option<NodeRef>,
 }
+
 impl Default for SceneNode {
     fn default() -> Self {
         Self {
@@ -96,9 +102,8 @@ impl Default for SceneNode {
                 | RenderableFlags::NEEDS_PAINT,
             hidden: false,
             image_cached: false,
-            picture_cached: false,
+            picture_cached: true,
             is_deleted: false,
-            is_pointer_hover: false,
             frame_number: 0,
             draw_cache: None,
             _debug_info: None,
@@ -106,6 +111,7 @@ impl Default for SceneNode {
         }
     }
 }
+
 impl SceneNode {
     pub fn new() -> Self {
         Self::default()
@@ -159,7 +165,7 @@ impl SceneNode {
             }
         }
         // self.layer.set_opacity(self.layer.opacity(), None);
-        self.set_need_repaint(true);
+        self.set_needs_repaint(true);
     }
     pub fn set_hidden(&mut self, hidden: bool) {
         self.hidden = hidden;
@@ -189,14 +195,6 @@ impl SceneNode {
             }
         }
     }
-    pub(crate) fn change_hover(&mut self, value: bool) -> bool {
-        // let hover = self.is_pointer_hover;
-        if self.is_pointer_hover != value {
-            self.is_pointer_hover = value;
-            return true;
-        }
-        false
-    }
     pub(crate) fn follow_node(&mut self, nodeid: &Option<NodeRef>) {
         // let mut _follow_node = self._follow_node.write().unwrap();
         self._follow_node = *nodeid;
@@ -222,44 +220,32 @@ impl SceneNode {
     //     self.layer.layout_id
     // }
 
-    /// genrate the picture from the renderlayer
+    /// generate the SkPicture from drawing the Renderlayer
+    /// if the layer is not hidden
+    /// if the layer has opacity
+    /// if the layer is marked for needs repaint
+    /// returns the damaged Rect of from drawing the layer, in layers coordinates
     #[profiling::function]
-    pub fn repaint_if_needed(
-        &mut self,
-        // arena: &Arena<SceneNode>
-    ) -> skia_safe::Rect {
+    pub fn repaint_if_needed(&mut self) -> skia_safe::Rect {
         let mut damage = skia_safe::Rect::default();
         let render_layer = &self.render_layer;
-
         if self.hidden() || render_layer.premultiplied_opacity == 0.0 {
             let rd = self.repaint_damage;
             self.repaint_damage = damage;
             return rd;
         }
-        let mut needs_repaint = self.rendering_flags.contains(RenderableFlags::NEEDS_PAINT);
 
-        // if the size has changed from the layout, we need to repaint
-        // the flag want be set if the size has changed from the layout calculations
-        if let Some(dc) = self.draw_cache.as_ref() {
-            if render_layer.size != *dc.size() {
-                needs_repaint = true;
-            }
-        }
-        // FIXME: can this be optimized?
-        if render_layer.blend_mode == BlendMode::BackgroundBlur {
-            needs_repaint = true;
-        }
-        if needs_repaint {
-            let (picture, layer_damage) = draw_layer_to_picture(render_layer);
-            let (layer_damage_transformed, _) = render_layer.transform_33.map_rect(layer_damage);
+        if self.needs_repaint() {
+            let (picture, _layer_damage) = draw_layer_to_picture(render_layer);
+            let (layer_damage_transformed, _) = render_layer.transform_33.map_rect(_layer_damage);
 
             damage.join(layer_damage_transformed);
             if self.is_picture_cached() {
                 if let Some(picture) = picture {
                     // update or create the draw cache
-                    if let Some(dc) = &mut self.draw_cache {
-                        dc.picture = picture;
-                        dc.size = render_layer.size;
+                    if let Some(draw_cache) = &mut self.draw_cache {
+                        draw_cache.picture = picture;
+                        draw_cache.size = render_layer.size;
                     } else {
                         let size = render_layer.size;
 
@@ -277,51 +263,50 @@ impl SceneNode {
                     self.repaint_damage = damage;
                     damage.join(previous_damage);
 
-                    self.set_need_repaint(false);
+                    self.set_needs_repaint(false);
                 }
             }
         }
         damage
     }
-
     /// update the renderlayer based on model and layout
     #[profiling::function]
-    pub fn layout_if_needed(
+    pub fn update_render_layer_if_needed(
         &mut self,
         layout: &Layout,
         model: Arc<ModelLayer>,
         matrix: Option<&M44>,
         context_opacity: f32,
-        // arena: &mut Arena<SceneNode>,
     ) -> bool {
         if self.hidden() {
             return false;
         }
-
-        if self.rendering_flags.contains(RenderableFlags::NEEDS_LAYOUT) {
+        if self.render_layer.size.width != layout.size.width as f32
+            || self.render_layer.size.height != layout.size.height as f32
+            || self.render_layer.local_transformed_bounds.x() != layout.location.x as f32
+            || self.render_layer.local_transformed_bounds.y() != layout.location.y as f32
+        {
+            self.set_needs_repaint(true);
+        }
+        if self.rendering_flags.contains(RenderableFlags::NEEDS_PAINT) {
             {
-                // let mut render_layer = self.render_layer.write().unwrap();
                 self.render_layer.update_with_model_and_layout(
                     &model,
                     layout,
                     matrix,
                     context_opacity,
-                    // self.is_picture_cached(),
-                    // arena,
                 );
             }
-            self.set_need_layout(false);
-            // self.increase_frame();
+            self.increase_frame();
             return true;
         }
         false
     }
-
-    pub fn set_need_repaint(&mut self, need_repaint: bool) {
+    pub fn set_needs_repaint(&mut self, need_repaint: bool) {
         self.rendering_flags
             .set(RenderableFlags::NEEDS_PAINT, need_repaint);
     }
-    pub fn set_need_layout(&mut self, need_layout: bool) {
+    pub fn set_needs_layout(&mut self, need_layout: bool) {
         self.rendering_flags
             .set(RenderableFlags::NEEDS_LAYOUT, need_layout);
     }
@@ -338,8 +323,13 @@ impl SceneNode {
     pub fn needs_layout(&self) -> bool {
         self.rendering_flags.contains(RenderableFlags::NEEDS_LAYOUT)
     }
-
     pub fn is_picture_cached(&self) -> bool {
         self.picture_cached
+    }
+    pub fn pointer_events(&self) -> bool {
+        self.render_layer.pointer_events
+    }
+    pub fn contains_point(&self, point: &skia::Point) -> bool {
+        self.render_layer.global_transformed_bounds.contains(point)
     }
 }

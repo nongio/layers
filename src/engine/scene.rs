@@ -62,14 +62,14 @@ impl Scene {
             parent.append(child, nodes);
             if let Some(scene_node) = nodes.get_mut(child) {
                 let scene_node = scene_node.get_mut();
-                scene_node.set_need_repaint(true);
+                scene_node.set_needs_repaint(true);
             }
 
             let parent = *parent;
             if let Some(new_parent_node) = nodes.get_mut(parent) {
                 let new_parent_node = new_parent_node.get_mut();
                 //FIXME if the node position is Absolute, we should not need to layout the parent
-                new_parent_node.set_need_layout(true);
+                new_parent_node.set_needs_layout(true);
             }
         });
     }
@@ -84,13 +84,13 @@ impl Scene {
             parent.prepend(child, nodes);
             if let Some(scene_node) = nodes.get_mut(child) {
                 let scene_node = scene_node.get_mut();
-                scene_node.set_need_repaint(true);
+                scene_node.set_needs_repaint(true);
             }
 
             let parent = *parent;
             if let Some(new_parent_node) = nodes.get_mut(parent) {
                 let new_parent_node = new_parent_node.get_mut();
-                new_parent_node.set_need_layout(true);
+                new_parent_node.set_needs_layout(true);
             }
         });
     }

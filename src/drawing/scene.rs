@@ -443,24 +443,7 @@ pub(crate) fn paint_node(
     if blend_mode == crate::prelude::BlendMode::BackgroundBlur && opacity > 0.0 {
         profiling::scope!("background_blur");
         let border_corner_radius = render_layer.border_corner_radius;
-        let rrbounds = skia_safe::RRect::new_rect_radii(
-            bounds_to_origin,
-            &[
-                skia_safe::Point::new(border_corner_radius.top_left, border_corner_radius.top_left),
-                skia_safe::Point::new(
-                    border_corner_radius.top_right,
-                    border_corner_radius.top_right,
-                ),
-                skia_safe::Point::new(
-                    border_corner_radius.bottom_left,
-                    border_corner_radius.bottom_left,
-                ),
-                skia_safe::Point::new(
-                    border_corner_radius.bottom_right,
-                    border_corner_radius.bottom_right,
-                ),
-            ],
-        );
+        let rrbounds = render_layer.rbounds;
         canvas.clip_rrect(rrbounds, skia_safe::ClipOp::Intersect, Some(true));
 
         let crop_rect = Some(skia_safe::image_filters::CropRect::from(

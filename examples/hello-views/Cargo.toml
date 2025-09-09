@@ -10,6 +10,7 @@ lay-rs = { path = "../../", features = [
     "export-skia",
     "export-taffy",
     "debugger",
+    "layer_state",
 ] }
 glutin = "0.29"
 winit = "0.28"

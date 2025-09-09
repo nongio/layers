@@ -1,22 +1,26 @@
 use std::sync::{Arc, RwLock};
 
-use indextree::NodeId;
 use rayon::{
     iter::IntoParallelRefIterator,
     prelude::{IntoParallelRefMutIterator, ParallelIterator},
 };
-use taffy::{prelude::Size, style_helpers::length, TaffyTree};
+use taffy::{prelude::Size, style_helpers::length, Dimension};
 
 #[cfg(feature = "debugger")]
 use layers_debug_server::send_debugger_message;
 
-use crate::{layers::layer::render_layer::RenderLayer, prelude::Layer};
+use crate::prelude::Layer;
 
 use super::{
-    node::SceneNode,
-    storage::{FlatStorageId, TreeStorageData},
-    AnimationState, Engine, NodeRef, Timestamp, TransactionCallback, TransitionCallbacks,
+    storage::FlatStorageId, AnimationState, Engine, NodeRef, Timestamp, TransactionCallback,
+    TransitionCallbacks,
 };
+
+mod update_node;
+
+#[allow(unused_imports)]
+pub(crate) use update_node::update_node_recursive;
+pub(crate) use update_node::update_node_single;
 
 #[profiling::function]
 /// This function updates the animations in the engine, in parallel.
@@ -153,7 +157,7 @@ pub(crate) fn nodes_for_layout(engine: &Engine) -> Vec<NodeRef> {
                     // let layout = engine.get_node_layout_style(layer.layout_id);
                     // if layout.position != taffy::style::Position::Absolute {
                     // }
-                    scene_node.set_need_layout(true);
+                    // scene_node.set_need_layout(true);
                     //     FIXME: replicated NODE
                     // follow a replicated node
                     //     // it will paint continuosly
@@ -178,182 +182,75 @@ pub(crate) fn nodes_for_layout(engine: &Engine) -> Vec<NodeRef> {
 
 #[profiling::function]
 pub(crate) fn update_layout_tree(engine: &Engine) {
+    // Get scene size early to avoid multiple lock acquisitions
+    let scene_size = engine.scene.size.read().unwrap();
+    let mut changed_nodes = Vec::new();
+
+    // First, collect nodes that need size updates
     {
-        profiling::scope!("update_nodes_size");
-        engine.scene.with_arena(|arena| {
-            arena.iter().for_each(|node| {
-                if node.is_removed() {
-                    return;
+        profiling::scope!("collect_nodes_needing_update");
+        if let Some(root) = engine.scene_root() {
+            engine.scene.with_arena(|arena| {
+                for node_id in root.0.descendants(arena) {
+                    let node = arena.get(node_id).unwrap();
+                    if node.is_removed() {
+                        return;
+                    }
+                    let node_ref = NodeRef(node_id);
+
+                    if node.get().needs_layout() {
+                        changed_nodes.push(node_ref);
+                    }
                 }
-                let id = arena.get_node_id(node).unwrap();
-                engine.with_layers(|layers| {
-                    let layer = layers.get(&NodeRef(id)).unwrap();
+            });
+        }
+    }
+
+    // Update size only for nodes that need it
+    if !changed_nodes.is_empty() {
+        profiling::scope!("update_nodes_size");
+        for node_ref in &changed_nodes {
+            engine.with_layers(|layers| {
+                if let Some(layer) = layers.get(node_ref) {
                     let size = layer.size();
                     let layout_node_id = layer.layout_id;
-                    engine.set_node_layout_size(layout_node_id, size);
-                });
+                    if size.width != Dimension::Auto || size.height != Dimension::Auto {
+                        engine.set_node_layout_size(layout_node_id, size);
+                    }
+                }
             });
-        });
-    };
+            engine.scene.with_arena_mut(|arena| {
+                if let Some(node) = arena.get_mut(node_ref.0) {
+                    let node = node.get_mut();
+                    node.set_needs_layout(false);
+                    node.set_needs_repaint(true);
+                }
+            });
+        }
+    }
+
+    // Now check if we need to compute layout
     let mut layout = engine.layout_tree.write().unwrap();
     let layout_root = *engine.layout_root.read().unwrap();
 
-    // FIXME; optimise this call
-    // if layout.dirty(layout_root).unwrap() {
-    let scene_size = engine.scene.size.read().unwrap();
+    // Only compute layout if nodes have changed or if the root is dirty
+    let needs_layout = !changed_nodes.is_empty() || layout.dirty(layout_root).unwrap_or(false);
 
-    {
+    if needs_layout {
         profiling::scope!("compute_layout");
-        layout
-            .compute_layout(
-                layout_root,
-                Size {
-                    width: length(scene_size.x),
-                    height: length(scene_size.y),
-                },
-            )
-            .unwrap();
-    }
-
-    // }
-}
-
-// this function recursively update the node picture and its children
-// and returns the area of pixels that are changed compared to the previeous frame
-#[allow(unused_assignments, unused_mut)]
-#[profiling::function]
-pub(crate) fn update_node(
-    engine: &Engine,
-    arena: &mut TreeStorageData<SceneNode>,
-    layout: &TaffyTree,
-    node_id: NodeId,
-    parent: Option<&RenderLayer>,
-    parent_changed: bool,
-) -> (bool, skia::Rect) {
-    // update the layout of the node
-    let children: Vec<_> = node_id.children(arena).collect();
-
-    let mut damaged = false;
-    let mut layout_changed = false;
-    let mut pos_changed = false;
-    let mut node_damage = skia::Rect::default();
-    let mut transformed_bounds = skia::Rect::default();
-    let mut new_transformed_bounds = skia::Rect::default();
-    let mut render_layer = {
-        let node = arena.get_mut(node_id);
-
-        if node.is_none() {
-            return (false, skia::Rect::default());
-        }
-
-        let node = node.unwrap().get_mut();
-        let layer = engine.get_layer(&NodeRef(node_id)).unwrap();
-        let node_layout = layout.layout(layer.layout_id).unwrap();
-
-        let mut opacity;
-        (transformed_bounds, opacity) = {
-            let render_layer = &node.render_layer;
-            (
-                render_layer.global_transformed_bounds,
-                render_layer.premultiplied_opacity,
-            )
-        };
-
-        let cumulative_transform = parent.map(|p| &p.transform);
-        let context_opacity = parent.map(|p| p.premultiplied_opacity).unwrap_or(1.0);
-
-        let _new_layout = node.layout_if_needed(
-            node_layout,
-            layer.model.clone(),
-            cumulative_transform,
-            context_opacity,
-            // arena,
-        );
-        // update the picture of the node
-        node_damage = node.repaint_if_needed();
-
-        let render_layer = node.render_layer();
-
-        new_transformed_bounds = render_layer.global_transformed_bounds;
-
-        let repainted = !node_damage.is_empty();
-
-        layout_changed = transformed_bounds.width() != new_transformed_bounds.width()
-            || transformed_bounds.height() != new_transformed_bounds.height();
-
-        pos_changed = transformed_bounds.x() != new_transformed_bounds.x()
-            || transformed_bounds.y() != new_transformed_bounds.y();
-
-        let opacity_changed = opacity != render_layer.premultiplied_opacity;
-
-        if (pos_changed && !transformed_bounds.is_empty())
-            && render_layer.premultiplied_opacity > 0.0
-            || opacity_changed
-        {
-            node_damage.join(node.repaint_damage);
-            node_damage.join(new_transformed_bounds);
-
-            node.repaint_damage = new_transformed_bounds;
-        }
-        damaged = layout_changed || repainted || parent_changed;
-
-        let render_layer = node.render_layer();
-
-        render_layer.clone()
-    };
-    let mut rl = render_layer.clone();
-    let (damaged, mut node_damage) = children
-        .iter()
-        .map(|child| {
-            // println!("**** map ({}) ", child);
-            let (child_damaged, child_damage) = update_node(
-                engine,
-                arena,
-                layout,
-                *child,
-                Some(&render_layer.clone()),
-                parent_changed,
-            );
-            let rn = arena.get(*child).unwrap().get().render_layer.clone();
-            // damaged = damaged || child_repainted || child_relayout;
-            (child_damaged, child_damage, child, rn)
-        })
-        .fold(
-            (damaged, node_damage),
-            |(damaged, node_damage), (child_damaged, child_damage, _nodeid, r)| {
-                // update the bounds of the node to include the children
-
-                rl.global_transformed_bounds_with_children
-                    .join(r.global_transformed_bounds_with_children);
-
-                let (_, _) = r.local_transform.to_m33().map_rect(r.bounds_with_children);
-                let child_bounds = r.bounds_with_children;
-
-                rl.bounds_with_children.join(child_bounds);
-
-                let node_damage = skia::Rect::join2(node_damage, child_damage);
-                (damaged || child_damaged, node_damage)
+        match layout.compute_layout(
+            layout_root,
+            Size {
+                width: length(scene_size.x),
+                height: length(scene_size.y),
             },
-        );
-    {
-        let node = arena.get_mut(node_id).unwrap().get_mut();
-        node.render_layer = rl;
-        // if the node has some drawing in it, and has changed size or position
-        // we need to repaint
-        let last_repaint_damage = node.repaint_damage;
-        if !last_repaint_damage.is_empty() && (layout_changed || pos_changed || parent_changed) {
-            transformed_bounds.join(new_transformed_bounds);
-            node_damage.join(transformed_bounds);
+        ) {
+            Ok(_) => {}
+            Err(e) => {
+                tracing::error!("Layout computation failed: {:?}", e);
+            }
         }
     }
-    if damaged {
-        // if !node_damage.is_empty() {
-        if let Some(node) = arena.get_mut(node_id) {
-            let node = node.get_mut();
-            node.increase_frame();
-        }
-    }
-    (damaged, node_damage)
 }
 
 #[profiling::function]
@@ -588,6 +485,10 @@ pub(crate) fn cleanup_nodes(engine: &Engine) -> skia_safe::Rect {
 
 #[cfg(feature = "debugger")]
 pub fn send_debugger(scene: Arc<crate::engine::scene::Scene>, scene_root: NodeRef) {
+    use indextree::NodeId;
+
+    use crate::layers::layer::render_layer::RenderLayer;
+
     let s = scene.clone();
     s.with_arena(|arena| {
         let render_layers: std::collections::HashMap<

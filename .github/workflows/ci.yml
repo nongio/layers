@@ -12,7 +12,7 @@ jobs:
       - name: Checkout sources
         uses: actions/checkout@v3
       - name: Rust toolchain
-        uses: dtolnay/rust-toolchain@1.82.0
+        uses: dtolnay/rust-toolchain@1.83.0
       - name: Get date for registry cache
         id: date
         run: echo "::set-output name=date::$(date +'%Y-%m-%d')"
@@ -51,7 +51,7 @@ jobs:
           restore-keys: ${{ runner.os }}-cargo-registry-
 
       - name: Rust toolchain
-        uses: dtolnay/rust-toolchain@1.82.0
+        uses: dtolnay/rust-toolchain@1.83.0
 
       - name: System dependencies
         run: sudo apt-get update; sudo apt-get install -y libudev-dev libgbm-dev libxkbcommon-dev libegl1-mesa-dev libwayland-dev libinput-dev libdbus-1-dev libsystemd-dev libseat-dev
