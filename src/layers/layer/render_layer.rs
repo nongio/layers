@@ -162,24 +162,24 @@ impl RenderLayer {
 
         // FIXME: cache content
         // if cache_content {
-        if content_draw_func.is_some()
-            && ((self.size != size) || (self.content_draw_func.as_ref() != content_draw_func))
-        {
-            let mut recorder = skia_safe::PictureRecorder::new();
-            let canvas =
-                recorder.begin_recording(skia_safe::Rect::from_wh(size.width, size.height), None);
-            let draw_func = content_draw_func.unwrap();
-            let caller = draw_func.0.as_ref();
-            let content_damage = caller(canvas, size.width, size.height);
-            self.content_damage = content_damage;
-            self.content = recorder.finish_recording_as_picture(None);
-        }
+        // if content_draw_func.is_some()
+        //     && ((self.size != size) || (self.content_draw_func.as_ref() != content_draw_func))
+        // {
+        //     let mut recorder = skia_safe::PictureRecorder::new();
+        //     let canvas =
+        //         recorder.begin_recording(skia_safe::Rect::from_wh(size.width, size.height), None);
+        //     let draw_func = content_draw_func.unwrap();
+        //     let caller = draw_func.0.as_ref();
+        //     let content_damage = caller(canvas, size.width, size.height);
+        //     self.content_damage = content_damage;
+        //     self.content = recorder.finish_recording_as_picture(None);
+        // }
         // } else {
         //     self.content = None;
-        //     if let Some(draw_func) = content_draw_func {
-        //         let caller = draw_func.0.as_ref();
-        //         self.content_draw_func = Some(draw_func.clone());
-        //     }
+        if let Some(draw_func) = content_draw_func {
+            // let caller = draw_func.0.as_ref();
+            self.content_draw_func = Some(draw_func.clone());
+        }
         // }
 
         self.key = key;
@@ -300,15 +300,15 @@ impl RenderLayer {
         let shadow_spread = model.shadow_spread.value();
         let shadow_color = model.shadow_color.value();
 
-        let mut content = None;
+        let content = None;
         let mut content_draw_func = None;
         if let Some(draw_func) = model.draw_content.read().unwrap().as_ref() {
-            let mut recorder = skia_safe::PictureRecorder::new();
-            let canvas =
-                recorder.begin_recording(skia_safe::Rect::from_wh(size.width, size.height), None);
-            let caller = draw_func.0.clone();
-            caller(canvas, size.width, size.height);
-            content = recorder.finish_recording_as_picture(None);
+            // let mut recorder = skia_safe::PictureRecorder::new();
+            // let canvas =
+            // recorder.begin_recording(skia_safe::Rect::from_wh(size.width, size.height), None);
+            // let caller = draw_func.0.clone();
+            // caller(canvas, size.width, size.height, arena);
+            // content = recorder.finish_recording_as_picture(None);
             content_draw_func = Some(draw_func.clone());
         }
 
