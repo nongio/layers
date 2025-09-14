@@ -210,12 +210,13 @@ impl SceneNode {
     }
     /// update the renderlayer based on model and layout
     #[profiling::function]
-    pub fn update_render_layer_if_needed(
+    pub(crate) fn update_render_layer_if_needed(
         &mut self,
         layout: &Layout,
         model: Arc<ModelLayer>,
         matrix: Option<&M44>,
         context_opacity: f32,
+        local_children_bounds: skia_safe::Rect,
     ) -> bool {
         if self.hidden() {
             return false;
@@ -231,17 +232,45 @@ impl SceneNode {
         {
             self.set_needs_layout(true);
         }
+        let mut changed = false;
         if self.rendering_flags.contains(RenderableFlags::NEEDS_LAYOUT) {
             self.render_layer
                 .update_with_model_and_layout(&model, layout, matrix, context_opacity);
-            let changed = current_width != self.render_layer.size.width
+            // bounds_with_children: union in this node's local space
+            self.render_layer.bounds_with_children = self.render_layer.bounds;
+            self.render_layer
+                .bounds_with_children
+                .join(local_children_bounds);
+
+            // local_transformed_bounds_with_children: union in parent space
+            // local_transformed_bounds_with_children: union in parent-of-this-node space
+            let (children_in_parent_space, _) = self
+                .render_layer
+                .local_transform
+                .to_m33()
+                .map_rect(local_children_bounds);
+            self.render_layer.local_transformed_bounds_with_children =
+                self.render_layer.local_transformed_bounds;
+            self.render_layer
+                .local_transformed_bounds_with_children
+                .join(children_in_parent_space);
+
+            let (_children_in_global_space, _) = self
+                .render_layer
+                .transform_33
+                .map_rect(local_children_bounds);
+            // global_transformed_bounds_with_children: map final local union through global transform
+            let (global_bwc, _) = self
+                .render_layer
+                .transform_33
+                .map_rect(self.render_layer.bounds_with_children);
+            self.render_layer.global_transformed_bounds_with_children = global_bwc;
+            changed = current_width != self.render_layer.size.width
                 || current_height != self.render_layer.size.height
                 || current_x != self.render_layer.local_transformed_bounds.x()
                 || current_y != self.render_layer.local_transformed_bounds.y();
-
-            return changed;
         }
-        false
+        changed
     }
     pub fn set_needs_repaint(&mut self, need_repaint: bool) {
         self.rendering_flags

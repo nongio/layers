@@ -1032,7 +1032,7 @@ impl Engine {
                 let mut groups: Vec<_> = depth_map.into_iter().collect();
                 // Sort by depth ascending so parents (depth 0) are processed first
                 groups.sort_by_key(|(depth, _)| *depth);
-                // groups.reverse(); // Process deepest first (leaves to root)
+                groups.reverse(); // Process deepest first (leaves to root)
                 groups
             });
 
@@ -1041,7 +1041,7 @@ impl Engine {
             for (_depth, nodes_at_depth) in depth_groups.into_iter() {
                 // Update nodes at this depth in parallel
                 let nad: &Vec<_> = nodes_at_depth.as_ref();
-                let damages: Vec<_> = nad
+                let _damages: Vec<_> = nad
                     .iter()
                     .map(|node_id| {
                         let parent_render_layer = self.scene.with_arena(|arena| {
@@ -1058,18 +1058,18 @@ impl Engine {
                             parent_render_layer.as_ref(),
                             false,
                         );
-
+                        total_damage.join(damage);
                         return damage;
                     })
                     .collect();
 
                 // Phase 4: Accumulate child damages to parents (sequential for each depth)
-                for (node_id, node_damage) in nodes_at_depth.iter().zip(damages.iter()) {
-                    if !node_damage.is_empty() {
-                        self.propagate_damage_to_ancestors(*node_id, *node_damage);
-                    }
-                    total_damage.join(*node_damage);
-                }
+                // for (node_id, node_damage) in nodes_at_depth.iter().zip(damages.iter()) {
+                //     if !node_damage.is_empty() {
+                //         self.propagate_damage_to_ancestors(*node_id, *node_damage);
+                //     }
+                //     total_damage.join(*node_damage);
+                // }
             }
         }
 

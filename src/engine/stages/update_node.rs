@@ -32,38 +32,55 @@ pub(crate) fn update_node_single(
 
             let scene_node = node.unwrap().get();
             // Store previous state for comparison
-            let prev_transformed_bounds = scene_node.render_layer.global_transformed_bounds;
+            let prev_transformed_bounds = scene_node
+                .render_layer
+                .global_transformed_bounds_with_children;
             let prev_opacity = scene_node.render_layer.premultiplied_opacity;
             let needs_paint = scene_node.needs_repaint();
 
             (prev_transformed_bounds, prev_opacity, needs_paint)
         });
-
+    // calculate children bounds
+    let local_children_bounds = engine.scene.with_arena(|node_arena| {
+        let mut local_children_bounds = skia::Rect::default();
+        node_id.children(node_arena).for_each(|child_id| {
+            if let Some(child_node) = node_arena.get(child_id) {
+                let child_scene_node = child_node.get();
+                let child_rl = &child_scene_node.render_layer;
+                // Accumulate child's local union
+                local_children_bounds.join(child_rl.local_transformed_bounds_with_children);
+            }
+        });
+        local_children_bounds
+    });
     // Get cumulative transform and opacity from parent
     let cumulative_transform = parent.map(|p| &p.transform);
     let context_opacity = parent.map(|p| p.premultiplied_opacity).unwrap_or(1.0);
 
     // Update the render layer (only node arena is mutable here)
-    let (changed_render_layer, _is_image_cached) = engine.scene.with_arena_mut(|node_arena| {
-        let node = node_arena.get_mut(node_id);
-        if let Some(node) = node {
-            let scene_node = node.get_mut();
-            let changed = scene_node.update_render_layer_if_needed(
-                node_layout,
-                layer.model.clone(),
-                cumulative_transform,
-                context_opacity,
-            );
+    let (changed_render_layer, _is_image_cached, is_debug) =
+        engine.scene.with_arena_mut(|node_arena| {
+            let node = node_arena.get_mut(node_id);
+            if let Some(node) = node {
+                let scene_node = node.get_mut();
+                // LAYOUT STEP: merge with children bounds
+                let changed = scene_node.update_render_layer_if_needed(
+                    node_layout,
+                    layer.model.clone(),
+                    cumulative_transform,
+                    context_opacity,
+                    local_children_bounds,
+                ) || scene_node._debug_info.is_some();
 
-            if changed {
-                scene_node.set_needs_repaint(true);
+                if changed {
+                    scene_node.set_needs_repaint(true);
+                }
+                let is_cached = scene_node.is_image_cached();
+                (changed, is_cached, scene_node._debug_info.is_some())
+            } else {
+                (false, false, false)
             }
-            let is_cached = scene_node.is_image_cached();
-            (changed, is_cached)
-        } else {
-            (false, false)
-        }
-    });
+        });
 
     // Read updated state before deciding to repaint
     let (new_transformed_bounds, new_opacity, _current_needs_paint) =
@@ -71,7 +88,9 @@ pub(crate) fn update_node_single(
             let node = arena.get(node_id).unwrap();
             let scene_node = node.get();
             (
-                scene_node.render_layer.global_transformed_bounds,
+                scene_node
+                    .render_layer
+                    .global_transformed_bounds_with_children,
                 scene_node.render_layer.premultiplied_opacity,
                 scene_node.needs_repaint(),
             )
@@ -144,7 +163,7 @@ pub(crate) fn update_node_single(
     // Calculate total damage for this node
     let mut total_damage = mapped_content_damage;
 
-    if position_changed && !prev_transformed_bounds.is_empty() && new_opacity > 0.0 {
+    if position_changed || is_debug {
         // Include both old and new bounds when position changes
         total_damage.join(prev_transformed_bounds);
         total_damage.join(new_transformed_bounds);

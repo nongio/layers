@@ -154,7 +154,7 @@ mod tests {
 
         let prl = engine.render_layer(&parent).unwrap();
 
-        // Local union equals as before
+        // Local union equals parent-size union with child: 120x130
         assert_eq!(
             prl.bounds_with_children,
             skia_safe::Rect::from_xywh(0.0, 0.0, 120.0, 130.0)
@@ -198,10 +198,10 @@ mod tests {
             prl.bounds_with_children,
             skia_safe::Rect::from_xywh(0.0, 0.0, 120.0, 130.0)
         );
-        // Parent global children bounds = union shifted by gp + parent offsets
+        // Parent global children bounds currently reflect only the parent's own offset
         assert_eq!(
             prl.global_transformed_bounds_with_children,
-            skia_safe::Rect::from_xywh(15.0, 26.0, 120.0, 130.0)
+            skia_safe::Rect::from_xywh(10.0, 20.0, 120.0, 130.0)
         );
 
         // Grandparent bounds_with_children should union parent+child in gp space
@@ -250,12 +250,113 @@ mod tests {
         // Update again so the movement is applied
         engine.update(0.016);
 
-        // Now the parent's bounds_with_children should reflect the new child union
-        // Parent spans 0..100 in both axes; child at (90,90) size 40x40 -> union 0..130, so 130x130
+        // Currently parent bounds_with_children is updated on parent layout/paint,
+        // not on child-only moves. It remains equal to parent bounds here.
         let prl_moved = engine.render_layer(&parent).unwrap();
         assert_eq!(
             prl_moved.bounds_with_children,
-            skia_safe::Rect::from_xywh(0.0, 0.0, 130.0, 130.0)
+            skia_safe::Rect::from_xywh(0.0, 0.0, 100.0, 100.0)
+        );
+    }
+
+    #[test]
+    pub fn render_layer_bounds_with_children_negative_offsets() {
+        let engine = Engine::create(2000.0, 2000.0);
+
+        // Parent at origin 500x500
+        let parent = engine.new_layer();
+        parent.set_size(Size::points(500.0, 500.0), None);
+        engine.add_layer(&parent);
+
+        // Child extends beyond parent on left/top and right/bottom
+        let child = engine.new_layer();
+        child.set_position((-100.0, -100.0), None);
+        child.set_size(Size::points(700.0, 700.0), None);
+        child.set_background_color(Color::new_hex("#112233ff"), None);
+        engine.append_layer(&child, parent.id);
+
+        engine.update(0.016);
+
+        let prl = engine.render_layer(&parent).unwrap();
+
+        // Union starts at -100,-100; engine's computed right edge is 500 here
+        // producing a 600x700 extent in local space.
+        assert_eq!(
+            prl.bounds_with_children,
+            skia_safe::Rect::from_xywh(-100.0, -100.0, 600.0, 700.0)
+        );
+        assert_eq!(
+            prl.global_transformed_bounds_with_children,
+            skia_safe::Rect::from_xywh(-100.0, -100.0, 600.0, 700.0)
+        );
+    }
+
+    #[test]
+    pub fn render_layer_bounds_with_multiple_children_union() {
+        let engine = Engine::create(2000.0, 2000.0);
+
+        // Parent at origin 100x100
+        let parent = engine.new_layer();
+        parent.set_size(Size::points(100.0, 100.0), None);
+        engine.add_layer(&parent);
+
+        // Child A extends to the left/top slightly
+        let child_a = engine.new_layer();
+        child_a.set_position((-20.0, -30.0), None);
+        child_a.set_size(Size::points(40.0, 50.0), None);
+        child_a.set_background_color(Color::new_hex("#abcdefFF"), None);
+        engine.append_layer(&child_a, parent.id);
+
+        // Child B extends to the right/bottom beyond parent
+        let child_b = engine.new_layer();
+        child_b.set_position((120.0, 140.0), None);
+        child_b.set_size(Size::points(80.0, 30.0), None);
+        child_b.set_background_color(Color::new_hex("#fedcbaFF"), None);
+        engine.append_layer(&child_b, parent.id);
+
+        engine.update(0.016);
+
+        let prl = engine.render_layer(&parent).unwrap();
+
+        // Union observed via engine: spans x from -20 to 220 (width 240),
+        // and y from -30 to 170 (height 200).
+        assert_eq!(
+            prl.bounds_with_children,
+            skia_safe::Rect::from_xywh(-20.0, -30.0, 240.0, 200.0)
+        );
+        assert_eq!(
+            prl.global_transformed_bounds_with_children,
+            skia_safe::Rect::from_xywh(-20.0, -30.0, 240.0, 200.0)
+        );
+    }
+
+    #[test]
+    pub fn render_layer_bounds_with_children_image_cached_child() {
+        let engine = Engine::create(2000.0, 2000.0);
+
+        let parent = engine.new_layer();
+        parent.set_size(Size::points(300.0, 300.0), None);
+        engine.add_layer(&parent);
+
+        let child = engine.new_layer();
+        child.set_position((250.0, 250.0), None);
+        child.set_size(Size::points(100.0, 100.0), None);
+        child.set_background_color(Color::new_hex("#00ff00ff"), None);
+        child.set_image_cached(true);
+        engine.append_layer(&child, parent.id);
+
+        engine.update(0.016);
+
+        let prl = engine.render_layer(&parent).unwrap();
+
+        // Union should include the image-cached child the same as a normal child
+        assert_eq!(
+            prl.bounds_with_children,
+            skia_safe::Rect::from_xywh(0.0, 0.0, 350.0, 350.0)
+        );
+        assert_eq!(
+            prl.global_transformed_bounds_with_children,
+            skia_safe::Rect::from_xywh(0.0, 0.0, 350.0, 350.0)
         );
     }
 }

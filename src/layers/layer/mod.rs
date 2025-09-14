@@ -92,7 +92,7 @@ impl Layer {
             let node = arena.get_mut(id);
             if let Some(node) = node {
                 let node = node.get_mut();
-                node.set_hidden(true);
+                node.set_hidden(hidden);
                 node.insert_flags(RenderableFlags::NEEDS_LAYOUT | RenderableFlags::NEEDS_PAINT);
             }
             let mut iter = id.ancestors(arena);

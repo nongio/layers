@@ -15,6 +15,8 @@ pub struct RenderLayer {
     pub rbounds: skia_safe::RRect,
     /// The transformed bounds of the layer, relative to the parent
     pub local_transformed_bounds: skia_safe::Rect,
+    /// The transformed bounds of the layer, relative to the parent, including children bounds
+    pub local_transformed_bounds_with_children: skia_safe::Rect,
     /// The bounds of the layers, including children bounds
     pub bounds_with_children: skia_safe::Rect,
     /// The transformed bounds of the layer, relative to the root
@@ -202,6 +204,7 @@ impl RenderLayer {
         self.rbounds = skia_safe::RRect::new_rect_radii(bounds, &border_corner_radius.into());
         self.bounds_with_children = bounds;
         self.local_transformed_bounds = local_transformed_bounds;
+        self.local_transformed_bounds_with_children = local_transformed_bounds;
         self.global_transformed_bounds = transformed_bounds;
         self.global_transformed_bounds_with_children = transformed_bounds;
         self.global_transformed_rbounds =
@@ -339,6 +342,7 @@ impl RenderLayer {
             bounds,
             bounds_with_children: bounds,
             local_transformed_bounds,
+            local_transformed_bounds_with_children: local_transformed_bounds,
             global_transformed_bounds: transformed_bounds,
             global_transformed_bounds_with_children: transformed_bounds,
             content_draw_func,
@@ -384,6 +388,7 @@ impl Default for RenderLayer {
             bounds: skia_safe::Rect::default(),
             rbounds: skia_safe::RRect::default(),
             local_transformed_bounds: skia_safe::Rect::default(),
+            local_transformed_bounds_with_children: skia_safe::Rect::default(),
             bounds_with_children: skia_safe::Rect::default(),
             global_transformed_bounds: skia_safe::Rect::default(),
             global_transformed_bounds_with_children: skia_safe::Rect::default(),
