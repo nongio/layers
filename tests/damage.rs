@@ -19,11 +19,12 @@ mod tests {
         engine.update(0.016);
 
         let render_layer = engine.render_layer(&layer.id).unwrap();
+        let renderable = engine.renderable(&layer.id).unwrap();
 
         let renderer = SkiaImageRenderer::new(1000, 1000, "damage.png");
         let mut surface = renderer.surface();
         let canvas = surface.canvas();
-        let damage = draw_layer(canvas, &render_layer, 1.0);
+        let damage = draw_layer(canvas, &render_layer, 1.0, &renderable);
         // test empty layer
         assert_eq!(damage, skia_safe::Rect::from_xywh(0.0, 0.0, 0.0, 0.0));
     }
@@ -49,9 +50,10 @@ mod tests {
         engine.update(0.016);
 
         let render_layer = engine.render_layer(&layer.id).unwrap();
+        let renderable = engine.renderable(&layer.id).unwrap();
         println!("{:#?}", render_layer);
 
-        let damage = draw_layer(canvas, &render_layer, 1.0);
+        let damage = draw_layer(canvas, &render_layer, 1.0, &renderable);
         assert_eq!(damage, skia_safe::Rect::from_xywh(0.0, 0.0, 100.0, 100.0));
     }
 
@@ -67,11 +69,12 @@ mod tests {
         engine.update(0.016);
 
         let render_layer = engine.render_layer(&layer.id).unwrap();
+        let renderable = engine.renderable(&layer.id).unwrap();
 
         let renderer = SkiaImageRenderer::new(1000, 1000, "damage.png");
         let mut surface = renderer.surface();
         let canvas = surface.canvas();
-        let damage = draw_layer(canvas, &render_layer, 1.0);
+        let damage = draw_layer(canvas, &render_layer, 1.0, &renderable);
         // test empty layer
         assert_eq!(damage, skia_safe::Rect::from_xywh(0.0, 0.0, 0.0, 0.0));
 
@@ -83,7 +86,8 @@ mod tests {
         engine.update(0.016);
 
         let render_layer = engine.render_layer(&layer).unwrap();
-        let damage = draw_layer(canvas, &render_layer, 1.0);
+        let renderable = engine.renderable(&layer).unwrap();
+        let damage = draw_layer(canvas, &render_layer, 1.0, &renderable);
         assert_eq!(damage, skia_safe::Rect::from_xywh(-5.0, -5.0, 110.0, 110.0));
     }
 
@@ -99,11 +103,12 @@ mod tests {
         engine.update(0.016);
 
         let render_layer = engine.render_layer(&layer).unwrap();
+        let renderable = engine.renderable(&layer).unwrap();
 
         let renderer = SkiaImageRenderer::new(1000, 1000, "damage.png");
         let mut surface = renderer.surface();
         let canvas = surface.canvas();
-        let damage = draw_layer(canvas, &render_layer, 1.0);
+        let damage = draw_layer(canvas, &render_layer, 1.0, &renderable);
         // test empty layer
         assert_eq!(damage, skia_safe::Rect::from_xywh(0.0, 0.0, 0.0, 0.0));
 
@@ -114,7 +119,8 @@ mod tests {
         layer.set_shadow_spread(20.0, None);
         engine.update(0.016);
         let render_layer = engine.render_layer(&layer).unwrap();
-        let damage = draw_layer(canvas, &render_layer, 1.0);
+        let renderable = engine.renderable(&layer).unwrap();
+        let damage = draw_layer(canvas, &render_layer, 1.0, &renderable);
         assert_eq!(
             damage,
             skia_safe::Rect::from_xywh(-50.0, -50.0, 180.0, 180.0)
@@ -348,12 +354,13 @@ mod tests {
         engine.update(0.016);
 
         let render_layer = engine.render_layer(&layer.id).unwrap();
+        let renderable = engine.renderable(&layer.id).unwrap();
 
         let renderer = SkiaImageRenderer::new(1000, 1000, "damage.png");
         let mut surface = renderer.surface();
         let canvas = surface.canvas();
 
-        let damage = draw_layer(canvas, &render_layer, 1.0);
+        let damage = draw_layer(canvas, &render_layer, 1.0, &renderable);
 
         // a layer with opacity 0 should not damage the scene
         assert_eq!(damage, skia_safe::Rect::from_xywh(0.0, 0.0, 0.0, 0.0));

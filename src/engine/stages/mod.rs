@@ -9,7 +9,7 @@ use taffy::{prelude::Size, style_helpers::length, Dimension};
 #[cfg(feature = "debugger")]
 use layers_debug_server::send_debugger_message;
 
-use crate::prelude::Layer;
+use crate::{engine::node::RenderableFlags, prelude::Layer};
 
 use super::{
     storage::FlatStorageId, AnimationState, Engine, NodeRef, Timestamp, TransactionCallback,
@@ -19,7 +19,6 @@ use super::{
 mod update_node;
 
 #[allow(unused_imports)]
-pub(crate) use update_node::update_node_recursive;
 pub(crate) use update_node::update_node_single;
 
 #[profiling::function]
@@ -114,8 +113,8 @@ pub(crate) fn execute_transactions(engine: &Engine) -> (Vec<NodeRef>, Vec<FlatSt
                     scene.with_arena_mut(|arena| {
                         if let Some(node) = arena.get_mut(node_id.0) {
                             if !node.is_removed() {
-                                let node = node.get_mut();
-                                node.insert_flags(flags);
+                                let scene_node = node.get_mut();
+                                scene_node.insert_flags(flags);
                             }
                         }
                     });
@@ -136,6 +135,10 @@ pub(crate) fn execute_transactions(engine: &Engine) -> (Vec<NodeRef>, Vec<FlatSt
         needs_redraw,
     )
 }
+/// Collects all valid nodes that are eligible for layout computation.
+/// This function traverses the scene tree from the root and filters out
+/// nodes that have been removed or marked for deletion, returning only
+/// the nodes that should participate in the layout pass.
 #[profiling::function]
 pub(crate) fn nodes_for_layout(engine: &Engine) -> Vec<NodeRef> {
     if let Some(root_node) = engine.scene_root() {
@@ -144,30 +147,15 @@ pub(crate) fn nodes_for_layout(engine: &Engine) -> Vec<NodeRef> {
         descendants
             .iter()
             .filter_map(|node_ref| {
-                let node = engine.scene().with_arena_mut(|arena| {
-                    let node = arena.get_mut(node_ref.0).unwrap();
+                let node = engine.scene().with_arena(|arena| {
+                    let node = arena.get(node_ref.0).unwrap();
                     if node.is_removed() {
                         return None;
                     }
-                    let scene_node = node.get_mut();
+                    let scene_node = node.get();
                     if scene_node.is_deleted() {
                         return None;
                     }
-                    // let layer = engine.get_layer(node_ref).unwrap();
-                    // let layout = engine.get_node_layout_style(layer.layout_id);
-                    // if layout.position != taffy::style::Position::Absolute {
-                    // }
-                    // scene_node.set_need_layout(true);
-                    //     FIXME: replicated NODE
-                    // follow a replicated node
-                    //     // it will paint continuosly
-                    //     if let Some(follow) = &*scene_node._follow_node.read().unwrap() {
-                    //         if let Some(_follow_node) = arena.get(follow.0) {
-                    //             // let follow_node = _follow_node.get();
-                    //             // scene_node.set_need_repaint(follow_node.needs_repaint());
-                    //             // scene_node.set_need_repaint(true);
-                    //         }
-                    //     }
 
                     Some(*node_ref)
                 });
@@ -185,12 +173,14 @@ pub(crate) fn update_layout_tree(engine: &Engine) {
     // Get scene size early to avoid multiple lock acquisitions
     let scene_size = engine.scene.size.read().unwrap();
     let mut changed_nodes = Vec::new();
+    let mut followers_nodes = Vec::new();
 
     // First, collect nodes that need size updates
     {
         profiling::scope!("collect_nodes_needing_update");
         if let Some(root) = engine.scene_root() {
             engine.scene.with_arena(|arena| {
+                // Traverse all descendants from the root node to identify nodes that need layout updates
                 for node_id in root.0.descendants(arena) {
                     let node = arena.get(node_id).unwrap();
                     if node.is_removed() {
@@ -198,7 +188,28 @@ pub(crate) fn update_layout_tree(engine: &Engine) {
                     }
                     let node_ref = NodeRef(node_id);
 
-                    if node.get().needs_layout() {
+                    // Update layout size for nodes that have explicit size constraints
+                    engine.with_layers(|layers| {
+                        if let Some(layer) = layers.get(&node_ref) {
+                            let size = layer.size();
+                            let layout_node_id = layer.layout_id;
+                            if size.width != Dimension::Auto || size.height != Dimension::Auto {
+                                engine.set_node_layout_size(layout_node_id, size);
+                            }
+                        }
+                    });
+
+                    // Check if this node needs layout recalculation and collect follower relationships
+                    let scene_node = node.get();
+                    if let Some(follow) = scene_node._follow_node {
+                        followers_nodes.push((node_ref, follow));
+                    }
+                    let needs_layout = scene_node.needs_layout()
+                        || true
+                        || scene_node.render_layer.blend_mode
+                            == crate::types::BlendMode::BackgroundBlur;
+
+                    if needs_layout {
                         changed_nodes.push(node_ref);
                     }
                 }
@@ -206,27 +217,33 @@ pub(crate) fn update_layout_tree(engine: &Engine) {
         }
     }
 
-    // Update size only for nodes that need it
-    if !changed_nodes.is_empty() {
-        profiling::scope!("update_nodes_size");
-        for node_ref in &changed_nodes {
-            engine.with_layers(|layers| {
-                if let Some(layer) = layers.get(node_ref) {
-                    let size = layer.size();
-                    let layout_node_id = layer.layout_id;
-                    if size.width != Dimension::Auto || size.height != Dimension::Auto {
-                        engine.set_node_layout_size(layout_node_id, size);
-                    }
+    // profiling::scope!("update_nodes_size");
+    // for node_ref in &changed_nodes {
+    //     engine.scene.with_arena_mut(|arena| {
+    //         if let Some(node) = arena.get_mut(node_ref.0) {
+    //             let scene_node = node.get_mut();
+    //             scene_node.set_needs_layout(false);
+    //             scene_node.set_needs_repaint(true);
+    //         }
+    //     });
+    // }
+
+    for (node_ref, follow) in &followers_nodes {
+        engine.scene.with_arena_mut(|arena| {
+            let follow_node = arena.get(follow.0);
+            let needs_repaint_follow = if let Some(follow_node) = follow_node {
+                let follow_node = follow_node.get();
+                follow_node.needs_repaint()
+            } else {
+                false
+            };
+            if let Some(node) = arena.get_mut(node_ref.0) {
+                let scene_node = node.get_mut();
+                if needs_repaint_follow {
+                    scene_node.set_needs_repaint(true);
                 }
-            });
-            engine.scene.with_arena_mut(|arena| {
-                if let Some(node) = arena.get_mut(node_ref.0) {
-                    let node = node.get_mut();
-                    node.set_needs_layout(false);
-                    node.set_needs_repaint(true);
-                }
-            });
-        }
+            }
+        });
     }
 
     // Now check if we need to compute layout

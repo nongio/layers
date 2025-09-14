@@ -73,6 +73,7 @@ use self::{
 };
 use crate::{
     drawing::render_node_tree,
+    engine::node::SceneNodeRenderable,
     layers::layer::{model::PointerHandlerFunction, render_layer::RenderLayer, Layer},
     prelude::ContentDrawFunction,
     types::Point,
@@ -664,7 +665,6 @@ impl Engine {
         // update...
         {
             execute_transactions(self);
-            nodes_for_layout(self);
             update_layout_tree(self);
             self.update_nodes();
         }
@@ -691,7 +691,6 @@ impl Engine {
         layer.set_position(new_position, None);
         {
             execute_transactions(self);
-            nodes_for_layout(self);
             update_layout_tree(self);
             self.update_nodes();
         }
@@ -784,6 +783,17 @@ impl Engine {
             Some(node)
         })
     }
+
+    pub fn renderable<'a>(&self, node_ref: impl Into<&'a NodeRef>) -> Option<SceneNodeRenderable> {
+        let node_ref = node_ref.into();
+        self.scene.with_renderable_arena_mut(|arena| {
+            let index: FlatStorageId = node_ref.0.into();
+            let node = arena.get(&index)?;
+            let node = node.clone();
+            Some(node)
+        })
+    }
+
     pub fn node_render_size<'a>(&self, node_ref: impl Into<&'a NodeRef>) -> (f32, f32) {
         let node_ref = node_ref.into();
         self.scene.with_arena(|a| {
@@ -961,9 +971,6 @@ impl Engine {
 
         let needs_draw = !updated_nodes.is_empty();
 
-        // merge the updated nodes with the nodes that are part of the layout calculation
-        // nodes_for_layout(self);
-
         // 2.0 update the layout tree using taffy
         update_layout_tree(self);
 
@@ -1001,7 +1008,7 @@ impl Engine {
         let mut total_damage = skia_safe::Rect::default();
         let node = self.scene_root.read().unwrap();
         if let Some(root_id) = *node {
-            // Phase 1: Collect nodes in post-order (children before parents)
+            // Phase 1: Collect nodes and compute their depth
             let nodes_post_order: Vec<_> = self.scene.with_arena(|arena| {
                 let mut result = Vec::new();
                 for edge in root_id.traverse(arena) {
@@ -1012,8 +1019,7 @@ impl Engine {
                 result
             });
 
-            // Phase 2: Update nodes in parallel batches by depth level
-            // First, group nodes by depth to ensure parent dependencies
+            // Phase 2: Group nodes by depth to ensure parent dependencies
             let depth_groups = self.scene.with_arena(|arena| {
                 let mut depth_map: std::collections::HashMap<usize, Vec<indextree::NodeId>> =
                     std::collections::HashMap::new();
@@ -1024,13 +1030,15 @@ impl Engine {
                 }
 
                 let mut groups: Vec<_> = depth_map.into_iter().collect();
+                // Sort by depth ascending so parents (depth 0) are processed first
                 groups.sort_by_key(|(depth, _)| *depth);
                 // groups.reverse(); // Process deepest first (leaves to root)
                 groups
             });
 
-            // Phase 3: Process each depth level
-            for (_depth, nodes_at_depth) in depth_groups {
+            // Phase 3: Process each depth level from root to leaves
+            // Parents must be updated before children so cumulative transforms are correct.
+            for (_depth, nodes_at_depth) in depth_groups.into_iter() {
                 // Update nodes at this depth in parallel
                 let nad: &Vec<_> = nodes_at_depth.as_ref();
                 let damages: Vec<_> = nad
@@ -1097,8 +1105,14 @@ impl Engine {
                         .global_transformed_bounds_with_children
                         .join(damage);
 
-                    // Mark ancestor for potential repaint
-                    ancestor.repaint_damage.join(damage);
+                    // ancestor.set_needs_repaint(true);
+                    // Mark ancestor for potential repaint in the renderable arena
+                    // self.scene.with_renderable_arena_mut(|renderable_arena| {
+                    //     if let Some(ancestor_renderable) = renderable_arena.get_mut(ancestor_id) {
+                    //         let ancestor_renderable = ancestor_renderable.get_mut();
+                    //         ancestor_renderable.repaint_damage.join(damage);
+                    //     }
+                    // });
                 }
             }
         });
@@ -1112,7 +1126,7 @@ impl Engine {
         layout.set_style(node, style).unwrap();
     }
 
-    pub fn set_node_layout_size(&self, node: taffy::NodeId, size: crate::types::Size) {
+    pub fn set_node_layout_size(&self, node: taffy::NodeId, size: crate::types::Size) -> bool {
         let mut layout = self.layout_tree.write().unwrap();
         let mut style = layout.style(node).unwrap().clone();
         let new_size = taffy::geometry::Size {
@@ -1122,10 +1136,9 @@ impl Engine {
         if style.size != new_size {
             style.size = new_size;
             layout.set_style(node, style).unwrap();
+            return true;
         }
-
-        // println!("{:?} set_node_layout_size: {:?}", node, style.size);
-        // layout.set_style(node, style).unwrap();
+        return false;
     }
 
     pub fn scene_layer_at(&self, point: Point) -> Option<NodeRef> {
@@ -1415,7 +1428,9 @@ impl Engine {
         let draw_function = move |c: &skia::Canvas, w: f32, h: f32| {
             let scene = engine_ref.scene.clone();
             scene.with_arena(|arena| {
-                render_node_tree(layer_id, arena, c, 1.0);
+                scene.with_renderable_arena(|renderable_arena| {
+                    render_node_tree(layer_id, arena, renderable_arena, c, 1.0);
+                });
             });
             skia::Rect::from_xywh(0.0, 0.0, w, h)
         };

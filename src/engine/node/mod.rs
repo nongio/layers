@@ -74,40 +74,50 @@ bitflags! {
     }
 }
 
-/// The SceneNode struct represents a node in the scene graph.
-/// It contains a Layer and manages rendering states, caching and interactions.
-/// It provides methods for managing rendering and pointer events.
+/// Contains the layout of a layer and information required for drawing
 #[derive(Clone)]
 pub struct SceneNode {
     pub(crate) render_layer: RenderLayer,
     rendering_flags: RenderableFlags,
-    pub(crate) repaint_damage: skia_safe::Rect,
     pub(crate) hidden: bool,
     pub(crate) image_cached: bool,
     pub(crate) picture_cached: bool,
     pub(crate) is_deleted: bool,
-    pub(crate) frame_number: usize,
-    pub(crate) draw_cache: Option<DrawCache>,
-    pub(crate) _debug_info: Option<DrawDebugInfo>,
     pub(crate) _follow_node: Option<NodeRef>,
+    pub(crate) _debug_info: Option<DrawDebugInfo>,
+    pub(crate) frame_number: usize,
 }
 
 impl Default for SceneNode {
     fn default() -> Self {
         Self {
             render_layer: RenderLayer::default(),
-            repaint_damage: skia_safe::Rect::default(),
-            rendering_flags: RenderableFlags::NEEDS_PAINT
-                | RenderableFlags::NEEDS_LAYOUT
-                | RenderableFlags::NEEDS_PAINT,
+            rendering_flags: RenderableFlags::NEEDS_PAINT | RenderableFlags::NEEDS_LAYOUT,
             hidden: false,
             image_cached: false,
             picture_cached: true,
             is_deleted: false,
-            frame_number: 0,
-            draw_cache: None,
-            _debug_info: None,
             _follow_node: None,
+            _debug_info: None,
+            frame_number: 0,
+        }
+    }
+}
+
+/// Contains the outputs of drawing the layer: cache, damage, and flags
+#[derive(Clone)]
+pub struct SceneNodeRenderable {
+    pub(crate) repaint_damage: skia_safe::Rect,
+    pub(crate) draw_cache: Option<DrawCache>,
+    pub(crate) content_cache: Option<Picture>,
+}
+
+impl Default for SceneNodeRenderable {
+    fn default() -> Self {
+        Self {
+            repaint_damage: skia_safe::Rect::default(),
+            draw_cache: None,
+            content_cache: None,
         }
     }
 }
@@ -179,95 +189,24 @@ impl SceneNode {
     pub fn is_image_cached(&self) -> bool {
         self.image_cached
     }
+    pub fn set_picture_cached(&mut self, value: bool) {
+        self.picture_cached = value;
+    }
+    pub fn is_picture_cached(&self) -> bool {
+        self.picture_cached
+    }
     pub fn render_layer(&self) -> &RenderLayer {
         &self.render_layer
     }
-    pub fn get_cached_picture(&self) -> Option<&DrawCache> {
-        self.draw_cache.as_ref()
-    }
     pub(crate) fn increase_frame(&mut self) {
-        if self.is_image_cached() {
-            // check to not overflow the frame number
-            if self.frame_number < usize::MAX {
-                self.frame_number += 1;
-            } else {
-                self.frame_number = 1;
-            }
+        // if self.is_image_cached() {
+        // check to not overflow the frame number
+        if self.frame_number < usize::MAX {
+            self.frame_number += 1;
+        } else {
+            self.frame_number = 1;
         }
-    }
-    pub(crate) fn follow_node(&mut self, nodeid: &Option<NodeRef>) {
-        // let mut _follow_node = self._follow_node.write().unwrap();
-        self._follow_node = *nodeid;
-    }
-    // pub fn replicate_node(&self, nodeid: &Option<NodeRef>) {
-    //     if let Some(nodeid) = nodeid {
-    //         let nodeid = *nodeid;
-    //         let draw_function =
-    //             move |c: &skia::Canvas, w: f32, h: f32, arena: &Arena<SceneNode>| {
-    //                 profiling::scope!("replicate_node");
-    //                 render_node_tree(nodeid, arena, c, 1.0);
-    //                 skia::Rect::from_xywh(0.0, 0.0, w, h)
-    //             };
-
-    //         self.layer.set_draw_content_internal(draw_function);
-    //         // when mirroring another layer we don't want to cache the content
-    //         self.layer.set_picture_cached(false);
-    //     }
-
-    //     self.follow_node(nodeid);
-    // }
-    // pub fn layout_node_id(&self) -> TaffyNodeId {
-    //     self.layer.layout_id
-    // }
-
-    /// generate the SkPicture from drawing the Renderlayer
-    /// if the layer is not hidden
-    /// if the layer has opacity
-    /// if the layer is marked for needs repaint
-    /// returns the damaged Rect of from drawing the layer, in layers coordinates
-    #[profiling::function]
-    pub fn repaint_if_needed(&mut self) -> skia_safe::Rect {
-        let mut damage = skia_safe::Rect::default();
-        let render_layer = &self.render_layer;
-        if self.hidden() || render_layer.premultiplied_opacity == 0.0 {
-            let rd = self.repaint_damage;
-            self.repaint_damage = damage;
-            return rd;
-        }
-
-        if self.needs_repaint() {
-            let (picture, _layer_damage) = draw_layer_to_picture(render_layer);
-            let (layer_damage_transformed, _) = render_layer.transform_33.map_rect(_layer_damage);
-
-            damage.join(layer_damage_transformed);
-            if self.is_picture_cached() {
-                if let Some(picture) = picture {
-                    // update or create the draw cache
-                    if let Some(draw_cache) = &mut self.draw_cache {
-                        draw_cache.picture = picture;
-                        draw_cache.size = render_layer.size;
-                    } else {
-                        let size = render_layer.size;
-
-                        let new_cache = DrawCache::new(
-                            picture,
-                            size,
-                            skia_safe::Point {
-                                x: render_layer.border_width * 2.0,
-                                y: render_layer.border_width * 2.0,
-                            },
-                        );
-                        self.draw_cache = Some(new_cache);
-                    }
-                    let previous_damage = self.repaint_damage;
-                    self.repaint_damage = damage;
-                    damage.join(previous_damage);
-
-                    self.set_needs_repaint(false);
-                }
-            }
-        }
-        damage
+        // }
     }
     /// update the renderlayer based on model and layout
     #[profiling::function]
@@ -281,24 +220,26 @@ impl SceneNode {
         if self.hidden() {
             return false;
         }
-        if self.render_layer.size.width != layout.size.width as f32
-            || self.render_layer.size.height != layout.size.height as f32
-            || self.render_layer.local_transformed_bounds.x() != layout.location.x as f32
-            || self.render_layer.local_transformed_bounds.y() != layout.location.y as f32
+        let current_width = self.render_layer.size.width;
+        let current_height = self.render_layer.size.height;
+        let current_x = self.render_layer.local_transformed_bounds.x();
+        let current_y = self.render_layer.local_transformed_bounds.y();
+        if current_width != layout.size.width as f32
+            || current_height != layout.size.height as f32
+            || current_x != layout.location.x as f32
+            || current_y != layout.location.y as f32
         {
-            self.set_needs_repaint(true);
+            self.set_needs_layout(true);
         }
-        if self.rendering_flags.contains(RenderableFlags::NEEDS_PAINT) {
-            {
-                self.render_layer.update_with_model_and_layout(
-                    &model,
-                    layout,
-                    matrix,
-                    context_opacity,
-                );
-            }
-            self.increase_frame();
-            return true;
+        if self.rendering_flags.contains(RenderableFlags::NEEDS_LAYOUT) {
+            self.render_layer
+                .update_with_model_and_layout(&model, layout, matrix, context_opacity);
+            let changed = current_width != self.render_layer.size.width
+                || current_height != self.render_layer.size.height
+                || current_x != self.render_layer.local_transformed_bounds.x()
+                || current_y != self.render_layer.local_transformed_bounds.y();
+
+            return changed;
         }
         false
     }
@@ -311,20 +252,12 @@ impl SceneNode {
             .set(RenderableFlags::NEEDS_LAYOUT, need_layout);
     }
     pub fn needs_repaint(&self) -> bool {
-        let mut needs_repaint = self.rendering_flags.contains(RenderableFlags::NEEDS_PAINT)
-            || self.render_layer.blend_mode == BlendMode::BackgroundBlur;
-        if let Some(dc) = self.draw_cache.as_ref() {
-            if self.render_layer.size != *dc.size() {
-                needs_repaint = true;
-            }
-        }
+        let needs_repaint = self.rendering_flags.contains(RenderableFlags::NEEDS_PAINT);
+
         needs_repaint
     }
     pub fn needs_layout(&self) -> bool {
         self.rendering_flags.contains(RenderableFlags::NEEDS_LAYOUT)
-    }
-    pub fn is_picture_cached(&self) -> bool {
-        self.picture_cached
     }
     pub fn pointer_events(&self) -> bool {
         self.render_layer.pointer_events
@@ -332,4 +265,82 @@ impl SceneNode {
     pub fn contains_point(&self, point: &skia::Point) -> bool {
         self.render_layer.global_transformed_bounds.contains(point)
     }
+    pub fn set_follow_node(&mut self, node: impl Into<Option<NodeRef>>) {
+        self._follow_node = node.into();
+    }
+}
+
+impl SceneNodeRenderable {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn get_cached_picture(&self) -> Option<&DrawCache> {
+        self.draw_cache.as_ref()
+    }
+}
+/// generate the SkPicture from drawing the Renderlayer
+/// if the layer is not hidden
+/// if the layer has opacity
+/// returns the damaged Rect of from drawing the layer, in layers coordinates
+#[profiling::function]
+pub fn do_repaint(renderable: &SceneNodeRenderable, scene_node: &SceneNode) -> SceneNodeRenderable {
+    let mut damage = skia_safe::Rect::default();
+    let render_layer = &scene_node.render_layer;
+    let mut new_renderable = renderable.clone();
+    if scene_node.hidden() || render_layer.premultiplied_opacity == 0.0 {
+        new_renderable.repaint_damage = damage;
+        return new_renderable;
+    }
+
+    if scene_node.is_picture_cached() {
+        if render_layer.content_draw_func.is_some() {
+            let content_draw_func = render_layer.content_draw_func.clone();
+            let size = render_layer.size;
+            if let Some(draw_func) = content_draw_func {
+                // only redraw if the content changed or the size changed
+                // if renderable.content_cache.is_none()
+                // || ((scene_node.size != size)
+                //     || (self.content_draw_func.as_ref() != content_draw_func))
+                // {
+                let mut recorder = skia_safe::PictureRecorder::new();
+                let canvas = recorder
+                    .begin_recording(skia_safe::Rect::from_wh(size.width, size.height), None);
+                // let draw_func = content_draw_func;
+                let caller = draw_func.0.as_ref();
+                let content_damage = caller(canvas, size.width, size.height);
+                damage.join(content_damage);
+                new_renderable.content_cache = recorder.finish_recording_as_picture(None);
+
+                // }
+            }
+        }
+        let (picture, layer_damage) = draw_layer_to_picture(render_layer, &new_renderable);
+        // Don't transform here - let the caller handle coordinate transformation
+        damage.join(layer_damage);
+
+        if let Some(picture) = picture {
+            // update or create the draw cache
+            if let Some(draw_cache) = &mut new_renderable.draw_cache {
+                draw_cache.picture = picture;
+                draw_cache.size = render_layer.size;
+            } else {
+                let size = render_layer.size;
+
+                let new_cache = DrawCache::new(
+                    picture,
+                    size,
+                    skia_safe::Point {
+                        x: render_layer.border_width * 2.0,
+                        y: render_layer.border_width * 2.0,
+                    },
+                );
+                new_renderable.draw_cache = Some(new_cache);
+            }
+            let previous_damage = new_renderable.repaint_damage;
+            new_renderable.repaint_damage = damage;
+            damage.join(previous_damage);
+        }
+    }
+    new_renderable
 }

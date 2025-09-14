@@ -1,14 +1,19 @@
 use skia_safe::*;
 
-use crate::types::PaintColor;
 use crate::{engine::draw_to_picture::DrawDebugInfo, layers::layer::render_layer::RenderLayer};
+use crate::{engine::node::SceneNodeRenderable, types::PaintColor};
 
 use super::scene::BACKGROUND_BLUR_SIGMA;
 
 /// Draw a layer into a skia::Canvas.
 /// Returns the damage rect in the layer's coordinate space.
 #[profiling::function]
-pub fn draw_layer(canvas: &Canvas, layer: &RenderLayer, context_opacity: f32) -> skia_safe::Rect {
+pub fn draw_layer(
+    canvas: &Canvas,
+    layer: &RenderLayer,
+    context_opacity: f32,
+    renderable: &SceneNodeRenderable,
+) -> skia_safe::Rect {
     let mut draw_damage = skia_safe::Rect::default();
     let opacity = layer.opacity * context_opacity;
     // if the layer is completely transparent, we don't need to draw anything
@@ -73,14 +78,14 @@ pub fn draw_layer(canvas: &Canvas, layer: &RenderLayer, context_opacity: f32) ->
     }
 
     // Draw content if any
-    if let Some(content) = &layer.content {
+    if let Some(content) = renderable.content_cache.as_ref() {
         let save_count = canvas.save();
         if layer.clip_content {
             canvas.clip_rrect(rrbounds, Some(ClipOp::Intersect), Some(true));
         }
         content.playback(canvas);
         canvas.restore_to_count(save_count);
-        draw_damage.join(layer.content_damage);
+        // draw_damage.join(renderable.repaint_damage);
     } else if let Some(draw_func) = layer.content_draw_func.as_ref() {
         let save_count = canvas.save();
         if layer.clip_content {

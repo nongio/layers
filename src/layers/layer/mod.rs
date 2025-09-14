@@ -98,10 +98,13 @@ impl Layer {
             let mut iter = id.ancestors(arena);
             iter.next(); // skip self
             if let Some(parent_id) = iter.next() {
-                if let Some(parent) = arena.get_mut(parent_id) {
-                    let parent = parent.get_mut();
-                    parent
-                        .insert_flags(RenderableFlags::NEEDS_LAYOUT | RenderableFlags::NEEDS_PAINT);
+                if arena.get(parent_id).is_some() {
+                    if let Some(parent_node) = arena.get_mut(parent_id) {
+                        let parent = parent_node.get_mut();
+                        parent.insert_flags(
+                            RenderableFlags::NEEDS_LAYOUT | RenderableFlags::NEEDS_PAINT,
+                        );
+                    }
                 }
             }
         });
@@ -128,7 +131,7 @@ impl Layer {
     change_model!(scale, Point, RenderableFlags::NEEDS_LAYOUT);
     change_model!(rotation, Point3d, RenderableFlags::NEEDS_LAYOUT);
     change_model!(anchor_point, Point, RenderableFlags::NEEDS_LAYOUT);
-    change_model!(opacity, f32, RenderableFlags::NEEDS_PAINT);
+    change_model!(opacity, f32, RenderableFlags::NEEDS_LAYOUT);
 
     change_model!(background_color, PaintColor, RenderableFlags::NEEDS_PAINT);
     change_model!(
@@ -496,6 +499,16 @@ impl Layer {
         self.model
             .picture_cached
             .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    pub(crate) fn set_follow_node(&self, follow_node: Option<NodeRef>) {
+        self.engine.scene.with_arena_mut(|node_arena| {
+            let node = node_arena.get_mut(self.id().into());
+            if let Some(node) = node {
+                let scene_node = node.get_mut();
+                scene_node._follow_node = follow_node;
+            }
+        });
     }
 }
 

@@ -63,7 +63,6 @@ pub struct RenderLayer {
     pub pointer_events: bool,
     pub content_draw_func: Option<ContentDrawFunctionInternal>,
     pub content: Option<Picture>,
-    pub content_damage: skia_safe::Rect,
     pub image_filter: Option<ImageFilter>,
     pub image_filter_bounds: Option<skia::Rect>,
     pub color_filter: Option<ColorFilter>,
@@ -315,7 +314,6 @@ impl RenderLayer {
         let opacity = model.opacity.value();
         let premultiplied_opacity = opacity * context_opacity;
         let blend_mode = model.blend_mode.value();
-        let content_damage = skia_safe::Rect::default();
         let clip_content = model.clip_content.value();
         let clip_children = model.clip_children.value();
 
@@ -344,7 +342,6 @@ impl RenderLayer {
             global_transformed_bounds: transformed_bounds,
             global_transformed_bounds_with_children: transformed_bounds,
             content_draw_func,
-            content_damage,
             rbounds,
             global_transformed_rbounds: transformed_rbounds,
             clip_content,
@@ -392,7 +389,6 @@ impl Default for RenderLayer {
             global_transformed_bounds_with_children: skia_safe::Rect::default(),
             global_transformed_rbounds: skia_safe::RRect::default(),
             content_draw_func: None,
-            content_damage: skia_safe::Rect::default(),
             clip_content: false,
             clip_children: false,
             image_filter: None,

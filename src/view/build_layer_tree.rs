@@ -157,9 +157,12 @@ impl BuildLayerTree for Layer {
         let engine = scene_layer.engine.clone();
 
         // if let Some(scene_node) = self.engine.scene_get_node(&layer_id) {
-        // let scene_node = scene_node.get();
-        // scene_node.replicate_node(&viewlayer_tree.replicate_node);
-        // }
+        if let Some(replicate_node) = viewlayer_tree.replicate_node {
+            if let Some(replicate_layer) = engine.get_layer(&replicate_node) {
+                scene_layer.set_draw_content(engine.layer_as_content(&replicate_layer));
+            }
+        }
+        scene_layer.set_follow_node(viewlayer_tree.replicate_node);
 
         // Children
         let mut current_scene_layers_children: HashSet<NodeId> = {

@@ -1,6 +1,9 @@
 use skia_safe::{Picture, PictureRecorder};
 
-use crate::{drawing::draw_layer, layers::layer::render_layer::RenderLayer};
+use crate::{
+    drawing::draw_layer, engine::node::SceneNodeRenderable,
+    layers::layer::render_layer::RenderLayer,
+};
 
 #[derive(Clone)]
 pub struct DrawDebugInfo {
@@ -12,6 +15,7 @@ pub struct DrawDebugInfo {
 /// Returns the picture and the damage rect in the layer's coordinate space
 pub(crate) fn draw_layer_to_picture(
     render_layer: &RenderLayer,
+    renderable: &SceneNodeRenderable,
 ) -> (Option<Picture>, skia_safe::Rect) {
     let mut recorder = PictureRecorder::new();
 
@@ -22,7 +26,7 @@ pub(crate) fn draw_layer_to_picture(
     let bounds_safe = render_layer.bounds.with_outset((SAFE_MARGIN, SAFE_MARGIN));
 
     let canvas = recorder.begin_recording(bounds_safe, None);
-    let damage = draw_layer(canvas, render_layer, 1.0);
+    let damage = draw_layer(canvas, render_layer, 1.0, renderable);
 
     (recorder.finish_recording_as_picture(None), damage)
 }

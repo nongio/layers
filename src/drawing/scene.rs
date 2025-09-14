@@ -7,7 +7,10 @@ use skia_safe::Contains;
 
 use crate::{
     engine::{
-        draw_to_picture::DrawDebugInfo, node::SceneNode, scene::Scene, storage::TreeStorageId,
+        draw_to_picture::DrawDebugInfo,
+        node::{SceneNode, SceneNodeRenderable},
+        scene::Scene,
+        storage::{FlatStorage, FlatStorageData, TreeStorageId},
         NodeRef,
     },
     layers::layer::render_layer::{self, RenderLayer},
@@ -29,14 +32,16 @@ pub trait DrawScene {
 
 /// Draw the scene to the given skia::Canvas
 pub fn draw_scene(canvas: &skia::Canvas, scene: std::sync::Arc<Scene>, root_id: NodeRef) {
-    scene.with_arena(|arena| {
-        if let Some(root) = arena.get(root_id.into()) {
-            let node = root.get();
-            let restore_point = canvas.save();
-            set_node_transform(node, canvas);
-            render_node_tree(root_id, &arena, canvas, 1.0);
-            canvas.restore_to_count(restore_point);
-        }
+    scene.with_arena(|scene_arena| {
+        scene.with_renderable_arena(|renderables_arena| {
+            if let Some(root) = scene_arena.get(root_id.into()) {
+                let node = root.get();
+                let restore_point = canvas.save();
+                set_node_transform(node, canvas);
+                render_node_tree(root_id, scene_arena, renderables_arena, canvas, 1.0);
+                canvas.restore_to_count(restore_point);
+            }
+        });
     });
 }
 
@@ -203,7 +208,8 @@ pub fn create_surface_for_node(
 /// paint a node and his subtree in the provided canvas
 pub fn paint_node_tree(
     node_ref: NodeRef,
-    arena: &Arena<SceneNode>,
+    scene_arena: &Arena<SceneNode>,
+    renderables_arena: &FlatStorageData<SceneNodeRenderable>,
     render_canvas: &skia_safe::Canvas,
     render_layer: &RenderLayer,
     context_opacity: f32,
@@ -212,7 +218,14 @@ pub fn paint_node_tree(
 ) {
     let node_id: TreeStorageId = node_ref.into();
 
-    paint_node(node_ref, arena, render_canvas, context_opacity, offscreen);
+    paint_node(
+        node_ref,
+        scene_arena,
+        renderables_arena,
+        render_canvas,
+        context_opacity,
+        offscreen,
+    );
     if let Some(dbg_info) = dbg_info {
         draw_debug(render_canvas, dbg_info, render_layer);
     }
@@ -231,12 +244,18 @@ pub fn paint_node_tree(
     }
     // let bounds = skia_safe::Rect::from_wh(render_layer.size.x, render_layer.size.y);
     // canvas.clip_rect(bounds, None, None);
-    node_id.children(arena).for_each(|child_id| {
+    node_id.children(scene_arena).for_each(|child_id| {
         let child_ref = NodeRef(child_id);
         let restore_point = render_canvas.save();
-        let child = arena.get(child_id).unwrap().get();
+        let child = scene_arena.get(child_id).unwrap().get();
         set_node_transform(child, render_canvas);
-        render_node_tree(child_ref, arena, render_canvas, context_opacity);
+        render_node_tree(
+            child_ref,
+            scene_arena,
+            renderables_arena,
+            render_canvas,
+            context_opacity,
+        );
         render_canvas.restore_to_count(restore_point);
     });
     render_canvas.restore_to_count(restore_point);
@@ -252,14 +271,15 @@ pub fn set_node_transform(node: &SceneNode, canvas: &Canvas) {
 #[profiling::function]
 pub fn render_node_tree(
     node_ref: NodeRef,
-    arena: &Arena<SceneNode>,
+    scene_arena: &Arena<SceneNode>,
+    renderables_arena: &FlatStorageData<SceneNodeRenderable>,
     render_canvas: &skia_safe::Canvas,
     context_opacity: f32,
 ) {
     let node_id: TreeStorageId = node_ref.into();
     #[cfg(feature = "profile-with-puffin")]
     profiling::puffin::profile_scope!("render_node_tree", format!("{}", node_id));
-    let scene_node = arena.get(node_id);
+    let scene_node = scene_arena.get(node_id);
     if (scene_node.is_none()) {
         return;
     }
@@ -314,7 +334,8 @@ pub fn render_node_tree(
 
                         paint_node_tree(
                             node_ref,
-                            arena,
+                            scene_arena,
+                            renderables_arena,
                             &recording_canvas,
                             &render_layer,
                             context_opacity,
@@ -393,7 +414,8 @@ pub fn render_node_tree(
 
     paint_node_tree(
         node_ref,
-        arena,
+        scene_arena,
+        renderables_arena,
         render_canvas,
         &render_layer,
         context_opacity,
@@ -409,14 +431,17 @@ pub(crate) const BACKGROUND_BLUR_SIGMA: f32 = 25.0;
 #[profiling::function]
 pub(crate) fn paint_node(
     node_ref: NodeRef,
-    arena: &Arena<SceneNode>,
+    scene_arena: &Arena<SceneNode>,
+    renderables_arena: &FlatStorageData<SceneNodeRenderable>,
     canvas: &skia_safe::Canvas,
     context_opacity: f32,
     offscreen: bool,
 ) -> usize {
     let node_id: TreeStorageId = node_ref.into();
     profiling::scope!("paint_node", format!("{}", node_id));
-    let node = arena.get(node_id).unwrap().get();
+    let node = scene_arena.get(node_id).unwrap().get();
+    let node_u: usize = node_id.into();
+    let node_renderable = renderables_arena.get(&node_u).unwrap();
     let render_layer = &node.render_layer;
     let node_opacity = render_layer.opacity;
     let mut opacity = 1.0;
@@ -430,7 +455,7 @@ pub(crate) fn paint_node(
         return restore_transform;
     }
 
-    let draw_cache = node.draw_cache.as_ref();
+    let draw_cache = node_renderable.draw_cache.as_ref();
 
     let before_backdrop = canvas.save();
 
@@ -478,7 +503,7 @@ pub(crate) fn paint_node(
         // skia creates a new layer when painting a picture with a paint
         draw_cache.draw(canvas, p);
     } else {
-        draw_layer(canvas, &render_layer, context_opacity);
+        // draw_layer(canvas, &render_layer, context_opacity, None);
     }
 
     restore_transform

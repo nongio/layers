@@ -4,12 +4,17 @@
 //! The scene is a tree of renderable nodes (implementing the `Renderable` trait).
 //! The tree is stored in a memory arena using IndexTree, which allow fast read/write and thread safe parallel iterations.
 
-use crate::prelude::Point;
+use crate::{
+    engine::storage::{FlatStorage, FlatStorageData},
+    prelude::Point,
+};
+use indexmap::IndexMap;
 use indextree::Arena;
+use serde_json::value::Index;
 use std::sync::{Arc, RwLock};
 
 use super::{
-    node::{RenderableFlags, SceneNode},
+    node::{RenderableFlags, SceneNode, SceneNodeRenderable},
     storage::{TreeStorage, TreeStorageId},
     Engine, NodeRef,
 };
@@ -25,14 +30,18 @@ impl Engine {
 }
 pub struct Scene {
     pub(crate) nodes: TreeStorage<SceneNode>,
+    pub(crate) renderables: FlatStorage<SceneNodeRenderable>,
+
     pub size: RwLock<Point>,
 }
 
 impl Scene {
     fn new(width: f32, height: f32) -> Self {
         let nodes = TreeStorage::new();
+        let renderables = FlatStorage::new();
         Self {
             nodes,
+            renderables,
             size: RwLock::new(Point {
                 x: width,
                 y: height,
@@ -57,14 +66,13 @@ impl Scene {
     /// The new parent node is marked as needing layout (NEEDS_LAYOUT).
     pub(crate) fn append_node_to(&self, child: NodeRef, parent: NodeRef) {
         self.with_arena_mut(|nodes| {
-            let child = *child;
-            child.detach(nodes);
-            parent.append(child, nodes);
-            if let Some(scene_node) = nodes.get_mut(child) {
+            let child_id = *child;
+            child_id.detach(nodes);
+            parent.append(child_id, nodes);
+            if let Some(scene_node) = nodes.get_mut(child_id) {
                 let scene_node = scene_node.get_mut();
                 scene_node.set_needs_repaint(true);
             }
-
             let parent = *parent;
             if let Some(new_parent_node) = nodes.get_mut(parent) {
                 let new_parent_node = new_parent_node.get_mut();
@@ -86,7 +94,6 @@ impl Scene {
                 let scene_node = scene_node.get_mut();
                 scene_node.set_needs_repaint(true);
             }
-
             let parent = *parent;
             if let Some(new_parent_node) = nodes.get_mut(parent) {
                 let new_parent_node = new_parent_node.get_mut();
@@ -97,6 +104,9 @@ impl Scene {
     /// Add a new node to the scene
     pub(crate) fn insert_node(&self, node: SceneNode, parent: Option<NodeRef>) -> NodeRef {
         let id = self.nodes.insert_sync(node);
+        let renderable = SceneNodeRenderable::new();
+        self.renderables.insert_with_id(renderable, id.into());
+
         if let Some(parent) = parent {
             self.append_node_to(NodeRef(id), parent);
         }
@@ -128,6 +138,7 @@ impl Scene {
         let id = id.into();
 
         self.nodes.remove_at_sync(&id);
+        self.renderables.remove_at(&id.into());
     }
 
     pub(crate) fn is_node_removed(&self, id: impl Into<TreeStorageId>) -> bool {
@@ -136,17 +147,19 @@ impl Scene {
         let nodes = self.nodes.data();
         let nodes = nodes.read().unwrap();
 
-        nodes
+        let node_removed = nodes
             .get(id)
             .map(|node| {
                 if node.is_removed() {
                     true
                 } else {
-                    let node = node.get();
-                    node.is_deleted()
+                    let scene_node = node.get();
+                    scene_node.is_deleted()
                 }
             })
-            .unwrap_or(true)
+            .unwrap_or(true);
+
+        node_removed
     }
     // pub async fn with_arena_async<T, F>(&self, f: F) -> Result<T, JoinError>
     // where
@@ -173,5 +186,19 @@ impl Scene {
         let arena_guard = self.nodes.data();
         let mut arena = arena_guard.write().unwrap();
         f(&mut arena)
+    }
+
+    pub fn with_renderable_arena<T: Send + Sync>(
+        &self,
+        f: impl FnOnce(&FlatStorageData<SceneNodeRenderable>) -> T,
+    ) -> T {
+        self.renderables.with_data(|arena| f(arena))
+    }
+
+    pub(crate) fn with_renderable_arena_mut<T>(
+        &self,
+        f: impl FnOnce(&FlatStorageData<SceneNodeRenderable>) -> T,
+    ) -> T {
+        self.renderables.with_data_mut(|arena| f(arena))
     }
 }
