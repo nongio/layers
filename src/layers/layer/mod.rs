@@ -494,6 +494,13 @@ impl Layer {
         self.model
             .picture_cached
             .store(picture_cache, std::sync::atomic::Ordering::Relaxed);
+        if picture_cache == false {
+            self.engine.scene.with_renderable_arena_mut(|arena| {
+                let id: usize = self.id.into();
+                let node = arena.get_mut(&id).unwrap();
+                node.draw_cache = None;
+            });
+        }
     }
     pub fn picture_cached(&self) -> bool {
         self.model

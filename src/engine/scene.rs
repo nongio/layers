@@ -197,7 +197,7 @@ impl Scene {
 
     pub(crate) fn with_renderable_arena_mut<T>(
         &self,
-        f: impl FnOnce(&FlatStorageData<SceneNodeRenderable>) -> T,
+        f: impl FnOnce(&mut FlatStorageData<SceneNodeRenderable>) -> T,
     ) -> T {
         self.renderables.with_data_mut(|arena| f(arena))
     }

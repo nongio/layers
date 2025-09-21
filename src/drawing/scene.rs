@@ -492,7 +492,8 @@ pub(crate) fn paint_node(
             canvas.restore_to_count(before_backdrop);
         }
     }
-    if let Some(draw_cache) = draw_cache {
+    if node.is_picture_cached() && draw_cache.is_some() {
+        let draw_cache = draw_cache.unwrap();
         let mut p = None;
         if opacity != 1.0
             || (blend_mode == crate::prelude::BlendMode::BackgroundBlur && opacity > 0.0)
