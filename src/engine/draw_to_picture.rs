@@ -25,7 +25,7 @@ pub(crate) fn draw_layer_to_picture(
 
     let bounds_safe = render_layer.bounds.with_outset((SAFE_MARGIN, SAFE_MARGIN));
 
-    let canvas = recorder.begin_recording(bounds_safe, None);
+    let canvas = recorder.begin_recording(bounds_safe, false);
     let damage = draw_layer(canvas, render_layer, 1.0, renderable);
 
     (recorder.finish_recording_as_picture(None), damage)

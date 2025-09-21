@@ -174,8 +174,9 @@ pub(crate) fn update_layout_tree(engine: &Engine) {
     let scene_size = engine.scene.size.read().unwrap();
     let mut changed_nodes = Vec::new();
     let mut followers_nodes = Vec::new();
+    let mut all_nodes = Vec::new();
 
-    // First, collect nodes that need size updates
+    // First, collect nodes that need layout updates and relationships without touching layout locks
     {
         profiling::scope!("collect_nodes_needing_update");
         if let Some(root) = engine.scene_root() {
@@ -187,19 +188,9 @@ pub(crate) fn update_layout_tree(engine: &Engine) {
                         return;
                     }
                     let node_ref = NodeRef(node_id);
+                    all_nodes.push(node_ref);
 
-                    // Update layout size for nodes that have explicit size constraints
-                    engine.with_layers(|layers| {
-                        if let Some(layer) = layers.get(&node_ref) {
-                            let size = layer.size();
-                            let layout_node_id = layer.layout_id;
-                            if size.width != Dimension::Auto || size.height != Dimension::Auto {
-                                engine.set_node_layout_size(layout_node_id, size);
-                            }
-                        }
-                    });
-
-                    // Check if this node needs layout recalculation and collect follower relationships
+                    // Collect follower relationships and layout flags
                     let scene_node = node.get();
                     if let Some(follow) = scene_node._follow_node {
                         followers_nodes.push((node_ref, follow));
@@ -214,6 +205,16 @@ pub(crate) fn update_layout_tree(engine: &Engine) {
                     }
                 }
             });
+        }
+    }
+
+    // Update layout node sizes outside of the scene lock to avoid lock inversion
+    for node_ref in &all_nodes {
+        if let Some(layer) = engine.get_layer(node_ref) {
+            let size = layer.size();
+            if size.width != Dimension::Auto || size.height != Dimension::Auto {
+                engine.set_node_layout_size(layer.layout_id, size);
+            }
         }
     }
 

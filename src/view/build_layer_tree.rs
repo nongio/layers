@@ -125,6 +125,9 @@ impl BuildLayerTree for Layer {
         if let Some(image_cache) = viewlayer_tree.image_cache {
             scene_layer.set_image_cached(image_cache);
         }
+        if let Some(picture_cached) = viewlayer_tree.picture_cached {
+            scene_layer.set_picture_cached(picture_cached);
+        }
         if let Some(pointer_events) = viewlayer_tree.pointer_events {
             scene_layer.set_pointer_events(pointer_events);
         }

@@ -503,7 +503,7 @@ pub(crate) fn paint_node(
         // skia creates a new layer when painting a picture with a paint
         draw_cache.draw(canvas, p);
     } else {
-        // draw_layer(canvas, &render_layer, context_opacity, None);
+        draw_layer(canvas, &render_layer, opacity, node_renderable);
     }
 
     restore_transform

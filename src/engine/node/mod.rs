@@ -334,7 +334,7 @@ pub fn do_repaint(renderable: &SceneNodeRenderable, scene_node: &SceneNode) -> S
                 // {
                 let mut recorder = skia_safe::PictureRecorder::new();
                 let canvas = recorder
-                    .begin_recording(skia_safe::Rect::from_wh(size.width, size.height), None);
+                    .begin_recording(skia_safe::Rect::from_wh(size.width, size.height), false);
                 // let draw_func = content_draw_func;
                 let caller = draw_func.0.as_ref();
                 let content_damage = caller(canvas, size.width, size.height);
