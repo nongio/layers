@@ -713,38 +713,46 @@ impl Engine {
 
     // FIXME: quite convoluted logic.. move main logic into scene
     pub(crate) fn scene_remove_layer<'a>(&self, layer: impl Into<&'a NodeRef>) {
-        // Scene object is responsible for removing the node and its children
-        // Engine is responsible for removing the layout node,
-        // and mark the scene node for relayout?
+        // Avoid deadlocks by not holding scene + layout/layers locks simultaneously.
+        let layer_id = *layer.into();
+
+        // Snapshot the scene parent id (read-only scene access)
+        let parent_id = self.scene.with_arena(|arena| {
+            arena
+                .get(layer_id.into())
+                .map(|n| n.parent())
+                .unwrap_or(None)
+        });
+
+        // Snapshot layout ids via layers map (separate lock)
+        let (layout_id_opt, parent_layout_id_opt) = {
+            let layout_id_opt = self.get_layer(&layer_id).map(|l| l.layout_id);
+            let parent_layout_id_opt = parent_id
+                .and_then(|pid| self.get_layer(&NodeRef(pid)))
+                .map(|pl| pl.layout_id);
+            (layout_id_opt, parent_layout_id_opt)
+        };
+
+        // Update layout tree first (no scene lock held)
+        if let Some(layout_id) = layout_id_opt {
+            let mut layout = self.layout_tree.write().unwrap();
+            if let Some(parent_layout_id) = parent_layout_id_opt {
+                let _ = layout.mark_dirty(parent_layout_id);
+            }
+            // Remove the layout node unconditionally
+            let _ = layout.remove(layout_id);
+        }
+
+        // Now mutate the scene (no layout lock held)
         self.scene.with_arena_mut(|arena| {
-            let layer_id = layer.into();
-            if let Some(node) = arena.get_mut(layer_id.into()) {
-                let layer = self.get_layer(layer_id).unwrap();
-                let layout_id = layer.layout_id;
-                let parent_id = node.parent();
-
-                if let Some(parent_id) = parent_id {
-                    // if the parent is already removed, we don't need to do anything
-                    if !parent_id.is_removed(arena) {
-                        if let Some(parent_node) = arena.get_mut(parent_id) {
-                            let parent = parent_node.get_mut();
-                            let parent_layer = self.get_layer(&NodeRef(parent_id)).unwrap();
-                            let parent_layout_id = parent_layer.layout_id;
-                            parent.set_needs_layout(true);
-
-                            let mut layout = self.layout_tree.write().unwrap();
-                            let res = layout.mark_dirty(parent_layout_id);
-                            if let Some(err) = res.err() {
-                                println!("layout err {}", err);
-                            }
-                        }
-                        // remove layers subtree
-                        layer_id.remove_subtree(arena);
+            if let Some(pid) = parent_id {
+                if !pid.is_removed(arena) {
+                    if let Some(parent_node) = arena.get_mut(pid) {
+                        parent_node.get_mut().set_needs_layout(true);
                     }
+                    // remove layers subtree
+                    layer_id.remove_subtree(arena);
                 }
-                // remove layout node
-                let mut layout_tree = self.layout_tree.write().unwrap();
-                layout_tree.remove(layout_id).unwrap();
             }
         });
     }
@@ -865,11 +873,12 @@ impl Engine {
         self.transactions.get(&tref.id)
     }
     pub fn get_transaction_for_value(&self, value_id: usize) -> Option<AnimatedNodeChange> {
-        self.values_transactions
-            .read()
-            .unwrap()
-            .get(&value_id)
-            .and_then(|id| self.transactions.with_data(|d| d.get(id).cloned()))
+        // Avoid holding multiple locks at once to prevent deadlocks
+        let tid = {
+            let vt = self.values_transactions.read().unwrap();
+            vt.get(&value_id).copied()
+        };
+        tid.and_then(|id| self.transactions.with_data(|d| d.get(&id).cloned()))
     }
     pub fn get_animation(&self, animation: AnimationRef) -> Option<AnimationState> {
         self.animations.with_data(|d| d.get(&animation.0).cloned())
@@ -1041,7 +1050,7 @@ impl Engine {
             for (_depth, nodes_at_depth) in depth_groups.into_iter() {
                 // Update nodes at this depth in parallel
                 let nad: &Vec<_> = nodes_at_depth.as_ref();
-                let _damages: Vec<_> = nad
+                let damages: Vec<_> = nad
                     .iter()
                     .map(|node_id| {
                         let parent_render_layer = self.scene.with_arena(|arena| {
@@ -1064,12 +1073,12 @@ impl Engine {
                     .collect();
 
                 // Phase 4: Accumulate child damages to parents (sequential for each depth)
-                // for (node_id, node_damage) in nodes_at_depth.iter().zip(damages.iter()) {
-                //     if !node_damage.is_empty() {
-                //         self.propagate_damage_to_ancestors(*node_id, *node_damage);
-                //     }
-                //     total_damage.join(*node_damage);
-                // }
+                for (node_id, node_damage) in nodes_at_depth.iter().zip(damages.iter()) {
+                    if !node_damage.is_empty() {
+                        self.propagate_damage_to_ancestors(*node_id, *node_damage);
+                    }
+                    total_damage.join(*node_damage);
+                }
             }
         }
 
@@ -1105,7 +1114,7 @@ impl Engine {
                         .global_transformed_bounds_with_children
                         .join(damage);
 
-                    // ancestor.set_needs_repaint(true);
+                    ancestor.set_needs_repaint(true);
                     // Mark ancestor for potential repaint in the renderable arena
                     // self.scene.with_renderable_arena_mut(|renderable_arena| {
                     //     if let Some(ancestor_renderable) = renderable_arena.get_mut(ancestor_id) {
@@ -1442,6 +1451,10 @@ impl Engine {
     pub fn clear_damage(&self) {
         let mut damage = self.damage.write().unwrap();
         *damage = skia_safe::Rect::default();
+    }
+    pub fn add_damage(&self, rect: skia_safe::Rect) {
+        let mut damage = self.damage.write().unwrap();
+        damage.join(&rect);
     }
 }
 
