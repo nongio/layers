@@ -51,6 +51,27 @@ pub fn save_image<'a>(
 //     // println!("SVG DOM created {} \n {:?}", image_path, svg.root());
 //     Ok(svg)
 // }
+
+pub fn image_from_svg(image_data: &[u8], size: impl Into<skia_safe::ISize>) -> skia_safe::Image {
+    let size: skia_safe::ISize = size.into();
+    let options = usvg::Options {
+        default_size: usvg::Size::from_wh(size.width as f32, size.height as f32).unwrap(),
+        ..Default::default()
+    };
+    let rtree = usvg::Tree::from_data(image_data, &options).unwrap();
+
+    // Convert tree back to SVG string
+    let xml = rtree.to_string(&usvg::WriteOptions::default());
+    let font_mgr = skia_safe::FontMgr::new();
+    let mut svg = skia_safe::svg::Dom::from_bytes(xml.as_bytes(), font_mgr).unwrap();
+    svg.set_container_size((size.width as f32, size.height as f32));
+
+    let mut surface = skia_safe::surfaces::raster_n32_premul((size.width, size.height)).unwrap();
+    let canvas = surface.canvas();
+    svg.render(canvas);
+    surface.image_snapshot()
+}
+
 pub fn load_svg_image(
     image_path: &str,
     size: impl Into<skia_safe::ISize>,
