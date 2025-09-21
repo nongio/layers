@@ -125,9 +125,6 @@ pub(crate) struct ModelLayer {
     pub image_filter_progress: Attribute<f32>,
     pub clip_content: Attribute<bool>,
     pub clip_children: Attribute<bool>,
-
-    pub image_cached: Arc<AtomicBool>,
-    pub picture_cached: Arc<AtomicBool>,
 }
 
 impl Default for ModelLayer {
@@ -168,15 +165,11 @@ impl Default for ModelLayer {
         let clip_children = Attribute::new(false);
         let pointer_events = Arc::new(AtomicBool::new(true));
         // let hidden = Arc::new(AtomicBool::new(false));
-        let image_cached = Arc::new(AtomicBool::new(true));
-        let picture_cached = Arc::new(AtomicBool::new(true));
 
         Self {
             key: RwLock::new(String::new()),
             pointer_events,
             // hidden,
-            image_cached,
-            picture_cached,
             display,
             anchor_point,
             position,

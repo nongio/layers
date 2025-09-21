@@ -481,19 +481,21 @@ impl Layer {
         self.engine.on_update_value(size_id, f, once);
     }
     pub fn set_image_cached(&self, image_cached: bool) {
-        self.model
-            .image_cached
-            .store(image_cached, std::sync::atomic::Ordering::Relaxed);
+        self.engine.scene.with_arena_mut(|arena| {
+            let id = self.id.0;
+            let node = arena.get_mut(id).unwrap();
+            let node = node.get_mut();
+            node.set_image_cached(image_cached);
+        });
     }
-    pub fn image_cached(&self) -> bool {
-        self.model
-            .image_cached
-            .load(std::sync::atomic::Ordering::Relaxed)
-    }
+
     pub fn set_picture_cached(&self, picture_cache: bool) {
-        self.model
-            .picture_cached
-            .store(picture_cache, std::sync::atomic::Ordering::Relaxed);
+       self.engine.scene.with_arena_mut(|arena| {
+            let id = self.id.0;
+            let node = arena.get_mut(id).unwrap();
+            let node = node.get_mut();
+            node.set_picture_cached(picture_cache);
+        });
         if picture_cache == false {
             self.engine.scene.with_renderable_arena_mut(|arena| {
                 let id: usize = self.id.into();
@@ -501,11 +503,6 @@ impl Layer {
                 node.draw_cache = None;
             });
         }
-    }
-    pub fn picture_cached(&self) -> bool {
-        self.model
-            .picture_cached
-            .load(std::sync::atomic::Ordering::Relaxed)
     }
 
     pub(crate) fn set_follow_node(&self, follow_node: Option<NodeRef>) {

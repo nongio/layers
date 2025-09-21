@@ -167,6 +167,22 @@ impl BuildLayerTree for Layer {
         }
         scene_layer.set_follow_node(viewlayer_tree.replicate_node);
 
+        scene_layer.engine.scene.with_arena_mut(|arena| {
+            let ancestors: Vec<NodeId> = layer_id.0.ancestors(arena).collect();
+            {
+                let node = arena.get_mut(layer_id.0).unwrap();
+                let scene_node = node.get_mut();
+                scene_node.set_needs_layout(true);
+                scene_node.increase_frame();
+            }
+            for ancestor in ancestors {
+                let node = arena.get_mut(ancestor).unwrap();
+                let node = node.get_mut();
+                node.set_needs_layout(true);
+                node.increase_frame();
+            }
+        });
+
         // Children
         let mut current_scene_layers_children: HashSet<NodeId> = {
             let children = engine
