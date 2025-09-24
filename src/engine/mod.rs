@@ -834,7 +834,7 @@ impl Engine {
     }
     pub fn add_animation_from_transition(
         &self,
-        transition: Transition,
+        transition: &Transition,
         autostart: bool,
     ) -> AnimationRef {
         let start = self.now() + transition.delay;

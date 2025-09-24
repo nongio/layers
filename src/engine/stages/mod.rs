@@ -31,39 +31,37 @@ pub(crate) fn update_animations(
     let started_animations = Arc::new(RwLock::new(Vec::<FlatStorageId>::new()));
 
     engine.animations.with_data_mut(|animations| {
-        if !animations.is_empty() {
-            animations.par_iter_mut().for_each_with(
-                (finished_animations.clone(), started_animations.clone()),
-                |(done_animations, started_animations),
-                 (
-                    id,
-                    AnimationState {
-                        animation,
-                        progress,
-                        time,
-                        is_running,
-                        is_finished,
-                        is_started,
-                    },
-                )| {
-                    if !*is_running {
-                        return;
-                    }
-                    let (animation_progress, time_progress) = animation.update_at(timestamp.0);
-                    if !(*is_started) && animation.start <= timestamp.0 {
-                        *is_started = true;
-                        started_animations.write().unwrap().push(*id);
-                    }
-                    *progress = animation_progress;
-                    *time = time_progress.clamp(0.0, time_progress);
-                    if animation.done(timestamp.0) {
-                        *is_running = false;
-                        *is_finished = true;
-                        done_animations.write().unwrap().push(*id);
-                    }
+        animations.par_iter_mut().for_each_with(
+            (finished_animations.clone(), started_animations.clone()),
+            |(done_animations, started_animations),
+             (
+                id,
+                AnimationState {
+                    animation,
+                    progress,
+                    time,
+                    is_running,
+                    is_finished,
+                    is_started,
                 },
-            );
-        }
+            )| {
+                if !*is_running {
+                    return;
+                }
+                let (animation_progress, time_progress) = animation.update_at(timestamp.0);
+                if !(*is_started) && animation.start <= timestamp.0 {
+                    *is_started = true;
+                    started_animations.write().unwrap().push(*id);
+                }
+                *progress = animation_progress;
+                *time = time_progress.clamp(0.0, time_progress);
+                if animation.done(timestamp.0) {
+                    *is_running = false;
+                    *is_finished = true;
+                    done_animations.write().unwrap().push(*id);
+                }
+            },
+        );
     });
 
     let finished = finished_animations.read().unwrap();

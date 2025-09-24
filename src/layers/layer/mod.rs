@@ -238,8 +238,9 @@ impl Layer {
         let draw: ContentDrawFunction = content_handler.into();
         *model_content = Some(draw.into());
 
+        let attribute_id = self.model.display.id;
         self.engine
-            .schedule_change(self.id, Arc::new(NoopChange::new(self.id.0.into())), None);
+            .schedule_change(self.id, Arc::new(NoopChange::new(attribute_id)), None);
     }
     #[allow(unused)]
     pub(crate) fn set_draw_content_internal<F: Into<ContentDrawFunctionInternal>>(
