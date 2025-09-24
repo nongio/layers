@@ -36,7 +36,7 @@ pub(crate) fn update_node_single(
                 .render_layer
                 .global_transformed_bounds_with_children;
             let prev_opacity = scene_node.render_layer.premultiplied_opacity;
-            let needs_paint = scene_node.needs_repaint() || true;
+            let needs_paint = scene_node.needs_repaint();
 
             (prev_transformed_bounds, prev_opacity, needs_paint)
         });

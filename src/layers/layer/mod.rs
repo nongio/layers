@@ -490,7 +490,7 @@ impl Layer {
     }
 
     pub fn set_picture_cached(&self, picture_cache: bool) {
-       self.engine.scene.with_arena_mut(|arena| {
+        self.engine.scene.with_arena_mut(|arena| {
             let id = self.id.0;
             let node = arena.get_mut(id).unwrap();
             let node = node.get_mut();

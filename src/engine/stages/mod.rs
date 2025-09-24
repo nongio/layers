@@ -195,11 +195,7 @@ pub(crate) fn update_layout_tree(engine: &Engine) {
                     if let Some(follow) = scene_node._follow_node {
                         followers_nodes.push((node_ref, follow));
                     }
-                    let needs_layout = scene_node.needs_layout()
-                        || true
-                        || scene_node.render_layer.blend_mode
-                            == crate::types::BlendMode::BackgroundBlur;
-
+                    let needs_layout = scene_node.needs_layout();
                     if needs_layout {
                         changed_nodes.push(node_ref);
                     }

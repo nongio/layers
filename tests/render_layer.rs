@@ -118,7 +118,10 @@ mod tests {
         let prl = engine.render_layer(&parent).unwrap();
 
         // Parent local bounds
-        assert_eq!(prl.bounds, skia_safe::Rect::from_xywh(0.0, 0.0, 100.0, 100.0));
+        assert_eq!(
+            prl.bounds,
+            skia_safe::Rect::from_xywh(0.0, 0.0, 100.0, 100.0)
+        );
 
         // bounds_with_children should include the child's area in parent space
         assert_eq!(

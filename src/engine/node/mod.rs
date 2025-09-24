@@ -322,55 +322,54 @@ pub fn do_repaint(renderable: &SceneNodeRenderable, scene_node: &SceneNode) -> S
         return new_renderable;
     }
 
-    if scene_node.is_picture_cached() {
-        // disable content cache as there is a bug with rendering images
-        // if render_layer.content_draw_func.is_some() {
-        //     let content_draw_func = render_layer.content_draw_func.clone();
-        //     let size = render_layer.size;
-        //     if let Some(draw_func) = content_draw_func {
-        //         // only redraw if the content changed or the size changed
-        //         // if renderable.content_cache.is_none()
-        //         // || ((scene_node.size != size)
-        //         //     || (self.content_draw_func.as_ref() != content_draw_func))
-        //         // {
-        //         let mut recorder = skia_safe::PictureRecorder::new();
-        //         let canvas = recorder
-        //             .begin_recording(skia_safe::Rect::from_wh(size.width, size.height), false);
-        //         // let draw_func = content_draw_func;
-        //         let caller = draw_func.0.as_ref();
-        //         let content_damage = caller(canvas, size.width, size.height);
-        //         damage.join(content_damage);
-        //         new_renderable.content_cache = recorder.finish_recording_as_picture(None);
-
-        //         // }
-        //     }
-        // }
-        let (picture, layer_damage) = draw_layer_to_picture(render_layer, &new_renderable);
-        // Don't transform here - let the caller handle coordinate transformation
-        damage.join(layer_damage);
-
-        if let Some(picture) = picture {
-            // update or create the draw cache
-            if let Some(draw_cache) = &mut new_renderable.draw_cache {
-                draw_cache.picture = picture;
-                draw_cache.size = render_layer.size;
-            } else {
-                let size = render_layer.size;
-
-                let new_cache = DrawCache::new(
-                    picture,
-                    size,
-                    skia_safe::Point {
-                        x: render_layer.border_width * 2.0,
-                        y: render_layer.border_width * 2.0,
-                    },
-                );
-                new_renderable.draw_cache = Some(new_cache);
-            }
-            let previous_damage = new_renderable.repaint_damage;
-            new_renderable.repaint_damage = damage;
-            damage.join(previous_damage);
+    // if scene_node.is_picture_cached() {
+    // disable content cache as there is a bug with rendering images
+    if render_layer.content_draw_func.is_some() {
+        let content_draw_func = render_layer.content_draw_func.clone();
+        let size = render_layer.size;
+        if let Some(draw_func) = content_draw_func {
+            //         // only redraw if the content changed or the size changed
+            //         // if renderable.content_cache.is_none()
+            //         // || ((scene_node.size != size)
+            //         //     || (self.content_draw_func.as_ref() != content_draw_func))
+            //         // {
+            let mut recorder = skia_safe::PictureRecorder::new();
+            let canvas =
+                recorder.begin_recording(skia_safe::Rect::from_wh(size.width, size.height), false);
+            // let draw_func = content_draw_func;
+            let caller = draw_func.0.as_ref();
+            let content_damage = caller(canvas, size.width, size.height);
+            damage.join(content_damage);
+            //         new_renderable.content_cache = recorder.finish_recording_as_picture(None);
         }
     }
+    // }
+    let (picture, layer_damage) = draw_layer_to_picture(render_layer, &new_renderable);
+    // Don't transform here - let the caller handle coordinate transformation
+    damage.join(layer_damage);
+
+    if let Some(picture) = picture {
+        // update or create the draw cache
+        if let Some(draw_cache) = &mut new_renderable.draw_cache {
+            draw_cache.picture = picture;
+            draw_cache.size = render_layer.size;
+        } else {
+            let size = render_layer.size;
+
+            let new_cache = DrawCache::new(
+                picture,
+                size,
+                skia_safe::Point {
+                    x: render_layer.border_width * 2.0,
+                    y: render_layer.border_width * 2.0,
+                },
+            );
+            new_renderable.draw_cache = Some(new_cache);
+        }
+        let previous_damage = new_renderable.repaint_damage;
+        new_renderable.repaint_damage = damage;
+        damage.join(previous_damage);
+    }
+    // }
     new_renderable
 }
