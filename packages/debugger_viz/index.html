@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Scene Debugger Viz</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <h1>lay_rs Scene Debugger</h1>
+      <div class="actions">
+        <label class="file-input">
+          <input type="file" id="file-loader" accept="application/json" />
+          <span>Load scene.json…</span>
+        </label>
+        <button id="reload-btn" type="button" title="Reload ../../scene.json">Reload Default</button>
+      </div>
+    </header>
+    <main class="app-main">
+      <aside class="sidebar">
+        <h2>Nodes</h2>
+        <div id="filters" class="filters">
+          <label>
+            <input type="checkbox" id="toggle-hidden" checked />
+            Show hidden
+          </label>
+          <label>
+            <input type="checkbox" id="toggle-zero-size" />
+            Show zero-size
+          </label>
+        </div>
+        <div id="node-list" class="node-list" role="tree"></div>
+      </aside>
+      <section class="stage">
+        <div class="stage-toolbar">
+          <span id="scene-size">—</span>
+          <label class="zoom-control">
+            Zoom
+            <input type="range" id="zoom-slider" min="0.2" max="4" value="0.8" step="0.05" />
+          </label>
+        </div>
+        <div class="stage-canvas" id="stage-canvas">
+          <svg id="scene-canvas" xmlns="http://www.w3.org/2000/svg" aria-label="Scene preview"></svg>
+          <div id="tooltip" class="tooltip hidden"></div>
+        </div>
+        <div id="node-details" class="details" aria-live="polite"></div>
+      </section>
+      <aside class="properties" id="properties-pane">
+        <h2>Properties</h2>
+        <div class="properties-content">
+          <p id="properties-empty" class="properties-empty">Select a node to inspect its properties.</p>
+          <table class="properties-table" aria-label="Node properties">
+            <tbody id="properties-body"></tbody>
+          </table>
+        </div>
+      </aside>
+    </main>
+    <template id="node-row">
+      <div class="node-row" role="treeitem">
+        <span class="node-toggle" aria-hidden="true"></span>
+        <button class="node-eye" type="button" aria-label="Toggle visibility" title="Toggle visibility"></button>
+        <span class="node-label"></span>
+      </div>
+    </template>
+    <script src="app.js" type="module"></script>
+  </body>
+</html>

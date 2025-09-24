@@ -6,11 +6,11 @@
 
 use crate::{
     engine::storage::{FlatStorage, FlatStorageData},
+    layers::layer::render_layer::RenderLayer,
     prelude::Point,
 };
-use indexmap::IndexMap;
 use indextree::Arena;
-use serde_json::value::Index;
+use serde::Serialize;
 use std::sync::{Arc, RwLock};
 
 use super::{
@@ -200,5 +200,189 @@ impl Scene {
         f: impl FnOnce(&mut FlatStorageData<SceneNodeRenderable>) -> T,
     ) -> T {
         self.renderables.with_data_mut(|arena| f(arena))
+    }
+
+    /// Returns a serializable snapshot of the scene, including the root size and node hierarchy.
+    pub fn snapshot(&self) -> SceneSnapshot {
+        let size = {
+            let guard = self.size.read().unwrap();
+            SceneDimensions {
+                width: guard.x,
+                height: guard.y,
+            }
+        };
+
+        let nodes = self.with_arena(|arena| collect_scene_roots(arena));
+
+        SceneSnapshot { size, nodes }
+    }
+
+    /// Serializes the current scene snapshot into a pretty formatted JSON string for debugging.
+    pub fn serialize_state_pretty(&self) -> serde_json::Result<String> {
+        serde_json::to_string_pretty(&self.snapshot())
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SceneSnapshot {
+    pub size: SceneDimensions,
+    pub nodes: Vec<SceneNodeSnapshot>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SceneDimensions {
+    pub width: f32,
+    pub height: f32,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SceneNodeSnapshot {
+    pub id: usize,
+    pub key: String,
+    pub hidden: bool,
+    pub pointer_events: bool,
+    pub image_cached: bool,
+    pub picture_cached: bool,
+    pub needs_layout: bool,
+    pub needs_repaint: bool,
+    pub opacity: f32,
+    pub local_bounds: RectSnapshot,
+    pub global_bounds: RectSnapshot,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content: Option<String>,
+    pub render_layer: RenderLayer,
+    pub children: Vec<SceneNodeSnapshot>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RectSnapshot {
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
+}
+
+fn collect_scene_roots(arena: &Arena<SceneNode>) -> Vec<SceneNodeSnapshot> {
+    let mut roots = Vec::new();
+    for node in arena.iter() {
+        if node.is_removed() || node.parent().is_some() {
+            continue;
+        }
+
+        if let Some(node_id) = arena.get_node_id(node) {
+            if let Some(snapshot) = SceneNodeSnapshot::from_arena(arena, node_id) {
+                roots.push(snapshot);
+            }
+        }
+    }
+
+    roots
+}
+
+impl RectSnapshot {
+    fn from_rect(rect: &skia_safe::Rect) -> Self {
+        Self {
+            x: rect.left(),
+            y: rect.top(),
+            width: rect.width(),
+            height: rect.height(),
+        }
+    }
+}
+
+impl SceneNodeSnapshot {
+    fn from_arena(arena: &Arena<SceneNode>, id: TreeStorageId) -> Option<Self> {
+        let node = arena.get(id)?;
+        if node.is_removed() {
+            return None;
+        }
+
+        let scene_node = node.get();
+        if scene_node.is_deleted() {
+            return None;
+        }
+
+        let children = id
+            .children(arena)
+            .filter_map(|child| SceneNodeSnapshot::from_arena(arena, child))
+            .collect();
+
+        let render_layer = scene_node.render_layer().clone();
+        let node_id: usize = id.into();
+
+        let mut key = render_layer.key.clone();
+        if key.is_empty() {
+            key = format!("node-{}", node_id);
+        }
+
+        let content = if render_layer.content.is_some() {
+            Some("picture".to_string())
+        } else if render_layer.content_draw_func.is_some() {
+            Some("dynamic".to_string())
+        } else {
+            None
+        };
+
+        Some(Self {
+            id: node_id,
+            key,
+            hidden: scene_node.hidden(),
+            pointer_events: scene_node.pointer_events(),
+            image_cached: scene_node.is_image_cached(),
+            picture_cached: scene_node.is_picture_cached(),
+            needs_layout: scene_node.needs_layout(),
+            needs_repaint: scene_node.needs_repaint(),
+            opacity: render_layer.opacity,
+            local_bounds: RectSnapshot::from_rect(&render_layer.local_transformed_bounds),
+            global_bounds: RectSnapshot::from_rect(&render_layer.global_transformed_bounds),
+            content,
+            render_layer,
+            children,
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::engine::Engine;
+
+    #[test]
+    fn serialize_state_pretty_exposes_tree_structure() {
+        let engine = Engine::create(200.0, 100.0);
+        let root = engine.new_layer();
+        root.set_key("root");
+        engine.scene_set_root(root.clone());
+
+        let child = engine.new_layer();
+        child.set_key("child");
+        let child_id = child.id();
+        root.add_sublayer(&child_id);
+
+        engine.update(0.0);
+
+        let snapshot = engine.scene.snapshot();
+        assert_eq!(snapshot.nodes.len(), 1);
+        assert_eq!(snapshot.nodes[0].key, "root");
+        assert_eq!(snapshot.nodes[0].render_layer.key, "root");
+        assert_eq!(snapshot.nodes[0].children.len(), 1);
+        assert_eq!(snapshot.nodes[0].children[0].key, "child");
+        assert_eq!(snapshot.nodes[0].children[0].render_layer.key, "child");
+
+        let json = engine
+            .scene
+            .serialize_state_pretty()
+            .expect("failed to serialize scene");
+        let value: serde_json::Value = serde_json::from_str(&json).expect("invalid json");
+
+        let nodes = value["nodes"].as_array().expect("nodes missing");
+        assert_eq!(nodes.len(), 1);
+        assert_eq!(nodes[0]["key"], "root");
+        assert_eq!(nodes[0]["render_layer"]["key"], "root");
+
+        let children = nodes[0]["children"].as_array().expect("children missing");
+        assert_eq!(children.len(), 1);
+        assert_eq!(children[0]["key"], "child");
+        assert_eq!(children[0]["render_layer"]["key"], "child");
     }
 }
