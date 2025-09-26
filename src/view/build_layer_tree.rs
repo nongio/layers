@@ -159,13 +159,12 @@ impl BuildLayerTree for Layer {
         let layer_id = scene_layer.id;
         let engine = scene_layer.engine.clone();
 
-        // if let Some(scene_node) = self.engine.scene_get_node(&layer_id) {
         if let Some(replicate_node) = viewlayer_tree.replicate_node {
             if let Some(replicate_layer) = engine.get_layer(&replicate_node) {
-                scene_layer.set_draw_content(engine.layer_as_content(&replicate_layer));
+                scene_layer.set_draw_content(replicate_layer.as_content());
+                replicate_layer.add_follower_node(scene_layer.id());
             }
         }
-        scene_layer.set_follow_node(viewlayer_tree.replicate_node);
 
         scene_layer.engine.scene.with_arena_mut(|arena| {
             let ancestors: Vec<NodeId> = layer_id.0.ancestors(arena).collect();

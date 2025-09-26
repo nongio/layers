@@ -1,4 +1,7 @@
-use std::sync::{Arc, RwLock};
+use std::{
+    collections::HashSet,
+    sync::{Arc, RwLock},
+};
 
 use rayon::{
     iter::IntoParallelRefIterator,
@@ -170,8 +173,7 @@ pub(crate) fn nodes_for_layout(engine: &Engine) -> Vec<NodeRef> {
 pub(crate) fn update_layout_tree(engine: &Engine) {
     // Get scene size early to avoid multiple lock acquisitions
     let scene_size = engine.scene.size.read().unwrap();
-    let mut changed_nodes = Vec::new();
-    let mut followers_nodes = Vec::new();
+    let mut changed_nodes = HashSet::new();
     let mut all_nodes = Vec::new();
 
     // First, collect nodes that need layout updates and relationships without touching layout locks
@@ -190,12 +192,12 @@ pub(crate) fn update_layout_tree(engine: &Engine) {
 
                     // Collect follower relationships and layout flags
                     let scene_node = node.get();
-                    if let Some(follow) = scene_node._follow_node {
-                        followers_nodes.push((node_ref, follow));
-                    }
                     let needs_layout = scene_node.needs_layout();
                     if needs_layout {
-                        changed_nodes.push(node_ref);
+                        changed_nodes.insert(node_ref);
+                        for follower in &scene_node.followers {
+                            changed_nodes.insert(*follower);
+                        }
                     }
                 }
             });
@@ -213,29 +215,19 @@ pub(crate) fn update_layout_tree(engine: &Engine) {
     }
 
     // profiling::scope!("update_nodes_size");
-    // for node_ref in &changed_nodes {
-    //     engine.scene.with_arena_mut(|arena| {
-    //         if let Some(node) = arena.get_mut(node_ref.0) {
-    //             let scene_node = node.get_mut();
-    //             scene_node.set_needs_layout(false);
-    //             scene_node.set_needs_repaint(true);
-    //         }
-    //     });
-    // }
-
-    for (node_ref, follow) in &followers_nodes {
+    for node_ref in &changed_nodes {
         engine.scene.with_arena_mut(|arena| {
-            let follow_node = arena.get(follow.0);
-            let needs_repaint_follow = if let Some(follow_node) = follow_node {
-                let follow_node = follow_node.get();
-                follow_node.needs_repaint()
-            } else {
-                false
-            };
-            if let Some(node) = arena.get_mut(node_ref.0) {
+            let followers = if let Some(node) = arena.get_mut(node_ref.0) {
                 let scene_node = node.get_mut();
-                if needs_repaint_follow {
-                    scene_node.set_needs_repaint(true);
+                scene_node.set_needs_repaint(true);
+                scene_node.followers.clone()
+            } else {
+                HashSet::new()
+            };
+            for follower in &followers {
+                if let Some(node) = arena.get_mut(follower.0) {
+                    let follower_node = node.get_mut();
+                    follower_node.set_needs_repaint(true);
                 }
             }
         });

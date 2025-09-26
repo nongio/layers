@@ -16,11 +16,14 @@ use taffy::style::Style;
 
 use self::model::{ContentDrawFunction, PointerHandlerFunction};
 
-use crate::engine::{animation::*, storage::TreeStorageId, AnimatedNodeChange};
 use crate::engine::{command::*, PointerEventType};
 use crate::engine::{node::RenderableFlags, TransactionCallback};
 use crate::engine::{Engine, NodeRef, TransactionRef};
 use crate::types::*;
+use crate::{
+    drawing::render_node_tree,
+    engine::{animation::*, storage::TreeStorageId, AnimatedNodeChange},
+};
 
 #[cfg(feature = "layer_state")]
 use state::LayerDataProps;
@@ -238,7 +241,7 @@ impl Layer {
         let draw: ContentDrawFunction = content_handler.into();
         *model_content = Some(draw.into());
 
-        let attribute_id = self.model.display.id;
+        let attribute_id = self.model.blend_mode.id;
         self.engine
             .schedule_change(self.id, Arc::new(NoopChange::new(attribute_id)), None);
     }
@@ -506,14 +509,42 @@ impl Layer {
         }
     }
 
-    pub(crate) fn set_follow_node(&self, follow_node: Option<NodeRef>) {
+    pub fn add_follower_node(&self, follower: impl Into<NodeRef>) {
+        let follower = follower.into();
         self.engine.scene.with_arena_mut(|node_arena| {
-            let node = node_arena.get_mut(self.id().into());
+            let node = node_arena.get_mut(self.id.0);
             if let Some(node) = node {
                 let scene_node = node.get_mut();
-                scene_node._follow_node = follow_node;
+                scene_node.followers.insert(follower);
             }
         });
+        let attribute_id = self.model.blend_mode.id;
+        self.engine
+            .schedule_change(self.id, Arc::new(NoopChange::new(attribute_id)), None);
+    }
+    pub fn remove_follower_node(&self, follower: impl Into<NodeRef>) {
+        let follower = follower.into();
+        self.engine.scene.with_arena_mut(|node_arena| {
+            let node = node_arena.get_mut(self.id.0);
+            if let Some(node) = node {
+                let scene_node = node.get_mut();
+                scene_node.followers.remove(&follower);
+            }
+        });
+    }
+    pub fn as_content(&self) -> ContentDrawFunction {
+        let engine_ref = self.engine.clone();
+        let layer_id = self.id();
+        let draw_function = move |c: &skia::Canvas, w: f32, h: f32| {
+            let scene = engine_ref.scene.clone();
+            scene.with_arena(|arena| {
+                scene.with_renderable_arena(|renderable_arena| {
+                    render_node_tree(layer_id, arena, renderable_arena, c, 1.0);
+                });
+            });
+            skia::Rect::from_xywh(0.0, 0.0, w, h)
+        };
+        ContentDrawFunction::from(draw_function)
     }
 }
 

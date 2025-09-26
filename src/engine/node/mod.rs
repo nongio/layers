@@ -3,7 +3,7 @@ use skia::Contains;
 
 use std::{
     cell::RefCell,
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fmt::Debug,
     sync::{atomic::AtomicUsize, Arc},
 };
@@ -83,7 +83,7 @@ pub struct SceneNode {
     pub(crate) image_cached: bool,
     pub(crate) picture_cached: bool,
     pub(crate) is_deleted: bool,
-    pub(crate) _follow_node: Option<NodeRef>,
+    pub(crate) followers: HashSet<NodeRef>,
     pub(crate) _debug_info: Option<DrawDebugInfo>,
     pub(crate) frame_number: usize,
 }
@@ -97,9 +97,9 @@ impl Default for SceneNode {
             image_cached: false,
             picture_cached: true,
             is_deleted: false,
-            _follow_node: None,
             _debug_info: None,
             frame_number: 0,
+            followers: HashSet::new(),
         }
     }
 }
@@ -293,9 +293,6 @@ impl SceneNode {
     }
     pub fn contains_point(&self, point: &skia::Point) -> bool {
         self.render_layer.global_transformed_bounds.contains(point)
-    }
-    pub fn set_follow_node(&mut self, node: impl Into<Option<NodeRef>>) {
-        self._follow_node = node.into();
     }
 }
 
