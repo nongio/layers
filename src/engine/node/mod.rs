@@ -233,7 +233,9 @@ impl SceneNode {
             self.set_needs_layout(true);
         }
         let mut changed = false;
-        if self.rendering_flags.contains(RenderableFlags::NEEDS_LAYOUT) {
+        if self.rendering_flags.contains(RenderableFlags::NEEDS_LAYOUT)
+            || self.rendering_flags.contains(RenderableFlags::NEEDS_PAINT)
+        {
             self.render_layer
                 .update_with_model_and_layout(&model, layout, matrix, context_opacity);
             // bounds_with_children: union in this node's local space

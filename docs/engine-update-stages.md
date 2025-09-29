@@ -44,6 +44,12 @@ Animations are stored as `AnimationState` entries. `update_animations` increment
 
 Returned rectangles are joined into the per-frame damage accumulator. The engine may also call `propagate_damage_to_ancestors` so higher-level render targets know to redraw when descendants change.
 
+#### Why parents run before children
+
+- Children rely on the latest parent transform and premultiplied opacity when repainting. Running parents first keeps those values fresh before `update_node_single` executes on the child.
+- Parents still detect child-driven layout changes because they compare their own new layout data (just written by Taffy) against the previous render-layer snapshot. Aggregated child bounds are read from the stored `SceneNode`, so "before" and "after" comparisons remain valid even if the child has not updated yet.
+- When a child runs later in the pass it reports damage in global coordinates. `update_nodes` merges that rectangle into the frame total, so child content changes are preserved even though the parent processed earlier.
+
 ### 5. Rendering
 
 Renderers such as `SkiaFboRenderer` and `SkiaImageRenderer` consume the merged damage. They set up clip regions, apply root transforms, and call `render_node_tree`, which:
@@ -72,6 +78,7 @@ Damage tracking quantifies the minimal screen area that must be redrawn. It reli
 - **Geometry unions**: When size or position changes, the union of old and new bounds is joined to damage. Child-aggregated bounds behave the same way so container nodes repaint around resized descendants.
 - **Visibility flips**: When a node becomes hidden, previous bounds are damaged so pixels can be cleared. When it becomes visible, new bounds are damaged so pixels can be drawn. Partial opacity transitions damage the current bounds while the node remains visible.
 - **Debug overlays**: Nodes with `_debug_info` set force geometry damage even if they have no drawables, which helps tooling visualize updates.
+- **Parent-first traversal**: Because parents execute before children, child damage is accumulated slightly later in the loop. This is safe because each child returns a global-space rectangle that goes straight into `Engine.damage`, while parents already captured their own geometry/layout deltas using the fresh layout data.
 
 ### Propagation and accumulation
 
@@ -93,9 +100,6 @@ Damage tracking works alongside two caching layers:
   ```
 
 - **Unit tests**: `src/engine/stages/update_node.rs` contains unit tests that verify geometry unions, opacity transitions, and global mapping for `update_node_single`.
-
-- **Debug overlays**: Setting `LAYERS_DEBUG_DAMAGE=1` (if wired through your build) enables visual debugging to inspect damaged regions.
-
 - **Inspection tips**: After each `update`, call `Engine::damage()` to verify the rectangles match expectations. Remember to call `Engine::clear_damage()` after consuming the result.
 
 ## Best practices

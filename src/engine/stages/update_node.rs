@@ -9,7 +9,6 @@ use crate::{
 // This function updates a single node's RenderLayer, repaints if needed, and calculates damage.
 // It compares the node's state before and after updates to determine what screen areas need
 // to be redrawn, taking into account position, size, opacity, and content changes.
-// Returns the total damage rectangle that encompasses all changed areas.#[allow(unused_assignments, unused_mut)]
 #[profiling::function]
 pub(crate) fn update_node_single(
     engine: &Engine,
@@ -21,202 +20,219 @@ pub(crate) fn update_node_single(
     let layer = engine.get_layer(&NodeRef(node_id)).unwrap();
     let node_layout = layout_tree.layout(layer.layout_id).unwrap();
 
-    // First, read the current state immutably from both arenas
-    let (prev_transformed_bounds, prev_opacity, prev_needs_paint) =
-        engine.scene.with_arena(|node_arena| {
-            let node = node_arena.get(node_id);
-
-            if node.is_none() {
-                return (skia::Rect::default(), 0.0, false);
-            }
-
-            let scene_node = node.unwrap().get();
-            // Store previous state for comparison
-            let prev_transformed_bounds = scene_node
-                .render_layer
-                .global_transformed_bounds_with_children;
-            let prev_opacity = scene_node.render_layer.premultiplied_opacity;
-            let needs_paint = scene_node.needs_repaint();
-
-            (prev_transformed_bounds, prev_opacity, needs_paint)
-        });
-    // calculate children bounds
-    let local_children_bounds = engine.scene.with_arena(|node_arena| {
-        let mut local_children_bounds = skia::Rect::default();
-        node_id.children(node_arena).for_each(|child_id| {
-            if let Some(child_node) = node_arena.get(child_id) {
-                let child_scene_node = child_node.get();
-                let child_rl = &child_scene_node.render_layer;
-                // Accumulate child's local union
-                local_children_bounds.join(child_rl.local_transformed_bounds_with_children);
-            }
-        });
-        local_children_bounds
-    });
-    // Get cumulative transform and opacity from parent
-    let cumulative_transform = parent.map(|p| &p.transform);
-    let context_opacity = parent.map(|p| p.premultiplied_opacity).unwrap_or(1.0);
-
-    // Update the render layer (only node arena is mutable here)
-    let (changed_render_layer, _is_image_cached, is_debug) =
-        engine.scene.with_arena_mut(|node_arena| {
-            let node = node_arena.get_mut(node_id);
-            if let Some(node) = node {
-                let scene_node = node.get_mut();
-                // LAYOUT STEP: merge with children bounds
-                let changed = scene_node.update_render_layer_if_needed(
-                    node_layout,
-                    layer.model.clone(),
-                    cumulative_transform,
-                    context_opacity,
-                    local_children_bounds,
-                ) || scene_node._debug_info.is_some();
-
-                if changed {
-                    scene_node.set_needs_repaint(true);
-                }
-                let is_cached = scene_node.is_image_cached();
-                (changed, is_cached, scene_node._debug_info.is_some())
+        // First, read the previous state for comparisons
+        let (
+            prev_transformed_bounds,
+            prev_global_bounds,
+            prev_opacity,
+            prev_visible,
+            prev_needs_paint,
+        ) = engine.scene.with_arena(|arena| {
+            if let Some(node) = arena.get(node_id) {
+                let scene_node = node.get();
+                (
+                    scene_node
+                        .render_layer
+                        .global_transformed_bounds_with_children,
+                    scene_node.render_layer.global_transformed_bounds,
+                    scene_node.render_layer.premultiplied_opacity,
+                    scene_node.render_layer.has_visible_drawables(),
+                    scene_node.needs_repaint(),
+                )
             } else {
-                (false, false, false)
+                (
+                    skia_safe::Rect::default(),
+                    skia_safe::Rect::default(),
+                    0.0,
+                    false,
+                    false,
+                )
             }
         });
 
-    // Read updated state before deciding to repaint
-    let (new_transformed_bounds, new_opacity, _current_needs_paint) =
-        engine.scene.with_arena(|arena| {
+        // Aggregate children bounds in the node's local space
+        let local_children_bounds = engine.scene.with_arena(|arena| {
+            let mut bounds = skia::Rect::default();
+            node_id.children(arena).for_each(|child_id| {
+                if let Some(child) = arena.get(child_id) {
+                    bounds.join(child.get().render_layer.local_transformed_bounds_with_children);
+                }
+            });
+            bounds
+        });
+
+        // Account for parent transform/opacity
+        let cumulative_transform = parent.map(|p| &p.transform);
+        let context_opacity = parent.map(|p| p.premultiplied_opacity).unwrap_or(1.0);
+
+        // Update the render layer using the latest model/layout state
+        let (changed_render_layer, is_debug) = engine.scene.with_arena_mut(|arena| {
+            arena
+                .get_mut(node_id)
+                .map(|node| {
+                    let scene_node = node.get_mut();
+                    let changed = scene_node.update_render_layer_if_needed(
+                        node_layout,
+                        layer.model.clone(),
+                        cumulative_transform,
+                        context_opacity,
+                        local_children_bounds,
+                    ) || scene_node._debug_info.is_some();
+
+                    if changed {
+                        scene_node.set_needs_repaint(true);
+                    }
+
+                    (changed, scene_node._debug_info.is_some())
+                })
+                .unwrap_or((false, false))
+        });
+
+        // Capture the new state after the update
+        let (
+            new_transformed_bounds,
+            new_global_bounds,
+            new_opacity,
+            new_visible,
+            current_needs_paint,
+        ) = engine.scene.with_arena(|arena| {
             let node = arena.get(node_id).unwrap();
             let scene_node = node.get();
             (
                 scene_node
                     .render_layer
                     .global_transformed_bounds_with_children,
+                scene_node.render_layer.global_transformed_bounds,
                 scene_node.render_layer.premultiplied_opacity,
+                scene_node.render_layer.has_visible_drawables(),
                 scene_node.needs_repaint(),
             )
         });
 
-    // Check what changed using previous vs current state (without forcing repaint)
-    let layout_changed = prev_transformed_bounds.width() != new_transformed_bounds.width()
-        || prev_transformed_bounds.height() != new_transformed_bounds.height();
-    let position_changed = prev_transformed_bounds.x() != new_transformed_bounds.x()
-        || prev_transformed_bounds.y() != new_transformed_bounds.y();
-    let opacity_changed = prev_opacity != new_opacity;
+        // Determine which properties changed
+        let layout_changed_self = prev_global_bounds.width() != new_global_bounds.width()
+            || prev_global_bounds.height() != new_global_bounds.height();
+        let position_changed_self = prev_global_bounds.x() != new_global_bounds.x()
+            || prev_global_bounds.y() != new_global_bounds.y();
+        let layout_changed_children =
+            prev_transformed_bounds.width() != new_transformed_bounds.width()
+                || prev_transformed_bounds.height() != new_transformed_bounds.height();
+        let position_changed_children =
+            prev_transformed_bounds.x() != new_transformed_bounds.x()
+                || prev_transformed_bounds.y() != new_transformed_bounds.y();
 
-    // Early exit: nothing changed and no repaint requested by flags/parents
-    if !parent_changed
-        && !prev_needs_paint
-        && !layout_changed
-        && !position_changed
-        && !opacity_changed
-        && !changed_render_layer
-    {
-        return skia::Rect::default();
-    }
+        let geometry_changed_self = layout_changed_self || position_changed_self;
+        let geometry_changed_children = layout_changed_children || position_changed_children;
+        let layout_changed = layout_changed_self || layout_changed_children;
+        let position_changed = position_changed_self || position_changed_children;
+        let opacity_changed = prev_opacity != new_opacity;
+        let visibility_changed = prev_visible != new_visible;
 
-    // Do the actual repaint if needed (both arenas need to be accessed)
-    let mut some_renderable = None;
-    let content_damage = engine.scene.with_arena(|node_arena| {
-        let opt_renderable = engine.scene.renderables.get(&node_id.into());
-        let node = node_arena.get(node_id);
-        if let (Some(node), Some(scene_node_renderable)) = (node, opt_renderable) {
-            let scene_node = node.get();
-            let mut repaint_damage = skia::Rect::default();
-            if scene_node.needs_repaint()
-                || parent_changed
-                || layout_changed
-                || position_changed
-                || opacity_changed
-            {
-                let renderable = do_repaint(&scene_node_renderable, scene_node);
-                repaint_damage = renderable.repaint_damage;
-                some_renderable = Some(renderable);
-            }
-            repaint_damage
-        } else {
-            skia_safe::Rect::default()
+        // If nothing relevant changed, bail out early
+        if !parent_changed
+            && !prev_needs_paint
+            && !current_needs_paint
+            && !layout_changed
+            && !position_changed
+            && !opacity_changed
+            && !changed_render_layer
+            && !visibility_changed
+        {
+            return skia_safe::Rect::default();
         }
-    });
 
-    if let Some(new_renderable) = some_renderable {
-        engine
-            .scene
-            .renderables
-            .insert_with_id(new_renderable, node_id.into());
-    }
-    engine.scene.with_arena_mut(|node_arena| {
-        let node = node_arena.get_mut(node_id);
-        if let Some(node) = node {
-            let scene_node = node.get_mut();
-            scene_node.set_needs_repaint(false);
-            scene_node.set_needs_layout(false);
-        }
-    });
-
-    // Map content damage into global space using the current transform
-    let (mapped_content_damage, _) = engine.scene.with_arena(|arena| {
-        let node = arena.get(node_id).unwrap();
-        let render_layer = &node.get().render_layer;
-        render_layer.transform_33.map_rect(content_damage)
-    });
-
-    // Calculate total damage for this node
-    let mut total_damage = mapped_content_damage;
-
-    if position_changed || is_debug {
-        // Include both old and new bounds when position changes
-        total_damage.join(prev_transformed_bounds);
-        total_damage.join(new_transformed_bounds);
-    }
-
-    if opacity_changed {
-        // When opacity changes, we need to damage the areas that become visible or invisible
-        if prev_opacity <= 0.0 && new_opacity > 0.0 {
-            // Layer becomes visible - damage the new bounds
-            total_damage.join(new_transformed_bounds);
-        } else if prev_opacity > 0.0 && new_opacity <= 0.0 {
-            // Layer becomes invisible - damage the previous bounds
-            total_damage.join(prev_transformed_bounds);
-        } else if prev_opacity > 0.0 && new_opacity > 0.0 {
-            // Layer remains visible but opacity changes - damage current bounds
-            total_damage.join(new_transformed_bounds);
-        }
-    }
-
-    // Update frame if anything changed
-    let content_repainted = !content_damage.is_empty();
-    let damaged = layout_changed
-        || content_repainted
-        || position_changed
-        || opacity_changed
-        || parent_changed;
-
-    if damaged {
-        engine.scene.with_arena_mut(|arena| {
-            if let Some(scene_node) = arena.get_mut(node_id) {
-                let node = scene_node.get_mut();
-                node.increase_frame();
+        // Trigger repaint if required and capture content damage
+        let mut updated_renderable = None;
+        let content_damage = engine.scene.with_arena(|arena| {
+            let opt_renderable = engine.scene.renderables.get(&node_id.into());
+            let node = arena.get(node_id);
+            if let (Some(node), Some(renderable)) = (node, opt_renderable) {
+                let scene_node = node.get();
+                let mut repaint_damage = skia_safe::Rect::default();
+                if scene_node.needs_repaint()
+                    || parent_changed
+                    || layout_changed
+                    || position_changed
+                    || opacity_changed
+                {
+                    let new_renderable = do_repaint(&renderable, scene_node);
+                    repaint_damage = new_renderable.repaint_damage;
+                    updated_renderable = Some(new_renderable);
+                }
+                repaint_damage
+            } else {
+                skia_safe::Rect::default()
             }
         });
-    }
 
-    // Log render_layer.key at cursor position
-    // if !total_damage.is_empty() {
-    //     engine.scene.with_arena(|arena| {
-    //         if let Some(node) = arena.get(node_id) {
-    //             let scene_node = node.get();
+        if let Some(renderable) = updated_renderable {
+            engine
+                .scene
+                .renderables
+                .insert_with_id(renderable, node_id.into());
+        }
 
-    //             println!(
-    //                 "Damage: {:?} | damaged area: {},{},{},{}",
-    //                 scene_node.render_layer.key,
-    //                 total_damage.x(),
-    //                 total_damage.y(),
-    //                 total_damage.width(),
-    //                 total_damage.height()
-    //             );
-    //         }
-    //     });
-    // }
+        // Clear repaint/layout flags now that the node has been updated
+        engine.scene.with_arena_mut(|arena| {
+            if let Some(node) = arena.get_mut(node_id) {
+                let scene_node = node.get_mut();
+                scene_node.set_needs_repaint(false);
+                scene_node.set_needs_layout(false);
+            }
+        });
+
+        // Map content damage to global coordinates
+        let (mapped_content_damage, _) = engine.scene.with_arena(|arena| {
+            let node = arena.get(node_id).unwrap();
+            node.get()
+                .render_layer
+                .transform_33
+                .map_rect(content_damage)
+        });
+
+        let mut total_damage = mapped_content_damage;
+        let has_visible_drawables = prev_visible || new_visible;
+
+        if geometry_changed_self && (has_visible_drawables || is_debug) {
+            total_damage.join(prev_global_bounds);
+            total_damage.join(new_global_bounds);
+        }
+
+        if geometry_changed_children && (has_visible_drawables || is_debug) {
+            total_damage.join(prev_transformed_bounds);
+            total_damage.join(new_transformed_bounds);
+        }
+
+        if prev_visible && !new_visible {
+            total_damage.join(prev_transformed_bounds);
+        }
+
+        if opacity_changed && has_visible_drawables {
+            if prev_opacity <= 0.0 && new_opacity > 0.0 {
+                total_damage.join(new_transformed_bounds);
+            } else if prev_opacity > 0.0 && new_opacity <= 0.0 {
+                total_damage.join(prev_transformed_bounds);
+            } else {
+                total_damage.join(new_transformed_bounds);
+            }
+        }
+
+        let content_repainted = !content_damage.is_empty();
+        let damaged = content_repainted
+            || (geometry_changed_self && (has_visible_drawables || is_debug))
+            || (geometry_changed_children && (has_visible_drawables || is_debug))
+            || opacity_changed
+            || parent_changed
+            || visibility_changed
+            || changed_render_layer;
+
+        if damaged {
+            engine.scene.with_arena_mut(|arena| {
+                if let Some(node) = arena.get_mut(node_id) {
+                    node.get_mut().increase_frame();
+                }
+            });
+        }
 
     total_damage
 }

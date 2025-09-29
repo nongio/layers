@@ -217,6 +217,32 @@ impl RenderLayer {
             .load(std::sync::atomic::Ordering::Relaxed);
     }
 
+    pub(crate) fn has_visible_drawables(&self) -> bool {
+        if self.premultiplied_opacity <= 0.0 {
+            return false;
+        }
+
+        let draws_background = Self::paint_color_max_alpha(&self.background_color) > 0.0;
+        let draws_border =
+            self.border_width > 0.0 && Self::paint_color_max_alpha(&self.border_color) > 0.0;
+        let draws_shadow = self.shadow_color.alpha > 0.0;
+        let draws_content = self.content.is_some() || self.content_draw_func.is_some();
+
+        draws_background || draws_border || draws_shadow || draws_content
+    }
+
+    fn paint_color_max_alpha(color: &PaintColor) -> f32 {
+        match color {
+            PaintColor::Solid { color } => color.alpha,
+            PaintColor::GradientLinear(gradient) => {
+                gradient.colors.iter().fold(0.0, |acc, c| acc.max(c.alpha))
+            }
+            PaintColor::GradientRadial(gradient) => {
+                gradient.colors.iter().fold(0.0, |acc, c| acc.max(c.alpha))
+            }
+        }
+    }
+
     #[allow(dead_code)]
     pub(crate) fn from_model_and_layout(
         model: &ModelLayer,
