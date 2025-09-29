@@ -23,6 +23,8 @@ Nodes of the scene graph are graphical layers like text or simple shapes like re
 The api is getting documented, be aware that is also still in evolution.
 [documentation](https://nongio.github.io/layers/lay_rs/)
 
+- Engine update pipeline & damage tracking: see `docs/` for a deep dive into frame stages and redraw rules.
+
 
 ## Rendering
 At the moment the components are rendered using Skia on different backends. This enables some drawing optimisation: the draw calls can be cached using a DisplayList. A Skia PictureRecorder is generate on a separate thread and then replayed on the main thread when needed.
@@ -43,6 +45,12 @@ The C header will be generated in the `target` folder.
 The project requires nightly rust to use the negative_impl feature.
 ```
 cargo build
+```
+
+### Run the damage test suite
+The integration tests in `tests/damage.rs` cover the damage tracking pipeline end-to-end.
+```
+cargo test --test damage
 ```
 
 ## Build the rust example
