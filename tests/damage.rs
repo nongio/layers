@@ -451,6 +451,159 @@ mod tests {
     }
 
     #[test]
+    pub fn damage_animation_updates_scene() {
+        let engine = Engine::create(1000.0, 1000.0);
+        let layer = engine.new_layer();
+        engine.add_layer(&layer);
+        layer.set_layout_style(lay_rs::taffy::Style {
+            position: lay_rs::taffy::Position::Absolute,
+            ..Default::default()
+        });
+        layer.set_position((0.0, 0.0), None);
+        layer.set_size(Size::points(100.0, 100.0), None);
+        layer.set_background_color(
+            PaintColor::Solid {
+                color: Color::new_hex("#ff0000ff"),
+            },
+            None,
+        );
+
+        engine.update(0.016);
+        engine.clear_damage();
+
+        layer.set_position((300.0, 0.0), Transition::linear(1.0));
+
+        engine.update(0.1);
+        let first_damage = engine.damage();
+        assert!(
+            !first_damage.is_empty(),
+            "running animation should damage the scene on first update"
+        );
+
+        engine.clear_damage();
+
+        engine.update(0.1);
+        let second_damage = engine.damage();
+        assert!(
+            !second_damage.is_empty(),
+            "running animation should continue to damage the scene"
+        );
+    }
+
+    #[test]
+    pub fn damage_opacity_animation() {
+        let engine = Engine::create(1000.0, 1000.0);
+        let layer = engine.new_layer();
+        engine.add_layer(&layer);
+        layer.set_layout_style(lay_rs::taffy::Style {
+            position: lay_rs::taffy::Position::Absolute,
+            ..Default::default()
+        });
+        layer.set_position((0.0, 0.0), None);
+        layer.set_size(Size::points(100.0, 100.0), None);
+        layer.set_background_color(
+            PaintColor::Solid {
+                color: Color::new_hex("#ff0000ff"),
+            },
+            None,
+        );
+        layer.set_opacity(0.0, None);
+
+        engine.update(0.016);
+        engine.clear_damage();
+
+        layer.set_opacity(1.0, Transition::linear(1.0));
+
+        for _ in 0..5 {
+            engine.update(0.1);
+            let damage = engine.damage();
+
+            assert!(
+                !damage.is_empty(),
+                "opacity animation should damage the scene on first update"
+            );
+            engine.clear_damage();
+        }
+    }
+
+    #[test]
+    pub fn damage_size_animation() {
+        let engine = Engine::create(1000.0, 1000.0);
+        let layer = engine.new_layer();
+        engine.add_layer(&layer);
+        layer.set_layout_style(lay_rs::taffy::Style {
+            position: lay_rs::taffy::Position::Absolute,
+            ..Default::default()
+        });
+        layer.set_position((0.0, 0.0), None);
+        layer.set_size(Size::points(100.0, 100.0), None);
+        layer.set_background_color(
+            PaintColor::Solid {
+                color: Color::new_hex("#ff0000ff"),
+            },
+            None,
+        );
+
+        engine.update(0.016);
+        engine.clear_damage();
+
+        layer.set_size(Size::points(200.0, 200.0), Transition::linear(1.0));
+
+        for _ in 0..5 {
+            engine.update(0.1);
+            let damage = engine.damage();
+
+            assert!(
+                !damage.is_empty(),
+                "opacity animation should damage the scene on first update"
+            );
+            engine.clear_damage();
+        }
+    }
+
+    #[test]
+    pub fn damage_layer_removal() {
+        let engine = Engine::create(1000.0, 1000.0);
+        let root = engine.new_layer();
+        engine.add_layer(&root);
+        root.set_layout_style(lay_rs::taffy::Style {
+            position: lay_rs::taffy::Position::Absolute,
+            ..Default::default()
+        });
+        root.set_position((0.0, 0.0), None);
+        root.set_size(Size::points(400.0, 400.0), None);
+
+        let child = engine.new_layer();
+        child.set_layout_style(lay_rs::taffy::Style {
+            position: lay_rs::taffy::Position::Absolute,
+            ..Default::default()
+        });
+        child.set_position((100.0, 100.0), None);
+        child.set_size(Size::points(50.0, 50.0), None);
+        child.set_background_color(
+            PaintColor::Solid {
+                color: Color::new_hex("#00ff00ff"),
+            },
+            None,
+        );
+
+        engine.append_layer(&child, root.id);
+
+        engine.update(0.016);
+        engine.clear_damage();
+
+        child.remove();
+
+        engine.update(0.016);
+        let damage = engine.damage();
+        assert_eq!(
+            damage,
+            skia_safe::Rect::from_xywh(100.0, 100.0, 50.0, 50.0),
+            "removing a layer should damage its previous bounds"
+        );
+    }
+
+    #[test]
     pub fn damage_parent_offset() {
         let engine = Engine::create(1000.0, 1000.0);
 
@@ -480,5 +633,4 @@ mod tests {
             skia_safe::Rect::from_xywh(50.0, 50.0, 100.0, 100.0)
         );
     }
-
 }
