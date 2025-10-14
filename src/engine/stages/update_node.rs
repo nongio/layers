@@ -244,10 +244,12 @@ mod tests {
     }
 
     #[test]
+    // Ensures a layer position change returns the union of old and new bounds.
     fn update_node_single_position_change_damages_union() {
         let engine = Engine::create(1000.0, 1000.0);
         let layer = engine.new_layer();
         layer.set_position((100.0, 100.0), None);
+        layer.set_background_color(Color::new_hex("#ff0000ff"), None);
         layer.set_size(Size::points(100.0, 100.0), None);
         engine.add_layer(&layer);
 
