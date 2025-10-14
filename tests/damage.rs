@@ -389,6 +389,39 @@ mod tests {
     }
 
     #[test]
+    pub fn damage_move_parent_with_visible_child() {
+        let engine = Engine::create(1000.0, 1000.0);
+
+        let parent = engine.new_layer();
+        parent.set_position((100.0, 100.0), None);
+        parent.set_size(Size::points(100.0, 100.0), None);
+        engine.add_layer(&parent.id);
+
+        let child = engine.new_layer();
+        child.set_position((0.0, 0.0), None);
+        child.set_size(Size::points(100.0, 100.0), None);
+        child.set_background_color(Color::new_hex("#ff0000ff"), None);
+        engine.append_layer(&child, parent.id);
+
+        engine.update(0.016);
+        let scene_damage = engine.damage();
+        assert_eq!(
+            scene_damage,
+            skia_safe::Rect::from_xywh(100.0, 100.0, 100.0, 100.0)
+        );
+        engine.clear_damage();
+
+        parent.set_position((200.0, 200.0), None);
+        engine.update(0.016);
+        let scene_damage = engine.damage();
+
+        assert_eq!(
+            scene_damage,
+            skia_safe::Rect::from_xywh(100.0, 100.0, 200.0, 200.0)
+        );
+    }
+
+    #[test]
     pub fn damage_opacity() {
         let engine = Engine::create(1000.0, 1000.0);
         let layer = engine.new_layer();

@@ -1,10 +1,28 @@
-use indextree::NodeId;
+use indextree::{Arena, NodeId};
 use taffy::TaffyTree;
 
 use crate::{
     engine::{node::do_repaint, storage::TreeStorageData, *},
     layers::layer::render_layer::RenderLayer,
 };
+
+fn subtree_has_visible_drawables(arena: &Arena<SceneNode>, node_id: NodeId) -> bool {
+    let mut stack = vec![node_id];
+    while let Some(id) = stack.pop() {
+        if let Some(node) = arena.get(id) {
+            let scene_node = node.get();
+            if scene_node.hidden() {
+                continue;
+            }
+            if scene_node.render_layer.has_visible_drawables() {
+                return true;
+            }
+            id.children(arena)
+                .for_each(|child_id| stack.push(child_id));
+        }
+    }
+    false
+}
 
 // This function updates a single node's RenderLayer, repaints if needed, and calculates damage.
 // It compares the node's state before and after updates to determine what screen areas need
@@ -44,6 +62,12 @@ pub(crate) fn update_node_single(
                 )
             }
         });
+
+    let prev_children_visible = engine.scene.with_arena(|arena| {
+        node_id
+            .children(arena)
+            .any(|child_id| subtree_has_visible_drawables(arena, child_id))
+    });
 
     // Aggregate children bounds in the node's local space
     let local_children_bounds = engine.scene.with_arena(|arena| {
@@ -104,6 +128,15 @@ pub(crate) fn update_node_single(
             )
         });
 
+    let new_children_visible = engine.scene.with_arena(|arena| {
+        node_id
+            .children(arena)
+            .any(|child_id| subtree_has_visible_drawables(arena, child_id))
+    });
+
+    let prev_effective_visible = prev_visible || prev_children_visible;
+    let new_effective_visible = new_visible || new_children_visible;
+
     // Determine which properties changed
     let layout_changed_self = prev_global_bounds.width() != new_global_bounds.width()
         || prev_global_bounds.height() != new_global_bounds.height();
@@ -119,7 +152,7 @@ pub(crate) fn update_node_single(
     let layout_changed = layout_changed_self || layout_changed_children;
     let position_changed = position_changed_self || position_changed_children;
     let opacity_changed = prev_opacity != new_opacity;
-    let visibility_changed = prev_visible != new_visible;
+    let visibility_changed = prev_effective_visible != new_effective_visible;
 
     // If nothing relevant changed, bail out early
     if !parent_changed
@@ -184,7 +217,7 @@ pub(crate) fn update_node_single(
     });
 
     let mut total_damage = mapped_content_damage;
-    let has_visible_drawables = prev_visible || new_visible;
+    let has_visible_drawables = prev_effective_visible || new_effective_visible;
 
     if geometry_changed_self && (has_visible_drawables || is_debug) {
         total_damage.join(prev_global_bounds);
@@ -196,7 +229,7 @@ pub(crate) fn update_node_single(
         total_damage.join(new_transformed_bounds);
     }
 
-    if prev_visible && !new_visible {
+    if prev_effective_visible && !new_effective_visible {
         total_damage.join(prev_transformed_bounds);
     }
 
