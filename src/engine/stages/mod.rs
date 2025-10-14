@@ -214,25 +214,6 @@ pub(crate) fn update_layout_tree(engine: &Engine) {
         }
     }
 
-    // profiling::scope!("update_nodes_size");
-    for node_ref in &changed_nodes {
-        engine.scene.with_arena_mut(|arena| {
-            let followers = if let Some(node) = arena.get_mut(node_ref.0) {
-                let scene_node = node.get_mut();
-                scene_node.set_needs_repaint(true);
-                scene_node.followers.clone()
-            } else {
-                HashSet::new()
-            };
-            for follower in &followers {
-                if let Some(node) = arena.get_mut(follower.0) {
-                    let follower_node = node.get_mut();
-                    follower_node.set_needs_repaint(true);
-                }
-            }
-        });
-    }
-
     // Now check if we need to compute layout
     let mut layout = engine.layout_tree.write().unwrap();
     let layout_root = *engine.layout_root.read().unwrap();
