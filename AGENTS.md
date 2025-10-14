@@ -94,3 +94,7 @@ Each frame, `Engine::update` advances the clock, updates animations, and applies
   - `Animation`, `AnimationState`, `Transition` define timing; `AnimatedNodeChange` wraps a `SyncCommand` which returns `RenderableFlags`. Storage and processing in `src/engine/stages/mod.rs` and `src/engine/mod.rs`.
 - Pointer Input
   - `PointerCallback` maps node ids to handlers; hover tracking and dispatch live in `Engine` (`pointer_move`, `pointer_button_down/up`, `bubble_up_event`). Hit-testing uses `SceneNode::contains_point` and `RenderLayer.global_transformed_bounds`.
+
+## Internal Docs
+- [Engine Update Pipeline](docs/engine-update-stages.md)
+- [Damage Tracking](docs/damage-tracking.md)
