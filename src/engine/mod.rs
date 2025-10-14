@@ -1066,6 +1066,10 @@ impl Engine {
                             parent_render_layer.as_ref(),
                             false,
                         );
+                        if !damage.is_empty() {
+                            self.mark_image_cached_ancestors_for_repaint(*node_id);
+                        }
+
                         return damage;
                     })
                     .collect();
@@ -1117,6 +1121,19 @@ impl Engine {
                     //         ancestor_renderable.repaint_damage.join(damage);
                     //     }
                     // });
+                }
+            }
+        });
+    }
+    fn mark_image_cached_ancestors_for_repaint(&self, node_id: indextree::NodeId) {
+        self.scene.with_arena_mut(|arena| {
+            let ancestor_ids: Vec<_> = node_id.ancestors(arena).skip(1).collect();
+            for ancestor_id in ancestor_ids {
+                if let Some(ancestor_node) = arena.get_mut(ancestor_id) {
+                    let ancestor = ancestor_node.get_mut();
+                    if ancestor.is_image_cached() {
+                        ancestor.increase_frame();
+                    }
                 }
             }
         });
