@@ -66,6 +66,39 @@ pub mod types;
 pub mod utils;
 pub mod view;
 
+#[cfg(doc)]
+pub mod guides {
+    /// Detailed walkthrough of `Engine::update` pipeline stages.
+    pub mod engine_update_stages {
+        #![doc = include_str!("../docs/engine-update-stages.md")]
+    }
+
+    /// Overview of how damage regions are tracked and propagated.
+    pub mod damage_tracking {
+        #![doc = include_str!("../docs/damage-tracking.md")]
+    }
+
+    /// Reference for the layer follower system.
+    pub mod layer_followers {
+        #![doc = include_str!("../docs/layer-followers.md")]
+    }
+
+    /// Guide to pointer hit-testing and event dispatch.
+    pub mod pointers {
+        #![doc = include_str!("../docs/pointers.md")]
+    }
+
+    /// Walkthrough of the portal system.
+    pub mod portals {
+        #![doc = include_str!("../docs/portals.md")]
+    }
+
+    /// Primer on scene damage concepts and terminology.
+    pub mod damage {
+        #![doc = include_str!("../docs/damage.md")]
+    }
+}
+
 #[cfg(feature = "export-skia")]
 pub extern crate skia_bindings as sb;
 #[cfg(feature = "export-skia")]
