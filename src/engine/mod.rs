@@ -711,7 +711,8 @@ impl Engine {
         });
     }
 
-    // FIXME: quite convoluted logic.. move main logic into scene
+    /// Remove the layer and its subtree from the scene and layout tree
+    /// This method is intended by the engine from the cleanup stage
     pub(crate) fn scene_remove_layer<'a>(&self, layer: impl Into<&'a NodeRef>) {
         // Avoid deadlocks by not holding scene + layout/layers locks simultaneously.
         let layer_id = *layer.into();
@@ -723,6 +724,22 @@ impl Engine {
                 .map(|n| n.parent())
                 .unwrap_or(None)
         });
+
+        // Determine if the parent still exists and is not already marked for deletion.
+        let (parent_exists, parent_marked_for_deletion) = parent_id
+            .map(|pid| {
+                self.scene.with_arena(|arena| {
+                    if pid.is_removed(arena) {
+                        return (false, true);
+                    }
+                    if let Some(parent_node) = arena.get(pid) {
+                        (true, parent_node.get().is_deleted())
+                    } else {
+                        (false, true)
+                    }
+                })
+            })
+            .unwrap_or((false, false));
 
         // Snapshot layout ids via layers map (separate lock)
         let (layout_id_opt, parent_layout_id_opt) = {
@@ -736,8 +753,10 @@ impl Engine {
         // Update layout tree first (no scene lock held)
         if let Some(layout_id) = layout_id_opt {
             let mut layout = self.layout_tree.write().unwrap();
-            if let Some(parent_layout_id) = parent_layout_id_opt {
-                let _ = layout.mark_dirty(parent_layout_id);
+            if parent_exists && !parent_marked_for_deletion {
+                if let Some(parent_layout_id) = parent_layout_id_opt {
+                    let _ = layout.mark_dirty(parent_layout_id);
+                }
             }
             // Remove the layout node unconditionally
             let _ = layout.remove(layout_id);

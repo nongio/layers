@@ -6,13 +6,14 @@ This guide explains how the Layers engine advances a frame from scheduled model 
 
 Every call to `Engine::update(dt)` executes the same ordered pipeline:
 
-| Stage                 | Entry point                                      | Purpose                                                                 |
-| --------------------- | ------------------------------------------------ | ----------------------------------------------------------------------- |
-| 1. Advance animations | `update_animations` (`src/engine/stages/mod.rs`) | Step active timelines, queueing property changes for affected nodes     |
-| 2. Apply transactions | `execute_transactions`                           | Update `ModelLayer` properties and adjust render/layout flags           |
-| 3. Solve layout       | `update_layout_tree`                             | Run Taffy to recompute node sizes and positions                         |
-| 4. Refresh nodes      | `Engine::update_nodes` (`src/engine/mod.rs`)     | Visit each scene node, update render layers, and calculate damage       |
-| 5. Render             | `render_node_tree` (`src/drawing/scene.rs`)      | Replay cached pictures or draw commands, clipping to accumulated damage |
+| Stage                  | Entry point                                        | Purpose                                                                  |
+| ---------------------- | -------------------------------------------------- | ------------------------------------------------------------------------ |
+| 1. Advance animations  | `update_animations` (`src/engine/stages/mod.rs`)   | Step active timelines, queueing property changes for affected nodes      |
+| 2. Apply transactions  | `execute_transactions`                             | Update `ModelLayer` properties and adjust render/layout flags            |
+| 3. Solve layout        | `update_layout_tree`                               | Run Taffy to recompute node sizes and positions                          |
+| 4. Refresh nodes       | `Engine::update_nodes` (`src/engine/mod.rs`)       | Visit each scene node, update render layers, and calculate damage        |
+| 5. Render              | `render_node_tree` (`src/drawing/scene.rs`)        | Replay cached pictures or draw commands, clipping to accumulated damage  |
+| 6. Cleanup deleted     | `cleanup_nodes` (`src/engine/stages/mod.rs`)       | Drop `SceneNode`s marked for removal and tidy layout bookkeeping safely  |
 
 The engine exposes the merged damage rectangle through `Engine::damage()`. Clients should consume it after rendering and call `Engine::clear_damage()` to prepare for the next frame.
 
@@ -59,6 +60,15 @@ Renderers such as `SkiaFboRenderer` and `SkiaImageRenderer` consume the merged d
 - Honors clip flags, blend modes, and filters from the `RenderLayer`.
 
 The client typically swaps buffers or composites the result, then clears the engine damage before the next frame.
+
+### 6. Cleanup
+
+`cleanup_nodes` runs after rendering to dispose of any scene subtrees whose root layer called `Layer::remove` (or was implicitly deleted by its parent). Each candidate node is still present in the scene arena but flagged with `is_deleted()`. For every such node the cleanup stage:
+
+1. Records the node’s transformed bounds to extend frame damage (ensuring stale visuals are repainted).
+2. Calls `Engine::scene_remove_layer` to unlink the subtree from both the scene graph and the Taffy layout tree.
+
+`scene_remove_layer` guards its Taffy bookkeeping so that it only marks a parent layout node dirty when that parent still exists and has not been scheduled for deletion. This prevents panics from attempting to dirty or traverse already-removed layout nodes while the tree is being dismantled.
 
 ## Damage tracking
 
