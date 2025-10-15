@@ -98,3 +98,5 @@ Each frame, `Engine::update` advances the clock, updates animations, and applies
 ## Internal Docs
 - [Engine Update Pipeline](docs/engine-update-stages.md)
 - [Damage Tracking](docs/damage-tracking.md)
+- [Layer Followers](docs/layer-followers.md)
+- [Pointer Input](docs/pointers.md)
