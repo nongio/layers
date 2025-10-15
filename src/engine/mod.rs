@@ -405,7 +405,7 @@ impl From<&TreeStorageId> for NodeRef {
 static UNIQ_POINTER_HANDLER_ID: AtomicUsize = AtomicUsize::new(0);
 
 // Global instance of the engine registry
-static ENGINE_REGISTRY: Lazy<EngineRegistry> = Lazy::new(|| EngineRegistry::new());
+static ENGINE_REGISTRY: Lazy<EngineRegistry> = Lazy::new(EngineRegistry::new);
 
 /// Thread-safe registry for managing Engine instances
 struct EngineRegistry {
@@ -839,7 +839,7 @@ impl Engine {
     ) -> Option<indextree::Node<SceneNode>> {
         let node_ref = node_ref.into();
         self.scene
-            .with_arena(|arena| arena.get(node_ref.into()).map(|node| node.clone()))
+            .with_arena(|arena| arena.get(node_ref.into()).cloned())
     }
     pub fn scene_get_node_parent(&self, node_ref: NodeRef) -> Option<NodeRef> {
         self.scene.with_arena(|arena| {
@@ -1089,7 +1089,7 @@ impl Engine {
                             self.mark_image_cached_ancestors_for_repaint(*node_id);
                         }
 
-                        return damage;
+                        damage
                     })
                     .collect();
 
@@ -1179,7 +1179,7 @@ impl Engine {
             layout.set_style(node, style).unwrap();
             return true;
         }
-        return false;
+        false
     }
 
     pub fn scene_layer_at(&self, point: Point) -> Option<NodeRef> {
@@ -1484,7 +1484,7 @@ impl Engine {
     }
     pub fn add_damage(&self, rect: skia_safe::Rect) {
         let mut damage = self.damage.write().unwrap();
-        damage.join(&rect);
+        damage.join(rect);
     }
 }
 

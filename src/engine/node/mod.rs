@@ -106,21 +106,13 @@ impl Default for SceneNode {
 
 /// Contains the outputs of drawing the layer: cache, damage, and flags
 #[derive(Clone)]
+#[derive(Default)]
 pub struct SceneNodeRenderable {
     pub(crate) repaint_damage: skia_safe::Rect,
     pub(crate) draw_cache: Option<DrawCache>,
     pub(crate) content_cache: Option<Picture>,
 }
 
-impl Default for SceneNodeRenderable {
-    fn default() -> Self {
-        Self {
-            repaint_damage: skia_safe::Rect::default(),
-            draw_cache: None,
-            content_cache: None,
-        }
-    }
-}
 
 impl SceneNode {
     pub fn new() -> Self {
@@ -225,10 +217,10 @@ impl SceneNode {
         let current_height = self.render_layer.size.height;
         let current_x = self.render_layer.local_transformed_bounds.x();
         let current_y = self.render_layer.local_transformed_bounds.y();
-        if current_width != layout.size.width as f32
-            || current_height != layout.size.height as f32
-            || current_x != layout.location.x as f32
-            || current_y != layout.location.y as f32
+        if current_width != layout.size.width
+            || current_height != layout.size.height
+            || current_x != layout.location.x
+            || current_y != layout.location.y
         {
             self.set_needs_layout(true);
         }
@@ -283,9 +275,9 @@ impl SceneNode {
             .set(RenderableFlags::NEEDS_LAYOUT, need_layout);
     }
     pub fn needs_repaint(&self) -> bool {
-        let needs_repaint = self.rendering_flags.contains(RenderableFlags::NEEDS_PAINT);
+        
 
-        needs_repaint
+        self.rendering_flags.contains(RenderableFlags::NEEDS_PAINT)
     }
     pub fn needs_layout(&self) -> bool {
         self.rendering_flags.contains(RenderableFlags::NEEDS_LAYOUT)

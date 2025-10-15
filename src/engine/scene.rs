@@ -212,7 +212,7 @@ impl Scene {
             }
         };
 
-        let nodes = self.with_arena(|arena| collect_scene_roots(arena));
+        let nodes = self.with_arena(collect_scene_roots);
 
         SceneSnapshot { size, nodes }
     }

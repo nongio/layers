@@ -395,22 +395,22 @@ impl Layer {
     }
     pub fn children_nodes(&self) -> Vec<NodeRef> {
         let node_id: TreeStorageId = self.id.into();
-        return {
+        {
             self.engine
                 .scene
                 .with_arena(|arena| node_id.children(arena).map(NodeRef).collect())
-        };
+        }
     }
     pub fn children(&self) -> Vec<Layer> {
         let node_id: TreeStorageId = self.id.into();
-        return {
+        {
             self.engine.scene.with_arena(|arena| {
                 node_id
                     .children(arena)
                     .filter_map(|cid| self.engine.get_layer(&NodeRef(cid)))
                     .collect()
             })
-        };
+        }
     }
     #[cfg(feature = "layer_state")]
     pub fn with_state<F, T>(&self, f: F) -> T
@@ -500,7 +500,7 @@ impl Layer {
             let node = node.get_mut();
             node.set_picture_cached(picture_cache);
         });
-        if picture_cache == false {
+        if !picture_cache {
             self.engine.scene.with_renderable_arena_mut(|arena| {
                 let id: usize = self.id.into();
                 let node = arena.get_mut(&id).unwrap();
