@@ -1131,6 +1131,7 @@ impl Engine {
             for ancestor_id in ancestor_ids {
                 if let Some(ancestor_node) = arena.get_mut(ancestor_id) {
                     let ancestor = ancestor_node.get_mut();
+                    ancestor.set_needs_repaint(true);
                     if ancestor.is_image_cached() {
                         ancestor.increase_frame();
                     }
@@ -1349,7 +1350,6 @@ impl Engine {
             let node_id = node_ref.0;
             node_id
                 .ancestors(arena)
-                .skip(1) // Skip the node itself
                 .filter(|node| !node.is_removed(arena))
                 .collect()
         });
@@ -1385,7 +1385,6 @@ impl Engine {
             for node_id in descendants.iter().rev() {
                 let node_id = *node_id;
                 let node = arena.get(node_id).unwrap().get();
-                // let layer = self.get_layer(&NodeRef(node_id)).unwrap();
                 if node.hidden() || !node.pointer_events() {
                     continue;
                 }

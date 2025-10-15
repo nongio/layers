@@ -320,7 +320,7 @@ pub fn render_node_tree(
 
                     // draw into the offscreen surface
                     let current_frame = scene_node.frame_number;
-                    if current_frame != recorded_frame {
+                    if current_frame != recorded_frame || dbg_info.is_some() {
                         let surface_bounds = skia::Rect::from_wh(
                             recording_surface.width() as f32,
                             recording_surface.height() as f32,
