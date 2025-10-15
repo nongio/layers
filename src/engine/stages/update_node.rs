@@ -17,8 +17,7 @@ fn subtree_has_visible_drawables(arena: &Arena<SceneNode>, node_id: NodeId) -> b
             if scene_node.render_layer.has_visible_drawables() {
                 return true;
             }
-            id.children(arena)
-                .for_each(|child_id| stack.push(child_id));
+            id.children(arena).for_each(|child_id| stack.push(child_id));
         }
     }
     false
@@ -88,6 +87,18 @@ pub(crate) fn update_node_single(
     // Account for parent transform/opacity
     let cumulative_transform = parent.map(|p| &p.transform);
     let context_opacity = parent.map(|p| p.premultiplied_opacity).unwrap_or(1.0);
+
+    // Ensure nodes refresh when only the parent opacity changes.
+    engine.scene.with_arena_mut(|arena| {
+        if let Some(node) = arena.get_mut(node_id) {
+            let scene_node = node.get_mut();
+            let prev_premultiplied = scene_node.render_layer.premultiplied_opacity;
+            let context_premultiplied = scene_node.render_layer.opacity * context_opacity;
+            if (prev_premultiplied - context_premultiplied).abs() > f32::EPSILON {
+                scene_node.set_needs_repaint(true);
+            }
+        }
+    });
 
     // Update the render layer using the latest model/layout state
     let (changed_render_layer, is_debug) = engine.scene.with_arena_mut(|arena| {
