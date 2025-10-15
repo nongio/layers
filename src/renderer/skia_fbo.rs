@@ -118,11 +118,13 @@ impl DrawScene for SkiaFboRenderer {
             canvas.clip_rect(damage, None, None);
         }
         scene.with_arena(|arena| {
-            if let Some(root) = arena.get(root_id.into()) {
-                let root = root.get();
-                set_node_transform(root, canvas);
-                render_node_tree(root_id, arena, &mut canvas, 1.0);
-            }
+            scene.with_renderable_arena(|renderable_arena| {
+                if let Some(root) = arena.get(root_id.into()) {
+                    let root = root.get();
+                    set_node_transform(root, canvas);
+                    render_node_tree(root_id, arena, renderable_arena, &mut canvas, 1.0);
+                }
+            });
         });
         canvas.restore_to_count(save_point);
         // surface.flush_and_submit();

@@ -185,6 +185,63 @@ pub fn nested_views() {
     assert!(num_children == 3);
 }
 
+#[test]
+fn layer_tree_builder_children_recover_from_zero_opacity_parent() {
+    let engine = Engine::create(1000.0, 1000.0);
+    let layer = engine.new_layer();
+    engine.add_layer(&layer);
+
+    let child_tree = LayerTreeBuilder::default()
+        .key("child")
+        .size((
+            Size {
+                width: taffy::Dimension::Length(10.0),
+                height: taffy::Dimension::Length(10.0),
+            },
+            None,
+        ))
+        .background_color((
+            PaintColor::Solid {
+                color: Color::new_hex("#ffffffff"),
+            },
+            None,
+        ))
+        .build()
+        .unwrap();
+
+    let root_tree = LayerTreeBuilder::default()
+        .key("root")
+        .opacity((0.0, None))
+        .size((
+            Size {
+                width: taffy::Dimension::Length(10.0),
+                height: taffy::Dimension::Length(10.0),
+            },
+            None,
+        ))
+        .children(vec![child_tree])
+        .build()
+        .unwrap();
+    layer.build_layer_tree(&root_tree);
+
+    engine.update(0.016);
+    let child = layer
+        .children()
+        .into_iter()
+        .next()
+        .expect("child layer missing after build");
+    assert_eq!(child.render_layer().premultiplied_opacity, 0.0);
+
+    layer.set_opacity(1.0, None);
+    engine.update(0.016);
+    let child = layer
+        .children()
+        .into_iter()
+        .next()
+        .expect("child layer missing after opacity change");
+    assert!(child.render_layer().premultiplied_opacity > 0.0);
+}
+
 // #[test]
 // pub fn layer_tree_from_css() {
 //     // let engine = Engine::create(1000.0, 1000.0);

@@ -125,6 +125,9 @@ impl BuildLayerTree for Layer {
         if let Some(image_cache) = viewlayer_tree.image_cache {
             scene_layer.set_image_cached(image_cache);
         }
+        if let Some(picture_cached) = viewlayer_tree.picture_cached {
+            scene_layer.set_picture_cached(picture_cached);
+        }
         if let Some(pointer_events) = viewlayer_tree.pointer_events {
             scene_layer.set_pointer_events(pointer_events);
         }
@@ -156,10 +159,28 @@ impl BuildLayerTree for Layer {
         let layer_id = scene_layer.id;
         let engine = scene_layer.engine.clone();
 
-        // if let Some(scene_node) = self.engine.scene_get_node(&layer_id) {
-        // let scene_node = scene_node.get();
-        // scene_node.replicate_node(&viewlayer_tree.replicate_node);
-        // }
+        if let Some(replicate_node) = viewlayer_tree.replicate_node {
+            if let Some(replicate_layer) = engine.get_layer(&replicate_node) {
+                scene_layer.set_draw_content(replicate_layer.as_content());
+                replicate_layer.add_follower_node(scene_layer.id());
+            }
+        }
+
+        scene_layer.engine.scene.with_arena_mut(|arena| {
+            let ancestors: Vec<NodeId> = layer_id.0.ancestors(arena).collect();
+            {
+                let node = arena.get_mut(layer_id.0).unwrap();
+                let scene_node = node.get_mut();
+                scene_node.set_needs_layout(true);
+                scene_node.increase_frame();
+            }
+            for ancestor in ancestors {
+                let node = arena.get_mut(ancestor).unwrap();
+                let node = node.get_mut();
+                node.set_needs_layout(true);
+                node.increase_frame();
+            }
+        });
 
         // Children
         let mut current_scene_layers_children: HashSet<NodeId> = {

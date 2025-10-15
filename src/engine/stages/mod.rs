@@ -1,4 +1,7 @@
-use std::sync::{Arc, RwLock};
+use std::{
+    collections::HashSet,
+    sync::{Arc, RwLock},
+};
 
 use rayon::{
     iter::IntoParallelRefIterator,
@@ -9,7 +12,7 @@ use taffy::{prelude::Size, style_helpers::length, Dimension};
 #[cfg(feature = "debugger")]
 use layers_debug_server::send_debugger_message;
 
-use crate::prelude::Layer;
+use crate::{engine::node::RenderableFlags, prelude::Layer};
 
 use super::{
     storage::FlatStorageId, AnimationState, Engine, NodeRef, Timestamp, TransactionCallback,
@@ -19,7 +22,6 @@ use super::{
 mod update_node;
 
 #[allow(unused_imports)]
-pub(crate) use update_node::update_node_recursive;
 pub(crate) use update_node::update_node_single;
 
 #[profiling::function]
@@ -32,39 +34,37 @@ pub(crate) fn update_animations(
     let started_animations = Arc::new(RwLock::new(Vec::<FlatStorageId>::new()));
 
     engine.animations.with_data_mut(|animations| {
-        if !animations.is_empty() {
-            animations.par_iter_mut().for_each_with(
-                (finished_animations.clone(), started_animations.clone()),
-                |(done_animations, started_animations),
-                 (
-                    id,
-                    AnimationState {
-                        animation,
-                        progress,
-                        time,
-                        is_running,
-                        is_finished,
-                        is_started,
-                    },
-                )| {
-                    if !*is_running {
-                        return;
-                    }
-                    let (animation_progress, time_progress) = animation.update_at(timestamp.0);
-                    if !(*is_started) && animation.start <= timestamp.0 {
-                        *is_started = true;
-                        started_animations.write().unwrap().push(*id);
-                    }
-                    *progress = animation_progress;
-                    *time = time_progress.clamp(0.0, time_progress);
-                    if animation.done(timestamp.0) {
-                        *is_running = false;
-                        *is_finished = true;
-                        done_animations.write().unwrap().push(*id);
-                    }
+        animations.par_iter_mut().for_each_with(
+            (finished_animations.clone(), started_animations.clone()),
+            |(done_animations, started_animations),
+             (
+                id,
+                AnimationState {
+                    animation,
+                    progress,
+                    time,
+                    is_running,
+                    is_finished,
+                    is_started,
                 },
-            );
-        }
+            )| {
+                if !*is_running {
+                    return;
+                }
+                let (animation_progress, time_progress) = animation.update_at(timestamp.0);
+                if !(*is_started) && animation.start <= timestamp.0 {
+                    *is_started = true;
+                    started_animations.write().unwrap().push(*id);
+                }
+                *progress = animation_progress;
+                *time = time_progress.clamp(0.0, time_progress);
+                if animation.done(timestamp.0) {
+                    *is_running = false;
+                    *is_finished = true;
+                    done_animations.write().unwrap().push(*id);
+                }
+            },
+        );
     });
 
     let finished = finished_animations.read().unwrap();
@@ -114,8 +114,8 @@ pub(crate) fn execute_transactions(engine: &Engine) -> (Vec<NodeRef>, Vec<FlatSt
                     scene.with_arena_mut(|arena| {
                         if let Some(node) = arena.get_mut(node_id.0) {
                             if !node.is_removed() {
-                                let node = node.get_mut();
-                                node.insert_flags(flags);
+                                let scene_node = node.get_mut();
+                                scene_node.insert_flags(flags);
                             }
                         }
                     });
@@ -136,6 +136,10 @@ pub(crate) fn execute_transactions(engine: &Engine) -> (Vec<NodeRef>, Vec<FlatSt
         needs_redraw,
     )
 }
+/// Collects all valid nodes that are eligible for layout computation.
+/// This function traverses the scene tree from the root and filters out
+/// nodes that have been removed or marked for deletion, returning only
+/// the nodes that should participate in the layout pass.
 #[profiling::function]
 pub(crate) fn nodes_for_layout(engine: &Engine) -> Vec<NodeRef> {
     if let Some(root_node) = engine.scene_root() {
@@ -144,30 +148,15 @@ pub(crate) fn nodes_for_layout(engine: &Engine) -> Vec<NodeRef> {
         descendants
             .iter()
             .filter_map(|node_ref| {
-                let node = engine.scene().with_arena_mut(|arena| {
-                    let node = arena.get_mut(node_ref.0).unwrap();
+                let node = engine.scene().with_arena(|arena| {
+                    let node = arena.get(node_ref.0).unwrap();
                     if node.is_removed() {
                         return None;
                     }
-                    let scene_node = node.get_mut();
+                    let scene_node = node.get();
                     if scene_node.is_deleted() {
                         return None;
                     }
-                    // let layer = engine.get_layer(node_ref).unwrap();
-                    // let layout = engine.get_node_layout_style(layer.layout_id);
-                    // if layout.position != taffy::style::Position::Absolute {
-                    // }
-                    // scene_node.set_need_layout(true);
-                    //     FIXME: replicated NODE
-                    // follow a replicated node
-                    //     // it will paint continuosly
-                    //     if let Some(follow) = &*scene_node._follow_node.read().unwrap() {
-                    //         if let Some(_follow_node) = arena.get(follow.0) {
-                    //             // let follow_node = _follow_node.get();
-                    //             // scene_node.set_need_repaint(follow_node.needs_repaint());
-                    //             // scene_node.set_need_repaint(true);
-                    //         }
-                    //     }
 
                     Some(*node_ref)
                 });
@@ -184,48 +173,44 @@ pub(crate) fn nodes_for_layout(engine: &Engine) -> Vec<NodeRef> {
 pub(crate) fn update_layout_tree(engine: &Engine) {
     // Get scene size early to avoid multiple lock acquisitions
     let scene_size = engine.scene.size.read().unwrap();
-    let mut changed_nodes = Vec::new();
+    let mut changed_nodes = HashSet::new();
+    let mut all_nodes = Vec::new();
 
-    // First, collect nodes that need size updates
+    // First, collect nodes that need layout updates and relationships without touching layout locks
     {
         profiling::scope!("collect_nodes_needing_update");
         if let Some(root) = engine.scene_root() {
             engine.scene.with_arena(|arena| {
+                // Traverse all descendants from the root node to identify nodes that need layout updates
                 for node_id in root.0.descendants(arena) {
                     let node = arena.get(node_id).unwrap();
                     if node.is_removed() {
                         return;
                     }
                     let node_ref = NodeRef(node_id);
+                    all_nodes.push(node_ref);
 
-                    if node.get().needs_layout() {
-                        changed_nodes.push(node_ref);
+                    // Collect follower relationships and layout flags
+                    let scene_node = node.get();
+                    let needs_layout = scene_node.needs_layout();
+                    if needs_layout {
+                        changed_nodes.insert(node_ref);
+                        for follower in &scene_node.followers {
+                            changed_nodes.insert(*follower);
+                        }
                     }
                 }
             });
         }
     }
 
-    // Update size only for nodes that need it
-    if !changed_nodes.is_empty() {
-        profiling::scope!("update_nodes_size");
-        for node_ref in &changed_nodes {
-            engine.with_layers(|layers| {
-                if let Some(layer) = layers.get(node_ref) {
-                    let size = layer.size();
-                    let layout_node_id = layer.layout_id;
-                    if size.width != Dimension::Auto || size.height != Dimension::Auto {
-                        engine.set_node_layout_size(layout_node_id, size);
-                    }
-                }
-            });
-            engine.scene.with_arena_mut(|arena| {
-                if let Some(node) = arena.get_mut(node_ref.0) {
-                    let node = node.get_mut();
-                    node.set_needs_layout(false);
-                    node.set_needs_repaint(true);
-                }
-            });
+    // Update layout node sizes outside of the scene lock to avoid lock inversion
+    for node_ref in &all_nodes {
+        if let Some(layer) = engine.get_layer(node_ref) {
+            let size = layer.size();
+            if size.width != Dimension::Auto || size.height != Dimension::Auto {
+                engine.set_node_layout_size(layer.layout_id, size);
+            }
         }
     }
 

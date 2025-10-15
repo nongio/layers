@@ -15,6 +15,8 @@ pub struct RenderLayer {
     pub rbounds: skia_safe::RRect,
     /// The transformed bounds of the layer, relative to the parent
     pub local_transformed_bounds: skia_safe::Rect,
+    /// The transformed bounds of the layer, relative to the parent, including children bounds
+    pub local_transformed_bounds_with_children: skia_safe::Rect,
     /// The bounds of the layers, including children bounds
     pub bounds_with_children: skia_safe::Rect,
     /// The transformed bounds of the layer, relative to the root
@@ -63,7 +65,6 @@ pub struct RenderLayer {
     pub pointer_events: bool,
     pub content_draw_func: Option<ContentDrawFunctionInternal>,
     pub content: Option<Picture>,
-    pub content_damage: skia_safe::Rect,
     pub image_filter: Option<ImageFilter>,
     pub image_filter_bounds: Option<skia::Rect>,
     pub color_filter: Option<ColorFilter>,
@@ -162,24 +163,24 @@ impl RenderLayer {
 
         // FIXME: cache content
         // if cache_content {
-        if content_draw_func.is_some()
-            && ((self.size != size) || (self.content_draw_func.as_ref() != content_draw_func))
-        {
-            let mut recorder = skia_safe::PictureRecorder::new();
-            let canvas =
-                recorder.begin_recording(skia_safe::Rect::from_wh(size.width, size.height), None);
-            let draw_func = content_draw_func.unwrap();
-            let caller = draw_func.0.as_ref();
-            let content_damage = caller(canvas, size.width, size.height);
-            self.content_damage = content_damage;
-            self.content = recorder.finish_recording_as_picture(None);
-        }
+        // if content_draw_func.is_some()
+        //     && ((self.size != size) || (self.content_draw_func.as_ref() != content_draw_func))
+        // {
+        //     let mut recorder = skia_safe::PictureRecorder::new();
+        //     let canvas =
+        //         recorder.begin_recording(skia_safe::Rect::from_wh(size.width, size.height), None);
+        //     let draw_func = content_draw_func.unwrap();
+        //     let caller = draw_func.0.as_ref();
+        //     let content_damage = caller(canvas, size.width, size.height);
+        //     self.content_damage = content_damage;
+        //     self.content = recorder.finish_recording_as_picture(None);
+        // }
         // } else {
         //     self.content = None;
-        //     if let Some(draw_func) = content_draw_func {
-        //         let caller = draw_func.0.as_ref();
-        //         self.content_draw_func = Some(draw_func.clone());
-        //     }
+        if let Some(draw_func) = content_draw_func {
+            // let caller = draw_func.0.as_ref();
+            self.content_draw_func = Some(draw_func.clone());
+        }
         // }
 
         self.key = key;
@@ -203,6 +204,7 @@ impl RenderLayer {
         self.rbounds = skia_safe::RRect::new_rect_radii(bounds, &border_corner_radius.into());
         self.bounds_with_children = bounds;
         self.local_transformed_bounds = local_transformed_bounds;
+        self.local_transformed_bounds_with_children = local_transformed_bounds;
         self.global_transformed_bounds = transformed_bounds;
         self.global_transformed_bounds_with_children = transformed_bounds;
         self.global_transformed_rbounds =
@@ -213,6 +215,32 @@ impl RenderLayer {
         self.pointer_events = model
             .pointer_events
             .load(std::sync::atomic::Ordering::Relaxed);
+    }
+
+    pub(crate) fn has_visible_drawables(&self) -> bool {
+        if self.premultiplied_opacity <= 0.0 {
+            return false;
+        }
+
+        let draws_background = Self::paint_color_max_alpha(&self.background_color) > 0.0;
+        let draws_border =
+            self.border_width > 0.0 && Self::paint_color_max_alpha(&self.border_color) > 0.0;
+        let draws_shadow = self.shadow_color.alpha > 0.0;
+        let draws_content = self.content.is_some() || self.content_draw_func.is_some();
+
+        draws_background || draws_border || draws_shadow || draws_content
+    }
+
+    fn paint_color_max_alpha(color: &PaintColor) -> f32 {
+        match color {
+            PaintColor::Solid { color } => color.alpha,
+            PaintColor::GradientLinear(gradient) => {
+                gradient.colors.iter().fold(0.0, |acc, c| acc.max(c.alpha))
+            }
+            PaintColor::GradientRadial(gradient) => {
+                gradient.colors.iter().fold(0.0, |acc, c| acc.max(c.alpha))
+            }
+        }
     }
 
     #[allow(dead_code)]
@@ -300,22 +328,21 @@ impl RenderLayer {
         let shadow_spread = model.shadow_spread.value();
         let shadow_color = model.shadow_color.value();
 
-        let mut content = None;
+        let content = None;
         let mut content_draw_func = None;
         if let Some(draw_func) = model.draw_content.read().unwrap().as_ref() {
-            let mut recorder = skia_safe::PictureRecorder::new();
-            let canvas =
-                recorder.begin_recording(skia_safe::Rect::from_wh(size.width, size.height), None);
-            let caller = draw_func.0.clone();
-            caller(canvas, size.width, size.height);
-            content = recorder.finish_recording_as_picture(None);
+            // let mut recorder = skia_safe::PictureRecorder::new();
+            // let canvas =
+            // recorder.begin_recording(skia_safe::Rect::from_wh(size.width, size.height), None);
+            // let caller = draw_func.0.clone();
+            // caller(canvas, size.width, size.height, arena);
+            // content = recorder.finish_recording_as_picture(None);
             content_draw_func = Some(draw_func.clone());
         }
 
         let opacity = model.opacity.value();
         let premultiplied_opacity = opacity * context_opacity;
         let blend_mode = model.blend_mode.value();
-        let content_damage = skia_safe::Rect::default();
         let clip_content = model.clip_content.value();
         let clip_children = model.clip_children.value();
 
@@ -341,10 +368,10 @@ impl RenderLayer {
             bounds,
             bounds_with_children: bounds,
             local_transformed_bounds,
+            local_transformed_bounds_with_children: local_transformed_bounds,
             global_transformed_bounds: transformed_bounds,
             global_transformed_bounds_with_children: transformed_bounds,
             content_draw_func,
-            content_damage,
             rbounds,
             global_transformed_rbounds: transformed_rbounds,
             clip_content,
@@ -387,12 +414,12 @@ impl Default for RenderLayer {
             bounds: skia_safe::Rect::default(),
             rbounds: skia_safe::RRect::default(),
             local_transformed_bounds: skia_safe::Rect::default(),
+            local_transformed_bounds_with_children: skia_safe::Rect::default(),
             bounds_with_children: skia_safe::Rect::default(),
             global_transformed_bounds: skia_safe::Rect::default(),
             global_transformed_bounds_with_children: skia_safe::Rect::default(),
             global_transformed_rbounds: skia_safe::RRect::default(),
             content_draw_func: None,
-            content_damage: skia_safe::Rect::default(),
             clip_content: false,
             clip_children: false,
             image_filter: None,

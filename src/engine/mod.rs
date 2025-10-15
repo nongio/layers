@@ -73,6 +73,7 @@ use self::{
 };
 use crate::{
     drawing::render_node_tree,
+    engine::node::SceneNodeRenderable,
     layers::layer::{model::PointerHandlerFunction, render_layer::RenderLayer, Layer},
     prelude::ContentDrawFunction,
     types::Point,
@@ -664,7 +665,6 @@ impl Engine {
         // update...
         {
             execute_transactions(self);
-            nodes_for_layout(self);
             update_layout_tree(self);
             self.update_nodes();
         }
@@ -691,7 +691,6 @@ impl Engine {
         layer.set_position(new_position, None);
         {
             execute_transactions(self);
-            nodes_for_layout(self);
             update_layout_tree(self);
             self.update_nodes();
         }
@@ -712,40 +711,67 @@ impl Engine {
         });
     }
 
-    // FIXME: quite convoluted logic.. move main logic into scene
+    /// Remove the layer and its subtree from the scene and layout tree
+    /// This method is intended by the engine from the cleanup stage
     pub(crate) fn scene_remove_layer<'a>(&self, layer: impl Into<&'a NodeRef>) {
-        // Scene object is responsible for removing the node and its children
-        // Engine is responsible for removing the layout node,
-        // and mark the scene node for relayout?
-        self.scene.with_arena_mut(|arena| {
-            let layer_id = layer.into();
-            if let Some(node) = arena.get_mut(layer_id.into()) {
-                let layer = self.get_layer(layer_id).unwrap();
-                let layout_id = layer.layout_id;
-                let parent_id = node.parent();
+        // Avoid deadlocks by not holding scene + layout/layers locks simultaneously.
+        let layer_id = *layer.into();
 
-                if let Some(parent_id) = parent_id {
-                    // if the parent is already removed, we don't need to do anything
-                    if !parent_id.is_removed(arena) {
-                        if let Some(parent_node) = arena.get_mut(parent_id) {
-                            let parent = parent_node.get_mut();
-                            let parent_layer = self.get_layer(&NodeRef(parent_id)).unwrap();
-                            let parent_layout_id = parent_layer.layout_id;
-                            parent.set_needs_layout(true);
+        // Snapshot the scene parent id (read-only scene access)
+        let parent_id = self.scene.with_arena(|arena| {
+            arena
+                .get(layer_id.into())
+                .map(|n| n.parent())
+                .unwrap_or(None)
+        });
 
-                            let mut layout = self.layout_tree.write().unwrap();
-                            let res = layout.mark_dirty(parent_layout_id);
-                            if let Some(err) = res.err() {
-                                println!("layout err {}", err);
-                            }
-                        }
-                        // remove layers subtree
-                        layer_id.remove_subtree(arena);
+        // Determine if the parent still exists and is not already marked for deletion.
+        let (parent_exists, parent_marked_for_deletion) = parent_id
+            .map(|pid| {
+                self.scene.with_arena(|arena| {
+                    if pid.is_removed(arena) {
+                        return (false, true);
                     }
+                    if let Some(parent_node) = arena.get(pid) {
+                        (true, parent_node.get().is_deleted())
+                    } else {
+                        (false, true)
+                    }
+                })
+            })
+            .unwrap_or((false, false));
+
+        // Snapshot layout ids via layers map (separate lock)
+        let (layout_id_opt, parent_layout_id_opt) = {
+            let layout_id_opt = self.get_layer(&layer_id).map(|l| l.layout_id);
+            let parent_layout_id_opt = parent_id
+                .and_then(|pid| self.get_layer(&NodeRef(pid)))
+                .map(|pl| pl.layout_id);
+            (layout_id_opt, parent_layout_id_opt)
+        };
+
+        // Update layout tree first (no scene lock held)
+        if let Some(layout_id) = layout_id_opt {
+            let mut layout = self.layout_tree.write().unwrap();
+            if parent_exists && !parent_marked_for_deletion {
+                if let Some(parent_layout_id) = parent_layout_id_opt {
+                    let _ = layout.mark_dirty(parent_layout_id);
                 }
-                // remove layout node
-                let mut layout_tree = self.layout_tree.write().unwrap();
-                layout_tree.remove(layout_id).unwrap();
+            }
+            // Remove the layout node unconditionally
+            let _ = layout.remove(layout_id);
+        }
+
+        // Now mutate the scene (no layout lock held)
+        self.scene.with_arena_mut(|arena| {
+            if let Some(pid) = parent_id {
+                if !pid.is_removed(arena) {
+                    if let Some(parent_node) = arena.get_mut(pid) {
+                        parent_node.get_mut().set_needs_layout(true);
+                    }
+                    // remove layers subtree
+                    layer_id.remove_subtree(arena);
+                }
             }
         });
     }
@@ -784,6 +810,17 @@ impl Engine {
             Some(node)
         })
     }
+
+    pub fn renderable<'a>(&self, node_ref: impl Into<&'a NodeRef>) -> Option<SceneNodeRenderable> {
+        let node_ref = node_ref.into();
+        self.scene.with_renderable_arena_mut(|arena| {
+            let index: FlatStorageId = node_ref.0.into();
+            let node = arena.get(&index)?;
+            let node = node.clone();
+            Some(node)
+        })
+    }
+
     pub fn node_render_size<'a>(&self, node_ref: impl Into<&'a NodeRef>) -> (f32, f32) {
         let node_ref = node_ref.into();
         self.scene.with_arena(|a| {
@@ -816,7 +853,7 @@ impl Engine {
     }
     pub fn add_animation_from_transition(
         &self,
-        transition: Transition,
+        transition: &Transition,
         autostart: bool,
     ) -> AnimationRef {
         let start = self.now() + transition.delay;
@@ -855,11 +892,12 @@ impl Engine {
         self.transactions.get(&tref.id)
     }
     pub fn get_transaction_for_value(&self, value_id: usize) -> Option<AnimatedNodeChange> {
-        self.values_transactions
-            .read()
-            .unwrap()
-            .get(&value_id)
-            .and_then(|id| self.transactions.with_data(|d| d.get(id).cloned()))
+        // Avoid holding multiple locks at once to prevent deadlocks
+        let tid = {
+            let vt = self.values_transactions.read().unwrap();
+            vt.get(&value_id).copied()
+        };
+        tid.and_then(|id| self.transactions.with_data(|d| d.get(&id).cloned()))
     }
     pub fn get_animation(&self, animation: AnimationRef) -> Option<AnimationState> {
         self.animations.with_data(|d| d.get(&animation.0).cloned())
@@ -961,9 +999,6 @@ impl Engine {
 
         let needs_draw = !updated_nodes.is_empty();
 
-        // merge the updated nodes with the nodes that are part of the layout calculation
-        // nodes_for_layout(self);
-
         // 2.0 update the layout tree using taffy
         update_layout_tree(self);
 
@@ -1001,7 +1036,7 @@ impl Engine {
         let mut total_damage = skia_safe::Rect::default();
         let node = self.scene_root.read().unwrap();
         if let Some(root_id) = *node {
-            // Phase 1: Collect nodes in post-order (children before parents)
+            // Phase 1: Collect nodes and compute their depth
             let nodes_post_order: Vec<_> = self.scene.with_arena(|arena| {
                 let mut result = Vec::new();
                 for edge in root_id.traverse(arena) {
@@ -1012,8 +1047,7 @@ impl Engine {
                 result
             });
 
-            // Phase 2: Update nodes in parallel batches by depth level
-            // First, group nodes by depth to ensure parent dependencies
+            // Phase 2: Group nodes by depth to ensure parent dependencies
             let depth_groups = self.scene.with_arena(|arena| {
                 let mut depth_map: std::collections::HashMap<usize, Vec<indextree::NodeId>> =
                     std::collections::HashMap::new();
@@ -1024,13 +1058,14 @@ impl Engine {
                 }
 
                 let mut groups: Vec<_> = depth_map.into_iter().collect();
+                // Sort by depth ascending so parents (depth 0) are processed first
                 groups.sort_by_key(|(depth, _)| *depth);
-                // groups.reverse(); // Process deepest first (leaves to root)
                 groups
             });
 
-            // Phase 3: Process each depth level
-            for (_depth, nodes_at_depth) in depth_groups {
+            // Phase 3: Process each depth level from root to leaves
+            // Parents are processed before children so cumulative transforms are correct.
+            for (_depth, nodes_at_depth) in depth_groups.into_iter() {
                 // Update nodes at this depth in parallel
                 let nad: &Vec<_> = nodes_at_depth.as_ref();
                 let damages: Vec<_> = nad
@@ -1050,16 +1085,16 @@ impl Engine {
                             parent_render_layer.as_ref(),
                             false,
                         );
+                        if !damage.is_empty() {
+                            self.mark_image_cached_ancestors_for_repaint(*node_id);
+                        }
 
                         return damage;
                     })
                     .collect();
 
                 // Phase 4: Accumulate child damages to parents (sequential for each depth)
-                for (node_id, node_damage) in nodes_at_depth.iter().zip(damages.iter()) {
-                    if !node_damage.is_empty() {
-                        self.propagate_damage_to_ancestors(*node_id, *node_damage);
-                    }
+                for (_node_id, node_damage) in nodes_at_depth.iter().zip(damages.iter()) {
                     total_damage.join(*node_damage);
                 }
             }
@@ -1097,8 +1132,28 @@ impl Engine {
                         .global_transformed_bounds_with_children
                         .join(damage);
 
-                    // Mark ancestor for potential repaint
-                    ancestor.repaint_damage.join(damage);
+                    ancestor.set_needs_repaint(true);
+                    // Mark ancestor for potential repaint in the renderable arena
+                    // self.scene.with_renderable_arena_mut(|renderable_arena| {
+                    //     if let Some(ancestor_renderable) = renderable_arena.get_mut(ancestor_id) {
+                    //         let ancestor_renderable = ancestor_renderable.get_mut();
+                    //         ancestor_renderable.repaint_damage.join(damage);
+                    //     }
+                    // });
+                }
+            }
+        });
+    }
+    fn mark_image_cached_ancestors_for_repaint(&self, node_id: indextree::NodeId) {
+        self.scene.with_arena_mut(|arena| {
+            let ancestor_ids: Vec<_> = node_id.ancestors(arena).skip(1).collect();
+            for ancestor_id in ancestor_ids {
+                if let Some(ancestor_node) = arena.get_mut(ancestor_id) {
+                    let ancestor = ancestor_node.get_mut();
+                    ancestor.set_needs_repaint(true);
+                    if ancestor.is_image_cached() {
+                        ancestor.increase_frame();
+                    }
                 }
             }
         });
@@ -1112,7 +1167,7 @@ impl Engine {
         layout.set_style(node, style).unwrap();
     }
 
-    pub fn set_node_layout_size(&self, node: taffy::NodeId, size: crate::types::Size) {
+    pub fn set_node_layout_size(&self, node: taffy::NodeId, size: crate::types::Size) -> bool {
         let mut layout = self.layout_tree.write().unwrap();
         let mut style = layout.style(node).unwrap().clone();
         let new_size = taffy::geometry::Size {
@@ -1122,10 +1177,9 @@ impl Engine {
         if style.size != new_size {
             style.size = new_size;
             layout.set_style(node, style).unwrap();
+            return true;
         }
-
-        // println!("{:?} set_node_layout_size: {:?}", node, style.size);
-        // layout.set_style(node, style).unwrap();
+        return false;
     }
 
     pub fn scene_layer_at(&self, point: Point) -> Option<NodeRef> {
@@ -1315,7 +1369,6 @@ impl Engine {
             let node_id = node_ref.0;
             node_id
                 .ancestors(arena)
-                .skip(1) // Skip the node itself
                 .filter(|node| !node.is_removed(arena))
                 .collect()
         });
@@ -1351,7 +1404,6 @@ impl Engine {
             for node_id in descendants.iter().rev() {
                 let node_id = *node_id;
                 let node = arena.get(node_id).unwrap().get();
-                // let layer = self.get_layer(&NodeRef(node_id)).unwrap();
                 if node.hidden() || !node.pointer_events() {
                     continue;
                 }
@@ -1415,7 +1467,9 @@ impl Engine {
         let draw_function = move |c: &skia::Canvas, w: f32, h: f32| {
             let scene = engine_ref.scene.clone();
             scene.with_arena(|arena| {
-                render_node_tree(layer_id, arena, c, 1.0);
+                scene.with_renderable_arena(|renderable_arena| {
+                    render_node_tree(layer_id, arena, renderable_arena, c, 1.0);
+                });
             });
             skia::Rect::from_xywh(0.0, 0.0, w, h)
         };
@@ -1427,6 +1481,10 @@ impl Engine {
     pub fn clear_damage(&self) {
         let mut damage = self.damage.write().unwrap();
         *damage = skia_safe::Rect::default();
+    }
+    pub fn add_damage(&self, rect: skia_safe::Rect) {
+        let mut damage = self.damage.write().unwrap();
+        damage.join(&rect);
     }
 }
 

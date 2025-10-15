@@ -84,6 +84,8 @@ pub struct LayerTree {
     #[builder(setter(into, strip_option), default)]
     pub image_cache: Option<bool>,
     #[builder(setter(into, strip_option), default)]
+    pub picture_cached: Option<bool>,
+    #[builder(setter(into, strip_option), default)]
     pub pointer_events: Option<bool>,
     #[builder(setter(custom))]
     pub on_pointer_move: Option<PointerHandlerFunction>,

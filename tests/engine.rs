@@ -82,3 +82,33 @@ pub fn test_independent_engines() {
     assert_eq!(width2, 300.0);
     assert_eq!(height2, 250.0);
 }
+
+#[test]
+fn removing_layer_subtree_triggers_layout() {
+    let engine = Engine::create(800.0, 600.0);
+
+    let root = engine.new_layer();
+    root.set_size(Size::points(400.0, 400.0), None);
+
+    let child = engine.new_layer();
+    child.set_size(Size::points(200.0, 200.0), None);
+
+    let grandchild = engine.new_layer();
+    grandchild.set_size(Size::points(100.0, 100.0), None);
+
+    child.add_sublayer(&grandchild);
+    root.add_sublayer(&child);
+
+    engine.add_layer(&root);
+
+    // Allow the engine to process the additions so layout nodes exist.
+    engine.update(0.016);
+
+    // Removing the subtree in the same frame causes the parent layout node to be
+    // dropped before the child, which makes layout.mark_dirty panic.
+    grandchild.remove();
+    child.remove();
+
+    // The panic is triggered during cleanup inside this update.
+    engine.update(0.016);
+}
