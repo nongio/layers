@@ -215,6 +215,10 @@ impl RenderLayer {
         self.pointer_events = model
             .pointer_events
             .load(std::sync::atomic::Ordering::Relaxed);
+
+        self.image_filter = model.image_filter.read().unwrap().clone();
+        self.image_filter_bounds = *model.filter_bounds.read().unwrap();
+        self.color_filter = model.color_filter.read().unwrap().clone();
     }
 
     pub(crate) fn has_visible_drawables(&self) -> bool {
