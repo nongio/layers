@@ -34,8 +34,12 @@ pub(crate) fn update_node_single(
     parent: Option<&RenderLayer>,
     parent_changed: bool,
 ) -> skia::Rect {
-    let layer = engine.get_layer(&NodeRef(node_id)).unwrap();
-    let node_layout = layout_tree.layout(layer.layout_id).unwrap();
+    let Some(layer) = engine.get_layer(&NodeRef(node_id)) else {
+        return skia_safe::Rect::default();
+    };
+    let Ok(node_layout) = layout_tree.layout(layer.layout_id) else {
+        return skia_safe::Rect::default();
+    };
 
     // First, read the previous state for comparisons
     let (prev_transformed_bounds, prev_global_bounds, prev_opacity, prev_visible, prev_needs_paint) =
@@ -126,17 +130,26 @@ pub(crate) fn update_node_single(
     // Capture the new state after the update
     let (new_transformed_bounds, new_global_bounds, new_opacity, new_visible, current_needs_paint) =
         engine.scene.with_arena(|arena| {
-            let node = arena.get(node_id).unwrap();
-            let scene_node = node.get();
-            (
-                scene_node
-                    .render_layer
-                    .global_transformed_bounds_with_children,
-                scene_node.render_layer.global_transformed_bounds,
-                scene_node.render_layer.premultiplied_opacity,
-                scene_node.render_layer.has_visible_drawables(),
-                scene_node.needs_repaint(),
-            )
+            if let Some(node) = arena.get(node_id) {
+                let scene_node = node.get();
+                (
+                    scene_node
+                        .render_layer
+                        .global_transformed_bounds_with_children,
+                    scene_node.render_layer.global_transformed_bounds,
+                    scene_node.render_layer.premultiplied_opacity,
+                    scene_node.render_layer.has_visible_drawables(),
+                    scene_node.needs_repaint(),
+                )
+            } else {
+                (
+                    skia_safe::Rect::default(),
+                    skia_safe::Rect::default(),
+                    0.0,
+                    false,
+                    false,
+                )
+            }
         });
 
     let new_children_visible = engine.scene.with_arena(|arena| {

@@ -105,14 +105,12 @@ impl Default for SceneNode {
 }
 
 /// Contains the outputs of drawing the layer: cache, damage, and flags
-#[derive(Clone)]
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct SceneNodeRenderable {
     pub(crate) repaint_damage: skia_safe::Rect,
     pub(crate) draw_cache: Option<DrawCache>,
     pub(crate) content_cache: Option<Picture>,
 }
-
 
 impl SceneNode {
     pub fn new() -> Self {
@@ -275,8 +273,6 @@ impl SceneNode {
             .set(RenderableFlags::NEEDS_LAYOUT, need_layout);
     }
     pub fn needs_repaint(&self) -> bool {
-        
-
         self.rendering_flags.contains(RenderableFlags::NEEDS_PAINT)
     }
     pub fn needs_layout(&self) -> bool {

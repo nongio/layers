@@ -12,7 +12,9 @@ pub trait ContainsPoint {
 impl ContainsPoint for SceneNode {
     fn contains(&self, point: Point) -> bool {
         let matrix = self.render_layer.transform_33;
-        let inverse = matrix.invert().unwrap();
+        let Some(inverse) = matrix.invert() else {
+            return false;
+        };
         let point = inverse.map_point(SkiaPoint::new(point.x, point.y));
 
         self.render_layer.bounds.contains(point)
