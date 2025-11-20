@@ -499,6 +499,9 @@ pub fn send_debugger(scene: Arc<crate::engine::scene::Scene>, scene_root: NodeRe
         let root: usize = scene_root.0.into();
 
         let data = (root, render_layers);
-        send_debugger_message(serde_json::to_string(&data).unwrap());
+        match serde_json::to_string(&data) {
+            Ok(message) => send_debugger_message(message),
+            Err(err) => eprintln!("Failed to serialize debugger payload: {err}"),
+        }
     });
 }
