@@ -27,11 +27,16 @@ pub use layer_tree::*;
 /// A View\<S\> is a struct to support the creation of complex hierarchies of layers
 /// that can be rendered by the engine.
 
+pub type PreRenderHook<S> = Arc<dyn Fn(&S, &View<S>) + Send + Sync + 'static>;
+pub type PostRenderHook<S> = Arc<dyn Fn(&S, &View<S>, &Layer) + Send + Sync + 'static>;
+
 #[derive(Clone)]
 pub struct View<S: Hash + Clone> {
     key: String,
     viewlayer_node_map: Arc<RwLock<HashMap<String, VecDeque<NodeRef>>>>,
     render_function: Arc<dyn ViewRenderFunction<S>>,
+    pre_render_hooks: Arc<RwLock<Vec<PreRenderHook<S>>>>,
+    post_render_hooks: Arc<RwLock<Vec<PostRenderHook<S>>>>,
     last_state: Arc<RwLock<Option<u64>>>,
     state: Arc<RwLock<S>>,
     pub layer: Arc<RwLock<Option<Layer>>>,
@@ -49,6 +54,8 @@ impl<S: Hash + Clone> View<S> {
             key,
             layer: Arc::new(RwLock::new(None)),
             render_function,
+            pre_render_hooks: Arc::new(RwLock::new(Vec::new())),
+            post_render_hooks: Arc::new(RwLock::new(Vec::new())),
             last_state: Arc::new(RwLock::new(None)),
             viewlayer_node_map: Arc::new(RwLock::new(HashMap::new())),
             state: Arc::new(RwLock::new(initial_state)),
@@ -65,10 +72,28 @@ impl<S: Hash + Clone> View<S> {
     #[profiling::function]
     pub fn render(&self, layer: &Layer) {
         let state = self.state.read().unwrap();
+
+        // Call pre-render hooks
+        {
+            let hooks = self.pre_render_hooks.read().unwrap();
+            for hook in hooks.iter() {
+                hook(&state, self);
+            }
+        }
+
         let view = (self.render_function)(&state, self);
         // view.set_path(format!("{}.{}", self.path.clone(), self.key.clone()));
-        let mut viewlayer_node_map = self.viewlayer_node_map.write().unwrap();
-        layer.build_layer_tree_internal(&view, &mut viewlayer_node_map);
+        {
+            let mut viewlayer_node_map = self.viewlayer_node_map.write().unwrap();
+            layer.build_layer_tree_internal(&view, &mut viewlayer_node_map);
+        }
+        // Call post-render hooks
+        {
+            let hooks = self.post_render_hooks.read().unwrap();
+            for hook in hooks.iter() {
+                hook(&state, self, layer);
+            }
+        }
     }
     /// Get the state of the view
     pub fn get_state(&self) -> S {
@@ -155,10 +180,7 @@ impl<S: Hash + Clone> View<S> {
                 // }
                 // None
             })
-            .or_else(|| {
-                println!("layer_by_key not found {}", id);
-                None
-            })
+            .or_else(|| None)
     }
     pub fn hover_layer(&self, id: &str, location: &Point) -> bool {
         if let Some(layer) = self.layer_by_key(id) {
@@ -172,6 +194,36 @@ impl<S: Hash + Clone> View<S> {
             }
         }
         false
+    }
+
+    /// Add a pre-render hook that will be called before each render
+    /// Hook receives: (state, view)
+    pub fn add_pre_render_hook<F>(&self, hook: F)
+    where
+        F: Fn(&S, &View<S>) + Send + Sync + 'static,
+    {
+        let mut hooks = self.pre_render_hooks.write().unwrap();
+        hooks.push(Arc::new(hook));
+    }
+
+    /// Add a post-render hook that will be called after each render
+    /// Hook receives: (state, view, layer)
+    pub fn add_post_render_hook<F>(&self, hook: F)
+    where
+        F: Fn(&S, &View<S>, &Layer) + Send + Sync + 'static,
+    {
+        let mut hooks = self.post_render_hooks.write().unwrap();
+        hooks.push(Arc::new(hook));
+    }
+
+    /// Clear all pre-render hooks
+    pub fn clear_pre_render_hooks(&self) {
+        self.pre_render_hooks.write().unwrap().clear();
+    }
+
+    /// Clear all post-render hooks
+    pub fn clear_post_render_hooks(&self) {
+        self.post_render_hooks.write().unwrap().clear();
     }
 }
 
