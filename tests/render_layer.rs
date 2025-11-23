@@ -46,6 +46,55 @@ mod tests {
     }
 
     #[test]
+    pub fn anchor_point_change_preserves_position() {
+        let engine = Engine::create(800.0, 600.0);
+        let layer = engine.new_layer();
+        engine.add_layer(&layer);
+
+        layer.set_size(Size::points(200.0, 100.0), None);
+        layer.set_position((50.0, 80.0), None);
+
+        engine.update(0.016);
+
+        let initial_bounds = layer.render_layer().global_transformed_bounds;
+
+        let new_position = layer.set_anchor_point_preserving_position(Point { x: 0.5, y: 0.5 });
+
+        engine.update(0.016);
+
+        let updated_bounds = layer.render_layer().global_transformed_bounds;
+
+        assert_eq!(initial_bounds, updated_bounds);
+        assert!((new_position.x - 150.0).abs() < f32::EPSILON);
+        assert!((new_position.y - 130.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    pub fn anchor_point_change_with_scale_preserves_position() {
+        let engine = Engine::create(800.0, 600.0);
+        let layer = engine.new_layer();
+        engine.add_layer(&layer);
+
+        layer.set_size(Size::points(200.0, 100.0), None);
+        layer.set_position((50.0, 80.0), None);
+        layer.set_scale(Point { x: 0.5, y: 0.5 }, None);
+
+        engine.update(0.016);
+
+        let initial_bounds = layer.render_layer().global_transformed_bounds;
+
+        let new_position = layer.set_anchor_point_preserving_position(Point { x: 0.5, y: 0.5 });
+
+        engine.update(0.016);
+
+        let updated_bounds = layer.render_layer().global_transformed_bounds;
+
+        assert_eq!(initial_bounds, updated_bounds);
+        assert!((new_position.x - 100.0).abs() < f32::EPSILON);
+        assert!((new_position.y - 105.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
     pub fn render_layer_background() {
         let engine = Engine::create(1000.0, 1000.0);
         let layer = engine.new_layer();

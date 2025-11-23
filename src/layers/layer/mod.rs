@@ -153,6 +153,72 @@ impl Layer {
     change_model!(clip_content, bool, RenderableFlags::NEEDS_PAINT);
     change_model!(clip_children, bool, RenderableFlags::NEEDS_PAINT);
 
+    /// Sets the anchor point while compensating the `position` so the layer stays in the
+    /// same place on screen. Returns the newly applied position.
+    pub fn set_anchor_point_preserving_position(&self, anchor_point: impl Into<Point>) -> Point {
+        let new_anchor = anchor_point.into();
+        let current_anchor = self.anchor_point();
+
+        if new_anchor.x == current_anchor.x && new_anchor.y == current_anchor.y {
+            return self.position();
+        }
+
+        let layout_size = {
+            let layout_tree = self.engine.layout_tree.read().unwrap();
+            let layout = layout_tree
+                .layout(self.layout_id)
+                .expect("layout is available for every layer");
+            layout.size
+        };
+
+        let scale = self.scale();
+        let rotation = self.rotation();
+
+        let mut linear = M44::scale(scale.x, scale.y, 1.0);
+        let rotate_x = M44::rotate(
+            V3 {
+                x: 1.0,
+                y: 0.0,
+                z: 0.0,
+            },
+            rotation.x,
+        );
+        let rotate_y = M44::rotate(
+            V3 {
+                x: 0.0,
+                y: 1.0,
+                z: 0.0,
+            },
+            rotation.y,
+        );
+        let rotate_z = M44::rotate(
+            V3 {
+                x: 0.0,
+                y: 0.0,
+                z: 1.0,
+            },
+            rotation.z,
+        );
+
+        linear = M44::concat(&linear, &rotate_x);
+        linear = M44::concat(&linear, &rotate_y);
+        linear = M44::concat(&linear, &rotate_z);
+
+        let mut new_position = self.position();
+        let delta_local = (
+            (new_anchor.x - current_anchor.x) * layout_size.width,
+            (new_anchor.y - current_anchor.y) * layout_size.height,
+        );
+        let delta = linear.map(delta_local.0, delta_local.1, 0.0, 0.0);
+        new_position.x += delta.x;
+        new_position.y += delta.y;
+
+        self.set_position(new_position, None);
+        self.set_anchor_point(new_anchor, None);
+
+        new_position
+    }
+
     pub fn change_size(&self, value: Size) -> AnimatedNodeChange {
         let flags = RenderableFlags::NEEDS_LAYOUT;
         let change: Arc<ModelChange<Size>> = Arc::new(ModelChange {
@@ -350,7 +416,7 @@ impl Layer {
             }
         })
     }
-    pub fn render_size(&self) -> Point {
+    pub fn render_size_transformed(&self) -> Point {
         self.engine.scene.with_arena(|arena| {
             let node = arena.get(self.id.into()).unwrap();
             let node = node.get();
@@ -359,6 +425,18 @@ impl Layer {
             Point {
                 x: rl.global_transformed_bounds.width(),
                 y: rl.global_transformed_bounds.height(),
+            }
+        })
+    }
+    pub fn render_size(&self) -> Point {
+        self.engine.scene.with_arena(|arena| {
+            let node = arena.get(self.id.into()).unwrap();
+            let node = node.get();
+            let render_layer = &node.render_layer;
+            let rl = render_layer;
+            Point {
+                x: rl.bounds.width(),
+                y: rl.bounds.height(),
             }
         })
     }
