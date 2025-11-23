@@ -131,6 +131,11 @@ impl BuildLayerTree for Layer {
         if let Some(pointer_events) = viewlayer_tree.pointer_events {
             scene_layer.set_pointer_events(pointer_events);
         }
+        if let Some(color_filter) = viewlayer_tree.color_filter.clone() {
+            scene_layer.set_color_filter(color_filter);
+        } else {
+            scene_layer.set_color_filter(None);
+        }
 
         // Handlers
         scene_layer.remove_all_pointer_handlers();

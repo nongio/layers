@@ -109,6 +109,8 @@ pub struct LayerTree {
     pub clip_content: Option<bool>,
     #[builder(setter(into), default)]
     pub clip_children: Option<bool>,
+    #[builder(setter(into), default)]
+    pub color_filter: Option<skia::ColorFilter>,
 }
 
 impl AsRef<LayerTree> for LayerTree {
@@ -123,9 +125,13 @@ impl LayerTreeBuilder {
         let key = key.into();
         LayerTreeBuilder::default().key(&key).clone()
     }
-    pub fn children(&mut self, children: Vec<impl RenderLayerTree + 'static>) -> &mut Self {
+    pub fn children<T: RenderLayerTree + 'static>(
+        &mut self,
+        children: Vec<impl Into<Option<T>>>,
+    ) -> &mut Self {
         let children = children
             .into_iter()
+            .filter_map(|child| child.into())
             .map(|child| {
                 let child: Arc<dyn RenderLayerTree> = Arc::new(child);
                 child
