@@ -1065,37 +1065,47 @@ impl Engine {
 
             // Phase 3: Process each depth level from root to leaves
             // Parents are processed before children so cumulative transforms are correct.
+            let mut parents_changed: std::collections::HashSet<indextree::NodeId> =
+                std::collections::HashSet::new();
             for (_depth, nodes_at_depth) in depth_groups.into_iter() {
                 // Update nodes at this depth in parallel
                 let nad: &Vec<_> = nodes_at_depth.as_ref();
-                let damages: Vec<_> = nad
+                let results: Vec<_> = nad
                     .iter()
                     .map(|node_id| {
-                        let parent_render_layer = self.scene.with_arena(|arena| {
-                            arena[*node_id]
-                                .parent()
-                                .and_then(|parent_id| arena.get(parent_id))
-                                .map(|parent_node| parent_node.get().render_layer().clone())
-                        });
+                        let (parent_render_layer, parent_changed) =
+                            self.scene.with_arena(|arena| {
+                                let parent_id = arena[*node_id].parent();
+                                let parent_layer = parent_id
+                                    .and_then(|pid| arena.get(pid))
+                                    .map(|parent_node| parent_node.get().render_layer().clone());
+                                let parent_changed = parent_id
+                                    .map(|pid| parents_changed.contains(&pid))
+                                    .unwrap_or(false);
+                                (parent_layer, parent_changed)
+                            });
 
-                        let damage = update_node_single(
+                        let result = update_node_single(
                             self,
                             &layout,
                             *node_id,
                             parent_render_layer.as_ref(),
-                            false,
+                            parent_changed,
                         );
-                        if !damage.is_empty() {
+                        if !result.damage.is_empty() {
                             self.mark_image_cached_ancestors_for_repaint(*node_id);
                         }
 
-                        damage
+                        (*node_id, result)
                     })
                     .collect();
 
                 // Phase 4: Accumulate child damages to parents (sequential for each depth)
-                for (_node_id, node_damage) in nodes_at_depth.iter().zip(damages.iter()) {
-                    total_damage.join(*node_damage);
+                for (node_id, result) in results.iter() {
+                    if result.propagate_to_children {
+                        parents_changed.insert(*node_id);
+                    }
+                    total_damage.join(result.damage);
                 }
             }
         }

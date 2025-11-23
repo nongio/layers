@@ -6,6 +6,13 @@ use crate::{
     layers::layer::render_layer::RenderLayer,
 };
 
+#[derive(Debug, Clone)]
+pub(crate) struct NodeUpdateResult {
+    pub damage: skia::Rect,
+    /// Whether this node's transform/opacity change should force children to recompute.
+    pub propagate_to_children: bool,
+}
+
 fn subtree_has_visible_drawables(arena: &Arena<SceneNode>, node_id: NodeId) -> bool {
     let mut stack = vec![node_id];
     while let Some(id) = stack.pop() {
@@ -33,7 +40,7 @@ pub(crate) fn update_node_single(
     node_id: NodeId,
     parent: Option<&RenderLayer>,
     parent_changed: bool,
-) -> skia::Rect {
+) -> NodeUpdateResult {
     let layer = engine.get_layer(&NodeRef(node_id)).unwrap();
     let node_layout = layout_tree.layout(layer.layout_id).unwrap();
 
@@ -112,6 +119,7 @@ pub(crate) fn update_node_single(
                     cumulative_transform,
                     context_opacity,
                     local_children_bounds,
+                    parent_changed,
                 ) || scene_node._debug_info.is_some();
 
                 if changed {
@@ -175,7 +183,10 @@ pub(crate) fn update_node_single(
         && !changed_render_layer
         && !visibility_changed
     {
-        return skia_safe::Rect::default();
+        return NodeUpdateResult {
+            damage: skia_safe::Rect::default(),
+            propagate_to_children: parent_changed,
+        };
     }
 
     // Trigger repaint if required and capture content damage
@@ -271,7 +282,12 @@ pub(crate) fn update_node_single(
         });
     }
 
-    total_damage
+    let propagate_to_children = parent_changed || geometry_changed_self || opacity_changed;
+
+    NodeUpdateResult {
+        damage: total_damage,
+        propagate_to_children,
+    }
 }
 
 #[cfg(test)]
@@ -307,11 +323,11 @@ mod tests {
 
         let layout = engine.layout_tree.read().unwrap();
         let node_id: indextree::NodeId = layer.id.0;
-        let damage = update_node_single(&engine, &layout, node_id, None, false);
+        let result = update_node_single(&engine, &layout, node_id, None, false);
 
         // Expect union of old (100,100,100x100) and new (200,100,100x100) bounds => (100,100,200x100)
         assert_eq!(
-            damage,
+            result.damage,
             skia_safe::Rect::from_xywh(100.0, 100.0, 200.0, 100.0)
         );
     }
@@ -340,8 +356,11 @@ mod tests {
         apply_changes_and_update_layout(&engine);
         let layout = engine.layout_tree.read().unwrap();
         let node_id: indextree::NodeId = layer.id.0;
-        let damage = update_node_single(&engine, &layout, node_id, None, false);
-        assert_eq!(damage, skia_safe::Rect::from_xywh(100.0, 0.0, 100.0, 100.0));
+        let result = update_node_single(&engine, &layout, node_id, None, false);
+        assert_eq!(
+            result.damage,
+            skia_safe::Rect::from_xywh(100.0, 0.0, 100.0, 100.0)
+        );
 
         // Fade in: 0.0 -> 0.1 damages new bounds
         engine.clear_damage();
@@ -349,8 +368,11 @@ mod tests {
         layer.set_opacity(0.1, None);
         apply_changes_and_update_layout(&engine);
         let layout = engine.layout_tree.read().unwrap();
-        let damage = update_node_single(&engine, &layout, node_id, None, false);
-        assert_eq!(damage, skia_safe::Rect::from_xywh(100.0, 0.0, 100.0, 100.0));
+        let result = update_node_single(&engine, &layout, node_id, None, false);
+        assert_eq!(
+            result.damage,
+            skia_safe::Rect::from_xywh(100.0, 0.0, 100.0, 100.0)
+        );
 
         // Opacity change while visible: 0.1 -> 0.5 damages current bounds
         engine.clear_damage();
@@ -358,8 +380,11 @@ mod tests {
         layer.set_opacity(0.5, None);
         apply_changes_and_update_layout(&engine);
         let layout = engine.layout_tree.read().unwrap();
-        let damage = update_node_single(&engine, &layout, node_id, None, false);
-        assert_eq!(damage, skia_safe::Rect::from_xywh(100.0, 0.0, 100.0, 100.0));
+        let result = update_node_single(&engine, &layout, node_id, None, false);
+        assert_eq!(
+            result.damage,
+            skia_safe::Rect::from_xywh(100.0, 0.0, 100.0, 100.0)
+        );
     }
 
     #[test]
@@ -383,10 +408,13 @@ mod tests {
         apply_changes_and_update_layout(&engine);
         let layout = engine.layout_tree.read().unwrap();
         let node_id: indextree::NodeId = layer.id.0;
-        let damage = update_node_single(&engine, &layout, node_id, None, false);
+        let result = update_node_single(&engine, &layout, node_id, None, false);
 
         // Expect content damage mapped by the node transform => translated by (100,100)
-        assert_eq!(damage, skia_safe::Rect::from_xywh(100.0, 100.0, 10.0, 10.0));
+        assert_eq!(
+            result.damage,
+            skia_safe::Rect::from_xywh(100.0, 100.0, 10.0, 10.0)
+        );
     }
 
     #[test]
@@ -411,9 +439,40 @@ mod tests {
         // No property changes are applied here
         let layout = engine.layout_tree.read().unwrap();
         let node_id: indextree::NodeId = layer.id.0;
-        let damage = update_node_single(&engine, &layout, node_id, None, false);
+        let result = update_node_single(&engine, &layout, node_id, None, false);
 
         // Expect no damage when nothing changed
-        assert_eq!(damage, skia_safe::Rect::from_xywh(0.0, 0.0, 0.0, 0.0));
+        assert_eq!(
+            result.damage,
+            skia_safe::Rect::from_xywh(0.0, 0.0, 0.0, 0.0)
+        );
+    }
+
+    #[test]
+    fn child_bounds_follow_parent_transform() {
+        let engine = Engine::create(1000.0, 1000.0);
+
+        let parent = engine.new_layer();
+        parent.set_position((10.0, 10.0), None);
+
+        let child = engine.new_layer();
+        child.set_position((5.0, 5.0), None);
+
+        engine.add_layer(&parent);
+        engine.append_layer(&child.id, Some(parent.id));
+
+        // Prime initial layout/state
+        engine.update(0.016);
+
+        // Move the parent; child global bounds should shift by the same delta.
+        parent.set_position((50.0, 0.0), None);
+        engine.update(0.016);
+
+        let child_bounds = child.render_bounds_transformed();
+
+        assert_eq!(
+            child_bounds,
+            skia_safe::Rect::from_xywh(55.0, 5.0, 0.0, 0.0)
+        );
     }
 }
