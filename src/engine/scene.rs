@@ -66,6 +66,10 @@ impl Scene {
     /// The new parent node is marked as needing layout (NEEDS_LAYOUT).
     pub(crate) fn append_node_to(&self, child: NodeRef, parent: NodeRef) {
         self.with_arena_mut(|nodes| {
+            if parent.is_removed(nodes) {
+                //     //
+                return;
+            }
             let child_id = *child;
             child_id.detach(nodes);
             parent.append(child_id, nodes);

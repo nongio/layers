@@ -705,6 +705,9 @@ impl Engine {
     pub fn mark_for_delete(&self, layer: NodeRef) {
         self.scene.with_arena_mut(|arena| {
             if let Some(node) = arena.get_mut(layer.into()) {
+                if node.is_removed() {
+                    return;
+                }
                 let node = node.get_mut();
                 node.mark_for_deletion();
             }

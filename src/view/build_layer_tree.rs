@@ -175,15 +175,19 @@ impl BuildLayerTree for Layer {
             let ancestors: Vec<NodeId> = layer_id.0.ancestors(arena).collect();
             {
                 let node = arena.get_mut(layer_id.0).unwrap();
-                let scene_node = node.get_mut();
-                scene_node.set_needs_layout(true);
-                scene_node.increase_frame();
+                if !node.is_removed() {
+                    let scene_node = node.get_mut();
+                    scene_node.set_needs_layout(true);
+                    scene_node.increase_frame();
+                }
             }
             for ancestor in ancestors {
                 let node = arena.get_mut(ancestor).unwrap();
-                let node = node.get_mut();
-                node.set_needs_layout(true);
-                node.increase_frame();
+                if !node.is_removed() {
+                    let node = node.get_mut();
+                    node.set_needs_layout(true);
+                    node.increase_frame();
+                }
             }
         });
 

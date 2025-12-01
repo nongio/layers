@@ -283,7 +283,11 @@ pub fn render_node_tree(
     if (scene_node.is_none()) {
         return;
     }
-    let scene_node = scene_node.unwrap().get();
+    let node = scene_node.unwrap();
+    if (node.is_removed()) {
+        return;
+    }
+    let scene_node = node.get();
     if scene_node.hidden() {
         return;
     }
