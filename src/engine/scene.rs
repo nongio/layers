@@ -186,10 +186,27 @@ impl Scene {
         f(&arena)
     }
 
+    /// Try to run `f` with a read guard; returns `None` if the lock is contended.
+    pub fn try_with_arena<T: Send + Sync>(
+        &self,
+        f: impl FnOnce(&Arena<SceneNode>) -> T,
+    ) -> Option<T> {
+        let arena_guard = self.nodes.data();
+        let arena = arena_guard.try_read().ok()?;
+        Some(f(&arena))
+    }
+
     pub(crate) fn with_arena_mut<T>(&self, f: impl FnOnce(&mut Arena<SceneNode>) -> T) -> T {
         let arena_guard = self.nodes.data();
         let mut arena = arena_guard.write().unwrap();
         f(&mut arena)
+    }
+
+    /// Try to run `f` with a write guard; returns `None` if the lock is contended.
+    pub fn try_with_arena_mut<T>(&self, f: impl FnOnce(&mut Arena<SceneNode>) -> T) -> Option<T> {
+        let arena_guard = self.nodes.data();
+        let mut arena = arena_guard.try_write().ok()?;
+        Some(f(&mut arena))
     }
 
     pub fn with_renderable_arena<T: Send + Sync>(
@@ -199,11 +216,35 @@ impl Scene {
         self.renderables.with_data(|arena| f(arena))
     }
 
+    /// Try to run `f` with a read guard on the renderables arena.
+    pub fn try_with_renderable_arena<T: Send + Sync>(
+        &self,
+        f: impl FnOnce(&FlatStorageData<SceneNodeRenderable>) -> T,
+    ) -> Option<T> {
+        self.renderables
+            .data()
+            .try_read()
+            .ok()
+            .map(|arena| f(&arena))
+    }
+
     pub(crate) fn with_renderable_arena_mut<T>(
         &self,
         f: impl FnOnce(&mut FlatStorageData<SceneNodeRenderable>) -> T,
     ) -> T {
         self.renderables.with_data_mut(|arena| f(arena))
+    }
+
+    /// Try to run `f` with a write guard on the renderables arena.
+    pub fn try_with_renderable_arena_mut<T>(
+        &self,
+        f: impl FnOnce(&mut FlatStorageData<SceneNodeRenderable>) -> T,
+    ) -> Option<T> {
+        self.renderables
+            .data()
+            .try_write()
+            .ok()
+            .map(|mut arena| f(&mut arena))
     }
 
     /// Returns a serializable snapshot of the scene, including the root size and node hierarchy.
