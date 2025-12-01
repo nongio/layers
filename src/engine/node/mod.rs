@@ -209,7 +209,9 @@ impl SceneNode {
         local_children_bounds: skia_safe::Rect,
         force_update: bool,
     ) -> bool {
-        if self.hidden() {
+        let is_hidden = self.hidden();
+        self.render_layer.visible = !is_hidden;
+        if is_hidden {
             return false;
         }
         let current_width = self.render_layer.size.width;
@@ -264,6 +266,7 @@ impl SceneNode {
                 || current_x != self.render_layer.local_transformed_bounds.x()
                 || current_y != self.render_layer.local_transformed_bounds.y();
         }
+        self.render_layer.visible = self.render_layer.has_visible_drawables();
         changed
     }
     pub fn set_needs_repaint(&mut self, need_repaint: bool) {

@@ -63,6 +63,8 @@ pub struct RenderLayer {
     pub clip_children: bool,
     /// Are the pointer events enabled for the layer
     pub pointer_events: bool,
+    /// Whether the layer should be rendered (not hidden and has drawable content)
+    pub visible: bool,
     pub content_draw_func: Option<ContentDrawFunctionInternal>,
     pub content: Option<Picture>,
     pub image_filter: Option<ImageFilter>,
@@ -350,7 +352,7 @@ impl RenderLayer {
         let clip_content = model.clip_content.value();
         let clip_children = model.clip_children.value();
 
-        Self {
+        let mut render_layer = Self {
             key,
             size,
             background_color,
@@ -386,7 +388,11 @@ impl RenderLayer {
             pointer_events: model
                 .pointer_events
                 .load(std::sync::atomic::Ordering::Relaxed),
-        }
+            visible: true,
+        };
+
+        render_layer.visible = render_layer.has_visible_drawables();
+        render_layer
     }
 }
 
@@ -430,6 +436,7 @@ impl Default for RenderLayer {
             image_filter_bounds: None,
             color_filter: None,
             pointer_events: false,
+            visible: false,
         }
     }
 }
@@ -439,7 +446,7 @@ impl Serialize for RenderLayer {
     where
         S: serde::Serializer,
     {
-        let mut seq = serializer.serialize_struct("RenderLayer", 15)?;
+        let mut seq = serializer.serialize_struct("RenderLayer", 17)?;
         // let mut seq = serializer.serialize_seq(Some(15))?;
         // seq.serialize_element(&Rectangle::from(self.rbounds))?;
         // seq.serialize_element(&self.transformed_rbounds.into())?;
@@ -465,6 +472,7 @@ impl Serialize for RenderLayer {
         seq.serialize_field("shadow_spread", &self.shadow_spread)?;
         seq.serialize_field("blend_mode", &self.blend_mode)?;
         seq.serialize_field("opacity", &self.opacity)?;
+        seq.serialize_field("visible", &self.visible)?;
         // seq.serialize_element(&self.content)?;
         // seq.serialize_element(&self.transform)?;
         seq.end()
