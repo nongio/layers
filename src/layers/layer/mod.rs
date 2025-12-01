@@ -533,6 +533,10 @@ impl Layer {
         effect.init(self);
         let effect_ref = effect.clone();
         let value_id = self.image_filter_progress_value_id();
+
+        // Clear previous handlers so we don’t accumulate duplicates
+        self.engine.clear_value_handlers(value_id);
+
         self.engine.on_update_value(
             value_id,
             move |l: &Layer, _p| {
@@ -551,12 +555,21 @@ impl Layer {
         *self.effect.write().unwrap() = Some(effect.clone());
     }
     pub fn remove_effect(&self) {
+        let value_id = self.image_filter_progress_value_id();
+
+        // Clear previous handlers so we don’t accumulate duplicates
+        self.engine.clear_value_handlers(value_id);
         let mut effect = self.effect.write().unwrap();
+
         if let Some(effect) = &*effect {
             effect.finish(self);
         }
 
         *effect = None;
+    }
+    pub fn clear_on_change_size_handlers(&self) {
+        let size_id = self.model.size.id;
+        self.engine.clear_value_handlers(size_id);
     }
     pub fn on_change_size<F: Into<TransactionCallback>>(&self, f: F, once: bool) {
         let size_id = self.model.size.id;
@@ -615,12 +628,25 @@ impl Layer {
         let layer_id = self.id();
         let draw_function = move |c: &skia::Canvas, w: f32, h: f32| {
             let scene = engine_ref.scene.clone();
-            scene.with_arena(|arena| {
-                scene.with_renderable_arena(|renderable_arena| {
-                    render_node_tree(layer_id, arena, renderable_arena, c, 1.0);
-                });
-            });
-            skia::Rect::from_xywh(0.0, 0.0, w, h)
+            let damage = scene
+                .try_with_arena(|arena| {
+                    scene.with_renderable_arena(|renderable_arena| {
+                        render_node_tree(layer_id, arena, renderable_arena, c, 1.0);
+                    });
+                    // the damage of a mirrored layer is the bounds with children
+                    if let Some(scene_node) = arena.get(layer_id.0) {
+                        if scene_node.is_removed() {
+                            return skia::Rect::from_xywh(0.0, 0.0, w, h);
+                        }
+                        let scene_node = scene_node.get();
+                        let render_layer = &scene_node.render_layer;
+                        let damage = render_layer.bounds_with_children;
+                        return damage;
+                    }
+                    skia::Rect::from_xywh(0.0, 0.0, w, h)
+                })
+                .unwrap_or(skia::Rect::from_xywh(0.0, 0.0, w, h));
+            damage
         };
         ContentDrawFunction::from(draw_function)
     }

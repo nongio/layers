@@ -703,6 +703,7 @@ impl Engine {
     }
 
     pub fn mark_for_delete(&self, layer: NodeRef) {
+        self.cleanup_pointer_handlers_for_subtree(layer);
         self.scene.with_arena_mut(|arena| {
             if let Some(node) = arena.get_mut(layer.into()) {
                 if node.is_removed() {
@@ -719,6 +720,9 @@ impl Engine {
     pub(crate) fn scene_remove_layer<'a>(&self, layer: impl Into<&'a NodeRef>) {
         // Avoid deadlocks by not holding scene + layout/layers locks simultaneously.
         let layer_id = *layer.into();
+
+        // Cleanup pointer handlers before removal to avoid leaks.
+        self.cleanup_pointer_handlers_for_subtree(layer_id);
 
         // Snapshot the scene parent id (read-only scene access)
         let parent_id = self.scene.with_arena(|arena| {
@@ -1208,6 +1212,53 @@ impl Engine {
         });
         result
     }
+    /// Prints the current transaction handlers, grouped by transaction id, to help debug leaks.
+    pub fn debug_print_transaction_handlers(&self) {
+        self.transaction_handlers.with_data(|handlers| {
+            println!("Transaction handlers registered: {}", handlers.len());
+            for (transaction_id, callbacks) in handlers.iter() {
+                println!(
+                    "  id={}: start={}, update={}, finish={}",
+                    transaction_id,
+                    callbacks.on_start.len(),
+                    callbacks.on_update.len(),
+                    callbacks.on_finish.len()
+                );
+            }
+        });
+    }
+    /// Prints the current value handlers, grouped by value id, to help debug leaks.
+    pub fn debug_print_value_handlers(&self) {
+        self.value_handlers.with_data(|handlers| {
+            println!("Value handlers registered: {}", handlers.len());
+            for (value_id, callbacks) in handlers.iter() {
+                println!(
+                    "  id={}: start={}, update={}, finish={}",
+                    value_id,
+                    callbacks.on_start.len(),
+                    callbacks.on_update.len(),
+                    callbacks.on_finish.len()
+                );
+            }
+        });
+    }
+    /// Prints the current pointer handlers, grouped by node id, to help debug leaks.
+    pub fn debug_print_pointer_handlers(&self) {
+        self.pointer_handlers.with_data(|handlers| {
+            println!("Pointer handlers registered: {}", handlers.len());
+            for (node_id, callbacks) in handlers.iter() {
+                println!(
+                    "  id={}: move={}, in={}, out={}, down={}, up={}",
+                    node_id,
+                    callbacks.on_move.len(),
+                    callbacks.on_in.len(),
+                    callbacks.on_out.len(),
+                    callbacks.on_down.len(),
+                    callbacks.on_up.len()
+                );
+            }
+        });
+    }
     #[allow(clippy::unwrap_or_default)]
     fn add_transaction_handler(
         &self,
@@ -1229,6 +1280,9 @@ impl Engine {
         self.transaction_handlers.insert_with_id(ch, transaction.id);
     }
 
+    pub fn clear_value_handlers(&self, value_id: usize) {
+        self.value_handlers.remove_at(&value_id);
+    }
     #[allow(clippy::unwrap_or_default)]
     fn add_value_handler(
         &self,
@@ -1377,6 +1431,24 @@ impl Engine {
                 .insert_with_id(pointer_callback, node_id);
         }
     }
+    /// Remove pointer handlers for the provided node and its descendants.
+    fn cleanup_pointer_handlers_for_subtree(&self, layer: NodeRef) {
+        let pointer_ids_to_remove: Vec<FlatStorageId> = self.scene.with_arena(|arena| {
+            if layer.0.is_removed(arena) {
+                return Vec::new();
+            }
+            let mut ids: Vec<FlatStorageId> = vec![layer.0.into()];
+            ids.extend(layer.0.descendants(arena).map(|id| {
+                let id: usize = id.into();
+                id
+            }));
+            ids
+        });
+
+        for pid in pointer_ids_to_remove {
+            self.pointer_handlers.remove_at(&pid);
+        }
+    }
     fn bubble_up_event(&self, node_ref: NodeRef, event_type: &PointerEventType) {
         let ancestors: Vec<_> = self.scene.with_arena(|arena| {
             let node_id = node_ref.0;
@@ -1479,11 +1551,13 @@ impl Engine {
         let layer_id = layer.id;
         let draw_function = move |c: &skia::Canvas, w: f32, h: f32| {
             let scene = engine_ref.scene.clone();
-            scene.with_arena(|arena| {
-                scene.with_renderable_arena(|renderable_arena| {
-                    render_node_tree(layer_id, arena, renderable_arena, c, 1.0);
-                });
-            });
+            let nodes = scene.nodes.data();
+            let renderables = scene.renderables.data();
+
+            // Try-lock to avoid blocking while a writer holds (or waits on) the arenas.
+            if let (Ok(nodes), Ok(renderables)) = (nodes.try_read(), renderables.try_read()) {
+                render_node_tree(layer_id, &nodes, &renderables, c, 1.0);
+            }
             skia::Rect::from_xywh(0.0, 0.0, w, h)
         };
         ContentDrawFunction::from(draw_function)
