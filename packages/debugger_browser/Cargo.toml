@@ -1,10 +1,10 @@
 [package]
-name = "layers_debug"
-version = "0.1.0"
-description = "Layers portable debugger browser"
+name = "layers_inspector"
+version = "1.0.0"
+description = "Layers portable inspector browser"
 license = ""
 repository = ""
-default-run = "layers_debug"
+default-run = "layers_inspector"
 edition = "2021"
 rust-version = "1.60"
 

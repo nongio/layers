@@ -4,8 +4,8 @@
     "distDir": "http://localhost:8000/client"
   },
   "package": {
-    "productName": "layers_debug",
-    "version": "0.1.0"
+    "productName": "layers_inspector",
+    "version": "1.0.0"
   },
   "tauri": {
     "allowlist": {
@@ -25,8 +25,8 @@
       "icon": [
         "icons/icon.png"
       ],
-      "identifier": "com.layers.debugger",
-      "longDescription": "Layers Debugger",
+      "identifier": "com.layers.inspector",
+      "longDescription": "Layers Inspector",
       "macOS": {
         "entitlements": null,
         "exceptionDomain": "",
@@ -55,7 +55,7 @@
         "fullscreen": false,
         "height": 600,
         "resizable": true,
-        "title": "Layers Debugger",
+        "title": "Layers Inspector",
         "width": 800
       }
     ]

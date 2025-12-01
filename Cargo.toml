@@ -74,7 +74,7 @@ winit = "0.28"
 image-compare = "0.4.1"
 image = { version = "0.25", default-features = false, features = ["png"] }
 
-[dependencies.layers_debug]
+[dependencies.layers_inspector]
 path = "packages/debugger_browser"
 optional = true
 
@@ -88,7 +88,7 @@ export-taffy = []
 profile-with-puffin = ["profiling/profile-with-puffin", "puffin_http"]
 default = ["export-skia", "export-taffy"]
 debugger = ["layers-debug-server"]
-debug_cmd = ["layers_debug"]
+debug_cmd = ["layers_inspector"]
 layer_state = []
 
 [[bench]]

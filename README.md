@@ -24,6 +24,7 @@ The api is getting documented, be aware that is also still in evolution.
 [documentation](https://nongio.github.io/layers/lay_rs/)
 
 - Engine update pipeline & damage tracking: see `docs/` for a deep dive into frame stages and redraw rules.
+- Layers Inspector: a browser-based debugger that shows the live scene graph with search and highlights (`docs/layers_inspector.md`).
 
 
 ## Rendering
