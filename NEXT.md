@@ -4,7 +4,7 @@ All the upcoming changes for the next release are listed here.
 (See CHANGELOG.md for released versions)
 
 ## [0.6.1] usable
-- [ ] [fix] damage tracking for mirrored layers
+- [x] [fix] damage tracking for mirrored layers
 - [ ] review update logic
 - [ ] [fix] examples
 
