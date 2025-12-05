@@ -6,6 +6,8 @@ pub(crate) use self::model::ModelLayer;
 use model::ContentDrawFunctionInternal;
 use render_layer::RenderLayer;
 use skia::{ColorFilter, Contains, ImageFilter};
+use std::cell::RefCell;
+use std::collections::HashSet;
 use std::{fmt, sync::Arc};
 use std::{
     hash::{Hash, Hasher},
@@ -27,6 +29,12 @@ use crate::{
 
 #[cfg(feature = "layer_state")]
 use state::LayerDataProps;
+
+// Thread-local set to track layers currently being rendered via as_content
+// to prevent infinite recursion when a follower is a descendant of its leader
+thread_local! {
+    static RENDERING_LAYERS: RefCell<HashSet<NodeRef>> = RefCell::new(HashSet::new());
+}
 
 #[allow(private_interfaces)]
 #[repr(C)]
@@ -111,6 +119,8 @@ impl Layer {
                 }
             }
         });
+        // Invalidate hit test node list since visibility affects hit-testing
+        self.engine.invalidate_hit_test_node_list();
     }
     pub fn hidden(&self) -> bool {
         self.engine.scene.with_arena(|a| {
@@ -123,6 +133,8 @@ impl Layer {
         self.model
             .pointer_events
             .store(pointer_events, std::sync::atomic::Ordering::Relaxed);
+        // Invalidate hit test node list since pointer_events affects hit-testing
+        self.engine.invalidate_hit_test_node_list();
     }
     pub fn pointer_events(&self) -> bool {
         self.model
@@ -627,6 +639,19 @@ impl Layer {
         let engine_ref = self.engine.clone();
         let layer_id = self.id();
         let draw_function = move |c: &skia::Canvas, w: f32, h: f32| {
+            // Check if this layer is already being rendered to prevent infinite recursion
+            // This can happen when a follower is a descendant of its leader
+            let already_rendering = RENDERING_LAYERS.with(|set| set.borrow().contains(&layer_id));
+            if already_rendering {
+                // Return empty damage to break the recursion
+                return skia::Rect::from_xywh(0.0, 0.0, w, h);
+            }
+
+            // Mark this layer as being rendered
+            RENDERING_LAYERS.with(|set| {
+                set.borrow_mut().insert(layer_id);
+            });
+
             let scene = engine_ref.scene.clone();
             let damage = scene
                 .try_with_arena(|arena| {
@@ -646,6 +671,12 @@ impl Layer {
                     skia::Rect::from_xywh(0.0, 0.0, w, h)
                 })
                 .unwrap_or(skia::Rect::from_xywh(0.0, 0.0, w, h));
+
+            // Unmark this layer
+            RENDERING_LAYERS.with(|set| {
+                set.borrow_mut().remove(&layer_id);
+            });
+
             damage
         };
         ContentDrawFunction::from(draw_function)
