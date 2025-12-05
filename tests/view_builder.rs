@@ -242,6 +242,91 @@ fn layer_tree_builder_children_recover_from_zero_opacity_parent() {
     assert!(child.render_layer().premultiplied_opacity > 0.0);
 }
 
+#[test]
+fn layer_tree_replicate_node() {
+    let engine = Engine::create(1000.0, 1000.0);
+
+    // Create a root layer first so source_layer and replica_holder are siblings
+    let root = engine.new_layer();
+    root.set_size(Size::points(1000.0, 1000.0), None);
+    engine.add_layer(&root);
+
+    // Create a source layer to replicate
+    let source_layer = engine.new_layer();
+    source_layer.set_size(Size::points(100.0, 100.0), None);
+    source_layer.set_background_color(
+        PaintColor::Solid {
+            color: Color::new_rgba255(255, 0, 0, 255),
+        },
+        None,
+    );
+    root.add_sublayer(&source_layer);
+
+    // Create a layer to hold the replicated content
+    let replica_holder = engine.new_layer();
+    replica_holder.set_size(Size::points(200.0, 200.0), None);
+    root.add_sublayer(&replica_holder);
+
+    // Build a layer tree that replicates the source layer
+    // This sets the content_draw_func on replica_holder to render source_layer
+    let replicate_tree = LayerTreeBuilder::default()
+        .key("replica")
+        .size((Size::points(100.0, 100.0), None))
+        .replicate_node(source_layer.id())
+        .build()
+        .unwrap();
+
+    replica_holder.build_layer_tree(&replicate_tree);
+
+    // Update the engine - this should not cause a stack overflow
+    engine.update(0.016);
+    engine.update(0.016);
+
+    // The test passes if we get here without a stack overflow
+    assert!(true);
+}
+
+#[test]
+fn layer_tree_replicate_node_descendant_follower() {
+    // This tests the case where the follower (replica) is a descendant of the leader (source)
+    // which previously caused infinite recursion
+    let engine = Engine::create(1000.0, 1000.0);
+
+    // Create a source layer - this will be the root AND the leader
+    let source_layer = engine.new_layer();
+    source_layer.set_size(Size::points(100.0, 100.0), None);
+    source_layer.set_background_color(
+        PaintColor::Solid {
+            color: Color::new_rgba255(255, 0, 0, 255),
+        },
+        None,
+    );
+    engine.add_layer(&source_layer);
+
+    // Create a replica layer as a CHILD of source_layer
+    // This creates the circular dependency: rendering source_layer renders replica,
+    // and replica's content_draw_func tries to render source_layer again
+    let replica = engine.new_layer();
+    replica.set_size(Size::points(50.0, 50.0), None);
+    source_layer.add_sublayer(&replica);
+
+    // Set up the replica to mirror the source
+    let replicate_tree = LayerTreeBuilder::default()
+        .key("replica")
+        .replicate_node(source_layer.id())
+        .build()
+        .unwrap();
+
+    replica.build_layer_tree(&replicate_tree);
+
+    // This should not cause a stack overflow - the recursion prevention should kick in
+    engine.update(0.016);
+    engine.update(0.016);
+
+    // The test passes if we get here without a stack overflow
+    assert!(true);
+}
+
 // #[test]
 // pub fn layer_tree_from_css() {
 //     // let engine = Engine::create(1000.0, 1000.0);

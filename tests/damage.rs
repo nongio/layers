@@ -666,4 +666,64 @@ mod tests {
             skia_safe::Rect::from_xywh(50.0, 50.0, 100.0, 100.0)
         );
     }
+
+    /// Tests that when a follower layer (B) replicates a leader layer (A) using as_content(),
+    /// and the follower has its own transform (position and scale),
+    /// damage from the leader is correctly transformed to the follower's
+    /// global coordinates.
+    #[test]
+    pub fn damage_follower_as_content_with_scale_and_translate() {
+        let engine = Engine::create(1000.0, 1000.0);
+
+        // Leader layer A: at position (0,0), size 100x100
+        let leader = engine.new_layer();
+        leader.set_position((0.0, 0.0), None);
+        leader.set_size(Size::points(100.0, 100.0), None);
+        // Add a draw function to the leader - just draws a background
+        leader.set_draw_content(
+            |_c: &skia_safe::Canvas, _w: f32, _h: f32| -> skia_safe::Rect {
+                skia_safe::Rect::from_xywh(0.0, 0.0, 100.0, 100.0)
+            },
+        );
+        engine.add_layer(&leader);
+
+        // Initial update to establish leader's state
+        engine.update(0.016);
+
+        // Follower layer B: manually uses as_content() to replicate leader
+        // Position (200,200) with scale 0.5x
+        let follower = engine.new_layer();
+        follower.set_position((200.0, 200.0), None);
+        follower.set_size(Size::points(100.0, 100.0), None);
+        follower.set_scale((0.5, 0.5), None);
+
+        // Use as_content() - this is what LayerTreeBuilder does with replicate_node
+        let leader_content = leader.as_content();
+        follower.set_draw_content(leader_content);
+
+        engine.add_layer(&follower);
+
+        // This update should NOT cause stack overflow anymore
+        engine.update(0.016);
+        engine.clear_damage();
+
+        // Change the leader - should damage both leader and follower
+        leader.set_draw_content(
+            |_c: &skia_safe::Canvas, _w: f32, _h: f32| -> skia_safe::Rect {
+                skia_safe::Rect::from_xywh(0.0, 0.0, 100.0, 100.0)
+            },
+        );
+        engine.update(0.016);
+
+        let scene_damage = engine.damage();
+
+        // Leader damage: (0, 0) to (100, 100)
+        // Follower damage: position (200, 200), size 100x100 scaled 0.5x = (200, 200) to (250, 250)
+        // Combined damage should be: (0, 0) to (250, 250)
+        assert_eq!(
+            scene_damage,
+            skia_safe::Rect::from_xywh(0.0, 0.0, 250.0, 250.0),
+            "Expected combined damage from leader (0,0)-(100,100) and follower (200,200)-(250,250)"
+        );
+    }
 }

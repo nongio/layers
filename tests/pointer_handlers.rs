@@ -225,3 +225,71 @@ pub fn pointer_in_out_nested_parent() {
         assert_eq!(*called, 3);
     }
 }
+
+/// When a parent is hidden, its children should not receive pointer events
+/// even if the child itself is not hidden
+#[test]
+pub fn pointer_hidden_parent_excludes_children() {
+    let engine = Engine::create(1000.0, 1000.0);
+
+    // Create parent layer
+    let parent = engine.new_layer();
+    parent.set_size(Size::points(400.0, 400.0), None);
+    parent.set_position((0.0, 0.0), None);
+    engine.add_layer(&parent);
+
+    // Create child layer inside the parent
+    let child = engine.new_layer();
+    child.set_size(Size::points(100.0, 100.0), None);
+    child.set_position((50.0, 50.0), None);
+    engine.append_layer(&child, parent.id);
+
+    engine.update(0.016);
+
+    let called = Arc::new(RwLock::new(0));
+    let c = called.clone();
+
+    child.add_on_pointer_move(move |_: &Layer, _, _| {
+        let mut c = c.write().unwrap();
+        *c += 1;
+        println!("child pointer move!!");
+    });
+
+    // First verify the child receives events when parent is visible
+    let root_id = engine.scene_root().unwrap();
+    engine.pointer_move(&(75.0, 75.0).into(), root_id.0);
+    {
+        let called = called.read().unwrap();
+        assert_eq!(
+            *called, 1,
+            "child should receive event when parent is visible"
+        );
+    }
+
+    // Now hide the parent
+    parent.set_hidden(true);
+    engine.update(0.016);
+
+    // Pointer move to the same location should NOT trigger the child's handler
+    engine.pointer_move(&(75.0, 75.0).into(), root_id.0);
+    {
+        let called = called.read().unwrap();
+        assert_eq!(
+            *called, 1,
+            "child should NOT receive event when parent is hidden"
+        );
+    }
+
+    // Unhide the parent and verify child receives events again
+    parent.set_hidden(false);
+    engine.update(0.016);
+
+    engine.pointer_move(&(75.0, 75.0).into(), root_id.0);
+    {
+        let called = called.read().unwrap();
+        assert_eq!(
+            *called, 2,
+            "child should receive event after parent is unhidden"
+        );
+    }
+}
