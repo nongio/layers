@@ -53,7 +53,7 @@ use std::{
     hash::Hash,
     ops::Deref,
     sync::{
-        atomic::{AtomicUsize, Ordering},
+        atomic::{AtomicBool, AtomicUsize, Ordering},
         Arc, RwLock,
     },
 };
@@ -298,6 +298,14 @@ pub struct Engine {
     /// Press, Release and CursorIn, CursorOut events are triggered
     /// based on the current_hover_node
     current_hover_node: RwLock<Option<NodeRef>>,
+
+    /// Cached list of nodes eligible for pointer hit-testing.
+    /// Built by traversing from root, skipping hidden subtrees,
+    /// and collecting nodes with pointer_events enabled.
+    hit_test_node_list: RwLock<Vec<TreeStorageId>>,
+    /// Flag indicating the hit_test_node_list cache needs rebuild.
+    /// Set when visibility or tree structure changes.
+    hit_test_node_list_dirty: AtomicBool,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -477,6 +485,8 @@ impl Engine {
             pointer_handlers: FlatStorage::new(),
             pointer_position: RwLock::new(skia::Point::default()),
             current_hover_node: RwLock::new(None),
+            hit_test_node_list: RwLock::new(Vec::new()),
+            hit_test_node_list_dirty: AtomicBool::new(true), // Start dirty so first update populates cache
         }
     }
 
@@ -625,6 +635,8 @@ impl Engine {
                 self.scene.append_node_to(layer.id, new_parent);
                 self.layout_append_layer(&layer, new_parent);
             }
+            // Invalidate hit test node list since tree structure changed
+            self.invalidate_hit_test_node_list();
         }
     }
 
@@ -658,6 +670,8 @@ impl Engine {
             self.scene.prepend_node_to(layer_id, new_parent);
             self.layout_prepend_layer(&layer, new_parent);
         }
+        // Invalidate hit test node list since tree structure changed
+        self.invalidate_hit_test_node_list();
     }
 
     pub fn add_layer_to_positioned(&self, layer: impl Into<Layer>, parent: Option<NodeRef>) {
@@ -781,6 +795,8 @@ impl Engine {
                 }
             }
         });
+        // Invalidate hit test node list since tree structure changed
+        self.invalidate_hit_test_node_list();
     }
     pub fn scene(&self) -> Arc<Scene> {
         self.scene.clone()
@@ -1115,9 +1131,54 @@ impl Engine {
                     total_damage.join(result.damage);
                 }
             }
+
+            // Phase 5: Rebuild hit test node list if dirty
+            if self.hit_test_node_list_dirty.load(Ordering::Relaxed) {
+                self.rebuild_hit_test_node_list(*root_id);
+            }
         }
 
         total_damage
+    }
+
+    /// Rebuild the hit test node list by traversing from root,
+    /// skipping hidden subtrees, and collecting nodes with pointer_events enabled.
+    fn rebuild_hit_test_node_list(&self, root_id: TreeStorageId) {
+        let nodes = self.scene.with_arena(|arena| {
+            let mut result = Vec::new();
+            Self::collect_hit_test_nodes(root_id, arena, &mut result);
+            result
+        });
+        *self.hit_test_node_list.write().unwrap() = nodes;
+        self.hit_test_node_list_dirty
+            .store(false, Ordering::Relaxed);
+    }
+
+    /// Recursively collect hit-testable node IDs, skipping entire hidden subtrees.
+    fn collect_hit_test_nodes(
+        node_id: TreeStorageId,
+        arena: &indextree::Arena<SceneNode>,
+        result: &mut Vec<TreeStorageId>,
+    ) {
+        let Some(node) = arena.get(node_id) else {
+            return;
+        };
+        let scene_node = node.get();
+
+        // Skip entire subtree if this node is hidden
+        if scene_node.hidden() {
+            return;
+        }
+
+        // Add this node if it has pointer_events enabled
+        if scene_node.pointer_events() {
+            result.push(node_id);
+        }
+
+        // Recurse into children
+        for child_id in node_id.children(arena) {
+            Self::collect_hit_test_nodes(child_id, arena, result);
+        }
     }
 
     /// Helper method to propagate damage up the tree
@@ -1473,25 +1534,26 @@ impl Engine {
         *self.pointer_position.write().unwrap() = *p;
 
         // get the starting node
-        let mut root_id = root_id.into();
+        let root_id = root_id.into();
 
-        if root_id.is_none() {
-            let root = *self.scene_root.read().unwrap().unwrap();
-            root_id = Some(root);
-        }
-
-        let root_id = root_id.unwrap();
+        // Use cached hit test node list (already filtered for hidden subtrees and pointer_events)
+        let hit_test_nodes = self.hit_test_node_list.read().unwrap();
 
         let (current_node, in_node, out_node) = self.scene.with_arena(|arena| {
-            let descendants: Vec<TreeStorageId> = root_id.descendants(arena).collect();
-
             let mut new_hover = None;
-            for node_id in descendants.iter().rev() {
+            // Iterate in reverse for back-to-front (topmost first) hit testing
+            for node_id in hit_test_nodes.iter().rev() {
                 let node_id = *node_id;
-                let node = arena.get(node_id).unwrap().get();
-                if node.hidden() || !node.pointer_events() {
-                    continue;
+                // Skip nodes not under the specified root (if provided)
+                if let Some(rid) = root_id {
+                    if !node_id.ancestors(arena).any(|a| a == rid) {
+                        continue;
+                    }
                 }
+                let Some(node) = arena.get(node_id) else {
+                    continue;
+                };
+                let node = node.get();
                 if node.contains_point(p) {
                     new_hover = Some(NodeRef(node_id));
                     break;
@@ -1572,6 +1634,12 @@ impl Engine {
     pub fn add_damage(&self, rect: skia_safe::Rect) {
         let mut damage = self.damage.write().unwrap();
         damage.join(rect);
+    }
+
+    /// Mark the hit test node list as dirty, requiring rebuild on next update.
+    /// Called when visibility or tree structure changes.
+    pub fn invalidate_hit_test_node_list(&self) {
+        self.hit_test_node_list_dirty.store(true, Ordering::Relaxed);
     }
 }
 
