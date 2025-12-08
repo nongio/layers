@@ -77,6 +77,9 @@ pub(crate) fn update_animations(
 pub(crate) fn execute_transactions(engine: &Engine) -> (Vec<NodeRef>, Vec<FlatStorageId>, bool) {
     let updated_nodes = Arc::new(std::sync::RwLock::new(Vec::<NodeRef>::new()));
     let transactions_finished = Arc::new(std::sync::RwLock::new(Vec::<FlatStorageId>::new()));
+    let follower_flags = Arc::new(std::sync::RwLock::new(
+        Vec::<(NodeRef, RenderableFlags)>::new(),
+    ));
 
     let needs_redraw = engine.transactions.with_data_mut(|transactions| {
         let needs_redraw = !transactions.is_empty();
@@ -92,8 +95,10 @@ pub(crate) fn execute_transactions(engine: &Engine) -> (Vec<NodeRef>, Vec<FlatSt
                     updated_nodes.clone(),
                     scene,
                     transactions_finished.clone(),
+                    follower_flags.clone(),
                 ),
-                |(animations, updated_nodes, scene, transactions_finished), (id, command)| {
+                |(animations, updated_nodes, scene, transactions_finished, follower_flags),
+                 (id, command)| {
                     let animation_state = command
                         .animation_id
                         .as_ref()
@@ -116,6 +121,13 @@ pub(crate) fn execute_transactions(engine: &Engine) -> (Vec<NodeRef>, Vec<FlatSt
                             if !node.is_removed() {
                                 let scene_node = node.get_mut();
                                 scene_node.insert_flags(flags);
+                                // Collect followers that need to be marked for repaint
+                                // when the leader's content changes
+                                if flags.contains(RenderableFlags::NEEDS_PAINT) {
+                                    for follower in &scene_node.followers {
+                                        follower_flags.write().unwrap().push((*follower, flags));
+                                    }
+                                }
                             }
                         }
                     });
@@ -127,6 +139,20 @@ pub(crate) fn execute_transactions(engine: &Engine) -> (Vec<NodeRef>, Vec<FlatSt
         }
         needs_redraw
     });
+
+    // Apply flags to followers outside of the parallel iteration
+    // to avoid potential deadlocks from nested arena access
+    let follower_flags = follower_flags.read().unwrap();
+    for (follower_id, flags) in follower_flags.iter() {
+        engine.scene.with_arena_mut(|arena| {
+            if let Some(node) = arena.get_mut(follower_id.0) {
+                if !node.is_removed() {
+                    let scene_node = node.get_mut();
+                    scene_node.insert_flags(*flags);
+                }
+            }
+        });
+    }
 
     let transactions_finished = transactions_finished.read().unwrap();
     let updated_nodes = updated_nodes.read().unwrap();

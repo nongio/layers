@@ -675,8 +675,17 @@ mod tests {
     pub fn damage_follower_as_content_with_scale_and_translate() {
         let engine = Engine::create(1000.0, 1000.0);
 
+        // Create an explicit root to hold both leader and follower as siblings
+        let root = engine.new_layer();
+        root.set_size(Size::points(1000.0, 1000.0), None);
+        engine.add_layer(&root);
+
         // Leader layer A: at position (0,0), size 100x100
         let leader = engine.new_layer();
+        leader.set_layout_style(lay_rs::taffy::Style {
+            position: lay_rs::taffy::Position::Absolute,
+            ..Default::default()
+        });
         leader.set_position((0.0, 0.0), None);
         leader.set_size(Size::points(100.0, 100.0), None);
         // Add a draw function to the leader - just draws a background
@@ -685,7 +694,7 @@ mod tests {
                 skia_safe::Rect::from_xywh(0.0, 0.0, 100.0, 100.0)
             },
         );
-        engine.add_layer(&leader);
+        engine.append_layer(&leader, root.id);
 
         // Initial update to establish leader's state
         engine.update(0.016);
@@ -693,6 +702,10 @@ mod tests {
         // Follower layer B: manually uses as_content() to replicate leader
         // Position (200,200) with scale 0.5x
         let follower = engine.new_layer();
+        follower.set_layout_style(lay_rs::taffy::Style {
+            position: lay_rs::taffy::Position::Absolute,
+            ..Default::default()
+        });
         follower.set_position((200.0, 200.0), None);
         follower.set_size(Size::points(100.0, 100.0), None);
         follower.set_scale((0.5, 0.5), None);
@@ -701,7 +714,12 @@ mod tests {
         let leader_content = leader.as_content();
         follower.set_draw_content(leader_content);
 
-        engine.add_layer(&follower);
+        // Register the follower relationship so the follower gets damaged
+        // when the leader's content changes (this is what LayerTreeBuilder does)
+        leader.add_follower_node(follower.id());
+
+        // Add follower as sibling to leader (not child)
+        engine.append_layer(&follower, root.id);
 
         // This update should NOT cause stack overflow anymore
         engine.update(0.016);
