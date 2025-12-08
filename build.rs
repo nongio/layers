@@ -16,15 +16,21 @@ fn main() {
     let mut config = Config::from_root_or_default("./");
     // Disable parsing dependencies to avoid issues with edition2024
     config.parse.parse_deps = false;
+    config.parse.expand.default_features = false;
 
     println!("crate_dir: {}", crate_dir);
     println!("output_file: {}", output_file);
     println!("config: {:?}", config);
 
-    // panic!("Not implemented");
-    cbindgen::generate_with_config(&crate_dir, config)
-        .unwrap()
-        .write_to_file(&output_file);
+    match cbindgen::generate_with_config(&crate_dir, config) {
+        Ok(bindings) => {
+            bindings.write_to_file(&output_file);
+        }
+        Err(e) => {
+            eprintln!("Warning: cbindgen failed to generate bindings: {}", e);
+            eprintln!("Continuing build without C bindings...");
+        }
+    }
 }
 
 /// Find the location of the `target/` directory. Note that this may be
