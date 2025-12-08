@@ -28,7 +28,7 @@ jobs:
       - name: Checkout sources
         uses: actions/checkout@v3
       - name: Rust toolchain
-        uses: dtolnay/rust-toolchain@nightly
+        uses: dtolnay/rust-toolchain@nightly-2024-12-01
         with:
           components: clippy
       - name: Get date for registry cache
