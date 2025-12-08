@@ -13,7 +13,9 @@ fn main() {
         .display()
         .to_string();
 
-    let config = Config::from_root_or_default("./");
+    let mut config = Config::from_root_or_default("./");
+    // Disable parsing dependencies to avoid issues with edition2024
+    config.parse.parse_deps = false;
 
     println!("crate_dir: {}", crate_dir);
     println!("output_file: {}", output_file);
