@@ -119,8 +119,8 @@ pub(crate) struct ModelLayer {
     pub draw_content: Arc<RwLock<Option<ContentDrawFunctionInternal>>>,
     pub blend_mode: Attribute<BlendMode>,
     pub opacity: Attribute<f32>,
-    pub image_filter: Arc<RwLock<Option<ImageFilter>>>,
-    pub color_filter: Arc<RwLock<Option<ColorFilter>>>,
+    pub image_filter: Attribute<Option<ImageFilter>>,
+    pub color_filter: Attribute<Option<ColorFilter>>,
     pub filter_bounds: Arc<RwLock<Option<skia::Rect>>>,
     pub image_filter_progress: Attribute<f32>,
     pub clip_content: Attribute<bool>,
@@ -157,8 +157,8 @@ impl Default for ModelLayer {
         let blend_mode = Attribute::new(BlendMode::Normal);
         let opacity = Attribute::new(1.0);
         let display = Attribute::new(Display::None);
-        let image_filter = Arc::new(RwLock::new(None));
-        let color_filter = Arc::new(RwLock::new(None));
+        let image_filter = Attribute::new(None);
+        let color_filter = Attribute::new(None);
         let filter_progress = Attribute::new(0.0);
         let filter_bounds = Arc::new(RwLock::new(None));
         let clip_content = Attribute::new(false);

@@ -350,8 +350,9 @@ impl Layer {
 
     pub fn set_blend_mode(&self, blend_mode: BlendMode) {
         self.model.blend_mode.set(blend_mode);
+        let attribute_id = self.model.blend_mode.id;
         self.engine
-            .schedule_change(self.id, Arc::new(NoopChange::new(self.id.0.into())), None);
+            .schedule_change(self.id, Arc::new(NoopChange::new(attribute_id)), None);
     }
     pub fn set_display(&self, display: Display) {
         self.model.display.set(display);
@@ -519,19 +520,42 @@ impl Layer {
         f(&mut data)
     }
 
+    /// Sets the image filter for this layer.
     pub fn set_image_filter(&self, filter: impl Into<Option<ImageFilter>>) {
-        let filter = filter.into();
-        let mut model_filter = self.model.image_filter.write().unwrap();
-        *model_filter = filter;
+        self.model.image_filter.set(filter.into());
+        let attribute_id = self.model.image_filter.id;
+        self.engine
+            .schedule_change(self.id, Arc::new(NoopChange::new(attribute_id)), None);
     }
-    pub fn set_color_filter(&self, filter: impl Into<Option<ColorFilter>>) {
-        let filter = filter.into();
 
-        let change = Arc::new(NoopChange::new(self.id.into()));
-        self.engine.schedule_change(self.id, change, None);
-        let mut model_filter = self.model.color_filter.write().unwrap();
-        *model_filter = filter;
+    /// Returns the current image filter.
+    pub fn image_filter(&self) -> Option<ImageFilter> {
+        self.model.image_filter.value()
     }
+
+    /// Returns the value ID for the image filter attribute.
+    pub fn image_filter_value_id(&self) -> usize {
+        self.model.image_filter.id
+    }
+
+    /// Sets the color filter for this layer.
+    pub fn set_color_filter(&self, filter: impl Into<Option<ColorFilter>>) {
+        self.model.color_filter.set(filter.into());
+        let attribute_id = self.model.color_filter.id;
+        self.engine
+            .schedule_change(self.id, Arc::new(NoopChange::new(attribute_id)), None);
+    }
+
+    /// Returns the current color filter.
+    pub fn color_filter(&self) -> Option<ColorFilter> {
+        self.model.color_filter.value()
+    }
+
+    /// Returns the value ID for the color filter attribute.
+    pub fn color_filter_value_id(&self) -> usize {
+        self.model.color_filter.id
+    }
+
     pub fn set_filter_bounds(&self, bounds: impl Into<Option<skia::Rect>>) {
         let mut model_filter_bounds = self.model.filter_bounds.write().unwrap();
         let bounds = bounds.into();

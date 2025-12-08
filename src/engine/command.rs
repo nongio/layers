@@ -99,8 +99,8 @@ impl Transaction {
 #[derive(Debug)]
 pub struct NoopChange(usize);
 impl NoopChange {
-    pub fn new(id: usize) -> Self {
-        Self(id)
+    pub fn new(value_id: usize) -> Self {
+        Self(value_id)
     }
 }
 impl Command for NoopChange {
