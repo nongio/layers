@@ -219,6 +219,10 @@ mod tests {
         );
     }
 
+    /// Tests that bounds_with_children correctly propagates through a three-level hierarchy:
+    /// grandparent -> parent -> child. Verifies that:
+    /// 1. Each level's bounds_with_children includes descendant bounds in local space
+    /// 2. global_transformed_bounds_with_children is in world/global coordinates
     #[test]
     pub fn render_layer_three_level_hierarchy_bounds() {
         let engine = Engine::create(1000.0, 1000.0);
@@ -229,13 +233,13 @@ mod tests {
         gp.set_size(Size::points(100.0, 100.0), None);
         engine.add_layer(&gp);
 
-        // Parent at an additional offset
+        // Parent at an additional offset (relative to grandparent)
         let parent = engine.new_layer();
         parent.set_position((10.0, 20.0), None);
         parent.set_size(Size::points(80.0, 80.0), None);
         engine.append_layer(&parent, gp.id);
 
-        // Child extends beyond parent
+        // Child extends beyond parent (relative to parent)
         let child = engine.new_layer();
         child.set_position((70.0, 80.0), None);
         child.set_size(Size::points(50.0, 50.0), None);
@@ -244,25 +248,28 @@ mod tests {
 
         engine.update(0.016);
 
-        // Parent bounds_with_children should union its child in parent space
+        // Parent bounds_with_children should union its child in parent's local space
+        // Parent is 80x80, child at (70,80) with size 50x50 extends to (120,130)
         let prl = engine.render_layer(&parent).unwrap();
         assert_eq!(
             prl.bounds_with_children,
             skia_safe::Rect::from_xywh(0.0, 0.0, 120.0, 130.0)
         );
-        // Parent global children bounds currently reflect only the parent's own offset
+        // Parent global children bounds: parent at (10,20) in gp space, gp at (5,6) in world
+        // So parent origin in world is (5+10, 6+20) = (15, 26)
         assert_eq!(
             prl.global_transformed_bounds_with_children,
-            skia_safe::Rect::from_xywh(10.0, 20.0, 120.0, 130.0)
+            skia_safe::Rect::from_xywh(15.0, 26.0, 120.0, 130.0)
         );
 
-        // Grandparent bounds_with_children should union parent+child in gp space
+        // Grandparent bounds_with_children should union parent+child in gp's local space
+        // Parent at (10,20) extends to (10+120, 20+130) = (130, 150)
         let gprl = engine.render_layer(&gp).unwrap();
         assert_eq!(
             gprl.bounds_with_children,
             skia_safe::Rect::from_xywh(0.0, 0.0, 130.0, 150.0)
         );
-        // And global shifted by gp offset
+        // Grandparent global: gp at (5,6) in world coordinates
         assert_eq!(
             gprl.global_transformed_bounds_with_children,
             skia_safe::Rect::from_xywh(5.0, 6.0, 130.0, 150.0)
@@ -302,12 +309,11 @@ mod tests {
         // Update again so the movement is applied
         engine.update(0.016);
 
-        // Currently parent bounds_with_children is updated on parent layout/paint,
-        // not on child-only moves. It remains equal to parent bounds here.
+        // Parent bounds_with_children should now include the moved child
         let prl_moved = engine.render_layer(&parent).unwrap();
         assert_eq!(
             prl_moved.bounds_with_children,
-            skia_safe::Rect::from_xywh(0.0, 0.0, 100.0, 100.0)
+            skia_safe::Rect::from_xywh(0.0, 0.0, 130.0, 130.0)
         );
     }
 

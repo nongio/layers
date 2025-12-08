@@ -1059,7 +1059,7 @@ impl Engine {
         let mut total_damage = skia_safe::Rect::default();
         let node = self.scene_root.read().unwrap();
         if let Some(root_id) = *node {
-            // Phase 1: Collect nodes and compute their depth
+            // Phase 1: Collect nodes in post-order (children before parents)
             let nodes_post_order: Vec<_> = self.scene.with_arena(|arena| {
                 let mut result = Vec::new();
                 for edge in root_id.traverse(arena) {
@@ -1081,7 +1081,8 @@ impl Engine {
                 }
 
                 let mut groups: Vec<_> = depth_map.into_iter().collect();
-                // Sort by depth ascending so parents (depth 0) are processed first
+                // Sort by depth ascending so parents (depth 0) are processed first.
+                // This ensures parent transforms are computed before children need them.
                 groups.sort_by_key(|(depth, _)| *depth);
                 groups
             });
@@ -1132,7 +1133,13 @@ impl Engine {
                 }
             }
 
-            // Phase 5: Rebuild hit test node list if dirty
+            // Phase 5: Bubble up bounds from children to parents
+            // Done in post-order so children's bounds are finalized before bubbling to parents
+            for node_id in nodes_post_order.iter() {
+                self.bubble_up_bounds_to_parent(*node_id);
+            }
+
+            // Phase 6: Rebuild hit test node list if dirty
             if self.hit_test_node_list_dirty.load(Ordering::Relaxed) {
                 self.rebuild_hit_test_node_list(*root_id);
             }
@@ -1222,6 +1229,51 @@ impl Engine {
             }
         });
     }
+
+    /// Bubble up a child's bounds to its parent's bounds_with_children.
+    /// Called after processing each depth level so parents accumulate children's bounds.
+    fn bubble_up_bounds_to_parent(&self, node_id: indextree::NodeId) {
+        self.scene.with_arena_mut(|arena| {
+            // Get the child's local_transformed_bounds_with_children (in parent's coordinate space)
+            let child_bounds_in_parent_space = arena
+                .get(node_id)
+                .map(|n| n.get().render_layer.local_transformed_bounds_with_children);
+
+            let Some(child_bounds) = child_bounds_in_parent_space else {
+                return;
+            };
+
+            // Get the parent and update its bounds
+            let parent_id = arena.get(node_id).and_then(|n| n.parent());
+            let Some(parent_id) = parent_id else {
+                return;
+            };
+
+            if let Some(parent_node) = arena.get_mut(parent_id) {
+                let parent = parent_node.get_mut();
+
+                // Union child bounds into parent's bounds_with_children (local space)
+                parent.render_layer.bounds_with_children.join(child_bounds);
+
+                // Recompute local_transformed_bounds_with_children by transforming
+                // the entire bounds_with_children through local_transform
+                let (local_transformed_bwc, _) = parent
+                    .render_layer
+                    .local_transform
+                    .to_m33()
+                    .map_rect(parent.render_layer.bounds_with_children);
+                parent.render_layer.local_transformed_bounds_with_children = local_transformed_bwc;
+
+                // Update global_transformed_bounds_with_children
+                let (global_bwc, _) = parent
+                    .render_layer
+                    .transform_33
+                    .map_rect(parent.render_layer.bounds_with_children);
+                parent.render_layer.global_transformed_bounds_with_children = global_bwc;
+            }
+        });
+    }
+
     fn mark_image_cached_ancestors_for_repaint(&self, node_id: indextree::NodeId) {
         self.scene.with_arena_mut(|arena| {
             let ancestor_ids: Vec<_> = node_id.ancestors(arena).skip(1).collect();
