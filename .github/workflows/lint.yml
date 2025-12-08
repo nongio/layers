@@ -28,7 +28,7 @@ jobs:
       - name: Checkout sources
         uses: actions/checkout@v3
       - name: Rust toolchain
-        uses: dtolnay/rust-toolchain@1.83.0
+        uses: dtolnay/rust-toolchain@nightly
         with:
           components: clippy
       - name: Get date for registry cache
@@ -43,18 +43,11 @@ jobs:
             ~/.cargo/git
           key: ${{ runner.os }}-cargo-registry-${{ steps.date.outputs.date }}
           restore-keys: ${{ runner.os }}-cargo-registry-
-      - name: Cargo binaries cache
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cargo/bin/cargo-cache
-            ~/.cargo/.crates.toml
-            ~/.cargo/.crates2.json
-          key: ${{ runner.os }}-cargo-binaries-0.8.2
-      - name: Install cargo-cache
-        run: cargo install cargo-cache --version 0.8.2
-      - name: Clean cargo cache of old items
-        run: cargo cache clean-unref
+      - name: Install and run cargo-cache
+        continue-on-error: true
+        run: |
+          cargo install cargo-cache --version 0.8.1 2>/dev/null || cargo install cargo-cache --version 0.7.0 2>/dev/null || true
+          cargo cache clean-unref 2>/dev/null || true
       - name: System dependencies
         run: sudo apt-get update; sudo apt-get install -y libdrm-dev libudev-dev libgbm-dev libxkbcommon-dev libegl1-mesa-dev libwayland-dev libinput-dev libdbus-1-dev libsystemd-dev libseat-dev
       - name: Clippy ScreenComposer
