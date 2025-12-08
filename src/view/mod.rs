@@ -26,7 +26,6 @@ pub use layer_tree::*;
 
 /// A View\<S\> is a struct to support the creation of complex hierarchies of layers
 /// that can be rendered by the engine.
-
 pub type PreRenderHook<S> = Arc<dyn Fn(&S, &View<S>) + Send + Sync + 'static>;
 pub type PostRenderHook<S> = Arc<dyn Fn(&S, &View<S>, &Layer) + Send + Sync + 'static>;
 

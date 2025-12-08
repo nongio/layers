@@ -1,6 +1,6 @@
 [package]
 name = "lay-rs"
-version = "0.7.0"
+version = "1.0.0"
 edition = "2021"
 build = "build.rs"
 rust-version = "1.83.0"
@@ -96,7 +96,7 @@ name = "my_benchmark"
 harness = false
 
 [build-dependencies]
-cbindgen = "0.24.3"
+cbindgen = "0.29"
 
 [workspace]
 members = [

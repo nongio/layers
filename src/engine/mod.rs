@@ -235,7 +235,6 @@ pub enum PointerEventType {
 /// let engine = Engine::create(1024.0, 768.0);
 /// let root_layer = engine.new_layer();
 /// root_layer.set_position(Point { x: 0.0, y: 0.0 }, None);
-
 /// root_layer.set_background_color(
 ///     PaintColor::Solid {
 ///         color: Color::new_rgba255(180, 180, 180, 255),

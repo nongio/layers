@@ -2,6 +2,152 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.0] - 2025-12-08
+
+### 🚀 Features
+
+- Layer color filter
+- Enable debugger on 0.0.0.0
+- Spring animations
+- Value change listener
+- Layer content clip to bounds
+- Layer clip children
+- Layertree fmt::Debug
+- Layer content clip to bounds
+- Layer clip children
+- Debugger_viz
+- Change anchor point preserving position
+- LayerTree color filter
+- View hooks
+- Expose visibility in render_layer
+- Layers_inspector 1.0
+- Add hit_test_node_list cache for pointer hit-testing
+
+### 🐛 Bug Fixes
+
+- [**breaking**] New layer apis and fix offscreen drawing
+- Debugger assets path
+- Increase spring animation tolerance
+- Engine.mark_for_delete
+- Engine.trigger_callback deadlock
+- Buildlayertree get or create child
+- Debugger assets path
+- Increase spring animation tolerance
+- Engine.mark_for_delete
+- Engine.trigger_callback deadlock
+- Buildlayertree get or create child
+- Engine update
+- Update node
+- Layer caching logic
+- Rendering issues
+- Noop change id conflict
+- Damage tracking logic
+- Engine update logic
+- Hit-tracking
+- Rendering problem with transparent parent nodes
+- Removing subtrees
+- Filters not working
+- Propagate parent transforms to children
+- Prevent crashes
+- Prevent deadlocks
+- Clean handlers on remove layer
+- Prevent infinite recursion in as_content for nested replicated layers
+- Re-enable content_cache to prevent recursion in draw_layer
+- Color / image filters model changes ids
+- Bounds with children calculations
+
+### 🚜 Refactor
+
+- Layer pointer event and propagation + examples
+
+### 📚 Documentation
+
+- Update documentation and imports
+- Documentation update logo link
+- RenderLayer attributes
+- Add development workflow instructions
+- Require doc comments for new methods
+- Add damage tracking docs
+- Update
+- Layer followers
+- Add documentation pages
+- Mark damage tracking for mirrored layers as fixed
+
+### 🧪 Testing
+
+- Transaction_handlers rework
+- Damage ut update
+- Add tests for hidden parent pointer events, damage tracking, and replicate_node
+- Update image_cache tests
+
+### ⚙️ Miscellaneous Tasks
+
+- Update cliff config for version bump
+- [**breaking**] Rename library to lay-rs
+- [**breaking**] Layer content caching api + export layer as content
+- [**breaking**] Storage using tokio:rwlock
+- Bump rust-skia
+- C api refactor
+- Expose LayerTree anchor point
+- [**breaking**] Replicate layer api
+- Improve error tracing
+- [**breaking**] Svg rendering using resvg
+- [**breaking**] Refactor Engine to handle Arc references
+- Bench results
+- [**breaking**] Rename library to lay-rs
+- [**breaking**] Layer content caching api + export layer as content
+- [**breaking**] Storage using tokio:rwlock
+- Bump rust-skia
+- C api refactor
+- Expose LayerTree anchor point
+- [**breaking**] Replicate layer api
+- Improve error tracing
+- [**breaking**] Svg rendering using resvg
+- Refactor shared mutable engines
+
+### ◀️ Revert
+
+- Tokio::rwlock
+
+### Api
+
+- [**breaking**] Rename engine add_layer api
+- [**breaking**] Rename engine add_layer api
+
+### Bugfix
+
+- Cargo test --doc
+- Build_layer logic / append new layers
+- Update_nodes stage
+
+### Example
+
+- Update hello-content
+
+### Examples
+
+- Rename hello-spring hello-views
+- Cleanup
+- Update animations
+
+### Fmt
+
+- Clippy
+- Clippy
+
+### Renderlayer
+
+- Disable layer content caching
+
+### Restore
+
+- Layer.set_hidden
+- Layer.set_hidden
+
+### Update
+
+- Examples
+
 ## [0.7.0]
 
 ### 🚀 Features

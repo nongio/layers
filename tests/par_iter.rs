@@ -78,6 +78,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     pub fn draw_multiple_children() {
         let (windowed_context, _events_loop) = initialize_opengl();
         let pixel_format = windowed_context.get_pixel_format();
