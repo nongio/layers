@@ -184,24 +184,20 @@ impl<S: Hash + Clone> View<S> {
             })
             .or_else(|| None)
     }
-    pub fn viewlayer_node_map_insert(
-        &self,
-        key: impl Into<String>,
-        node: NodeRef,
-    ) {
+    pub fn viewlayer_node_map_insert(&self, key: impl Into<String>, node: NodeRef) {
         let key = key.into();
         let mut viewlayer_node_map = self.viewlayer_node_map.write().unwrap();
         let entry = viewlayer_node_map.entry(key).or_insert_with(VecDeque::new);
         entry.push_back(node);
     }
-    
+
     /// Set the entire viewlayer_node_map cache from a pre-built HashMap
     /// Used to inject warm caches created during surface pre-population
     pub fn set_viewlayer_node_map(&self, cache: HashMap<String, VecDeque<NodeRef>>) {
         let mut viewlayer_node_map = self.viewlayer_node_map.write().unwrap();
         *viewlayer_node_map = cache;
     }
-    
+
     pub fn hover_layer(&self, id: &str, location: &Point) -> bool {
         if let Some(layer) = self.layer_by_key(id) {
             let rect = layer.render_bounds_transformed();
