@@ -85,6 +85,9 @@ impl Layer {
         key.clone()
     }
     pub fn set_hidden(&self, hidden: bool) {
+        if self.hidden() == hidden {
+            return;
+        }
         // when hidden we set display to none so that the layout engine
         // doesn't layout the node
         let mut display = Display::None;
@@ -103,6 +106,7 @@ impl Layer {
             let node = arena.get_mut(id);
             if let Some(node) = node {
                 let node = node.get_mut();
+
                 node.set_hidden(hidden);
                 node.insert_flags(RenderableFlags::NEEDS_LAYOUT | RenderableFlags::NEEDS_PAINT);
             }
@@ -704,6 +708,13 @@ impl Layer {
             damage
         };
         ContentDrawFunction::from(draw_function)
+    }
+    pub fn redraw(&self) {
+        self.engine
+            .set_node_flags(self.id, RenderableFlags::NEEDS_PAINT);
+        let attribute_id = self.model.blend_mode.id;
+        self.engine
+            .schedule_change(self.id, Arc::new(NoopChange::new(attribute_id)), None);
     }
 }
 

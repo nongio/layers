@@ -497,14 +497,22 @@ pub(crate) fn cleanup_nodes(engine: &Engine) -> skia_safe::Rect {
 #[cfg(feature = "debugger")]
 pub fn send_debugger(scene: Arc<crate::engine::scene::Scene>, scene_root: NodeRef) {
     use indextree::NodeId;
+    use serde::Serialize;
 
     use crate::layers::layer::render_layer::RenderLayer;
+
+    #[derive(Clone, Serialize)]
+    struct DebugRenderLayer {
+        #[serde(flatten)]
+        render_layer: RenderLayer,
+        hidden: bool,
+    }
 
     let s = scene.clone();
     s.with_arena(|arena| {
         let render_layers: std::collections::HashMap<
             usize,
-            (usize, RenderLayer, Vec<usize>, NodeId),
+            (usize, DebugRenderLayer, Vec<usize>, NodeId),
         > = arena
             .iter()
             .filter_map(|node| {
@@ -517,7 +525,10 @@ pub fn send_debugger(scene: Arc<crate::engine::scene::Scene>, scene_root: NodeRe
                     .children(arena)
                     .map(|child| child.into())
                     .collect::<Vec<usize>>();
-                let render_layer = scene_node.render_layer.clone();
+                let render_layer = DebugRenderLayer {
+                    render_layer: scene_node.render_layer.clone(),
+                    hidden: scene_node.hidden(),
+                };
                 let id: usize = node_id.into();
                 Some((id, (id, render_layer, children, node_id)))
             })

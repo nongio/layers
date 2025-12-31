@@ -6,9 +6,9 @@ pub struct Spring {
     pub mass: f32,
     pub stiffness: f32,
     pub damping: f32,
-    pub(crate) initial_velocity: f32,
-    pub(crate) initial_position: f32,
-    pub(crate) last_update: f32,
+    pub initial_velocity: f32,
+    pub initial_position: f32,
+    pub last_update: f32,
 }
 
 const TOLERANCE_POSITION: f32 = 0.003;

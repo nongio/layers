@@ -1,6 +1,8 @@
 #[cfg(feature = "layer_state")]
 #[test]
 pub fn state_for_layer() {
+    use lay_rs::engine::Engine;
+
     let engine = Engine::create(1000.0, 1000.0);
     let layer = engine.new_layer();
     layer.with_mut_state(|state| {

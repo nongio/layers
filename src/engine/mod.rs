@@ -1169,6 +1169,9 @@ impl Engine {
         let Some(node) = arena.get(node_id) else {
             return;
         };
+        if node.is_removed() {
+            return;
+        }
         let scene_node = node.get();
 
         // Skip entire subtree if this node is hidden
@@ -1604,6 +1607,9 @@ impl Engine {
                 let Some(node) = arena.get(node_id) else {
                     continue;
                 };
+                if node.is_removed() {
+                    continue;
+                }
                 let node = node.get();
                 if node.contains_point(p) {
                     new_hover = Some(NodeRef(node_id));
