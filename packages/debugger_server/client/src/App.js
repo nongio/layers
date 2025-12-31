@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Layer from './Layer';
 import LayerDetails from './LayerDetails';
 import './index.css';
@@ -66,12 +66,23 @@ async function init(setMessage, setSocket, setConnectionStatus) {
 function App() {
   const [message, setMessage] = useState('');
   const [socket, setSocket] = useState(null);
-  const [selectedLayer, setSelectedLayer] = useState(null);
+  const [selectedLayerId, setSelectedLayerId] = useState(null);
   const [connectionStatus, setConnectionStatus] = useState('idle');
   const [theme, setTheme] = useState('light');
-  const [treeWidth, setTreeWidth] = useState(360);
+  const defaultLayoutWidths = useMemo(() => {
+    const width = typeof window !== 'undefined' ? window.innerWidth : 1200;
+    return {
+      tree: Math.round(width * 0.25),
+      right: Math.round(width * 0.25),
+    };
+  }, []);
+  const [treeWidth, setTreeWidth] = useState(defaultLayoutWidths.tree);
+  const [rightWidth, setRightWidth] = useState(defaultLayoutWidths.right);
   const resizing = useRef(null);
   const [search, setSearch] = useState('');
+  const [expanded, setExpanded] = useState({});
+  const treeBodyRef = useRef(null);
+  const keyboardScrollRef = useRef(false);
 
   useEffect(() => {
     let activeSocket = null;
@@ -94,9 +105,21 @@ function App() {
   useEffect(() => {
     const onMove = (ev) => {
       if (!resizing.current) return;
-      const delta = ev.clientX - resizing.current.startX;
-      const nextWidth = Math.min(Math.max(resizing.current.startWidth + delta, 240), 700);
-      setTreeWidth(nextWidth);
+      const totalWidth = window.innerWidth;
+      const handleSize = 16;
+      const minPanel = 240;
+      const minMiddle = 320;
+      const { target, startX, startWidth } = resizing.current;
+      const delta = ev.clientX - startX;
+      if (target === 'tree') {
+        const max = totalWidth - minMiddle - rightWidth - handleSize;
+        const nextWidth = Math.min(Math.max(startWidth + delta, minPanel), Math.max(max, minPanel));
+        setTreeWidth(nextWidth);
+      } else if (target === 'right') {
+        const max = totalWidth - minMiddle - treeWidth - handleSize;
+        const nextWidth = Math.min(Math.max(startWidth - delta, minPanel), Math.max(max, minPanel));
+        setRightWidth(nextWidth);
+      }
       ev.preventDefault();
     };
 
@@ -121,6 +144,7 @@ function App() {
     layers = layers[1];
     root = layers[root_id];
   }
+  const selectedLayer = selectedLayerId !== null ? layers?.[selectedLayerId] : null;
 
   const matchesSearch = (layerEntry) => {
     const term = search.trim();
@@ -186,30 +210,197 @@ function App() {
     error: 'Error',
   }[connectionStatus];
 
+  const isExpanded = (id) => {
+    if (expanded[id] === undefined) {
+      const depth = depthMap[id];
+      if (depth === undefined) return id === root_id;
+      return depth <= 1;
+    }
+    return expanded[id];
+  };
+
+  const toggleExpanded = (id) => {
+    setExpanded((prev) => {
+      const current = prev[id] === undefined ? true : prev[id];
+      return { ...prev, [id]: !current };
+    });
+  };
+
+  const setExpandedFor = (id, value) => {
+    setExpanded((prev) => {
+      if (prev[id] === value) return prev;
+      return { ...prev, [id]: value };
+    });
+  };
+
+  const filtered = layers ? filteredLayers() : null;
+  const layersForTree = filtered || layers;
+  const rootEntry = layersForTree && root_id !== null ? layersForTree[root_id] : null;
+
+  const parentMap = useMemo(() => {
+    if (!layersForTree) return {};
+    const parents = {};
+    Object.values(layersForTree).forEach((entry) => {
+      const kids = entry[2] || [];
+      kids.forEach((cid) => {
+        parents[cid] = entry[0];
+      });
+    });
+    return parents;
+  }, [layersForTree]);
+
+  const depthMap = useMemo(() => {
+    if (!layersForTree || root_id === null) return {};
+    const depths = {};
+    const walk = (id, depth) => {
+      depths[id] = depth;
+      const entry = layersForTree[id];
+      if (!entry) return;
+      const kids = entry[2] || [];
+      kids.forEach((cid) => walk(cid, depth + 1));
+    };
+    walk(root_id, 0);
+    return depths;
+  }, [layersForTree, root_id]);
+
+  const visibleIds = useMemo(() => {
+    if (!layersForTree || root_id === null) return [];
+    const list = [];
+    const walk = (id) => {
+      const entry = layersForTree[id];
+      if (!entry) return;
+      list.push(id);
+      const kids = entry[2] || [];
+      if (isExpanded(id)) {
+        kids.forEach(walk);
+      }
+    };
+    walk(root_id);
+    return list;
+  }, [layersForTree, root_id, expanded]);
+
+  useEffect(() => {
+    if (!layersForTree || root_id === null) return;
+
+    const onKeyDown = (ev) => {
+      const tag = ev.target?.tagName?.toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || ev.target?.isContentEditable) {
+        return;
+      }
+
+      if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(ev.key)) {
+        return;
+      }
+
+      ev.preventDefault();
+      if (visibleIds.length === 0) return;
+
+      let currentId = selectedLayerId ?? root_id;
+      if (!visibleIds.includes(currentId)) {
+        currentId = root_id;
+      }
+
+      const index = visibleIds.indexOf(currentId);
+      const currentEntry = layersForTree[currentId];
+      const children = currentEntry?.[2] || [];
+
+      if (ev.key === 'ArrowDown') {
+        if (index < visibleIds.length - 1) {
+          keyboardScrollRef.current = true;
+          setSelectedLayerId(visibleIds[index + 1]);
+        }
+        return;
+      }
+
+      if (ev.key === 'ArrowUp') {
+        if (index > 0) {
+          keyboardScrollRef.current = true;
+          setSelectedLayerId(visibleIds[index - 1]);
+        }
+        return;
+      }
+
+      if (ev.key === 'ArrowRight') {
+        if (children.length > 0) {
+          if (!isExpanded(currentId)) {
+            keyboardScrollRef.current = true;
+            setExpandedFor(currentId, true);
+          } else {
+            keyboardScrollRef.current = true;
+            setSelectedLayerId(children[0]);
+          }
+        }
+        return;
+      }
+
+      if (ev.key === 'ArrowLeft') {
+        if (children.length > 0 && isExpanded(currentId)) {
+          keyboardScrollRef.current = true;
+          setExpandedFor(currentId, false);
+          return;
+        }
+
+        const parentId = parentMap[currentId];
+        if (parentId !== undefined) {
+          keyboardScrollRef.current = true;
+          setSelectedLayerId(parentId);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [layersForTree, root_id, visibleIds, selectedLayerId, parentMap, expanded]);
+
+  useEffect(() => {
+    if (selectedLayerId === null) return;
+    if (!keyboardScrollRef.current) return;
+    keyboardScrollRef.current = false;
+    const container = treeBodyRef.current;
+    if (!container) return;
+    const row = container.querySelector(`[data-layer-row-id="${selectedLayerId}"]`);
+    if (!row) return;
+    const containerRect = container.getBoundingClientRect();
+    const rowRect = row.getBoundingClientRect();
+    const deltaTop = rowRect.top - containerRect.top;
+    const deltaBottom = rowRect.bottom - containerRect.bottom;
+    if (deltaTop < 0) {
+      container.scrollTop += deltaTop;
+    } else if (deltaBottom > 0) {
+      container.scrollTop += deltaBottom;
+    }
+  }, [selectedLayerId, layersForTree]);
+
   return (
     <div className="App">
-      <header className="toolbar">
+      <header className="toolbar" data-tauri-drag-region>
         <div className="brand">
           <span className="brand-accent"></span>
           Layers Inspector
         </div>
-        <div className="toolbar-actions">
+        <div className="toolbar-actions" data-tauri-drag-region="false">
           <button
             className="icon-toggle"
             onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
             title="Toggle theme"
             aria-label="Toggle theme"
+            data-tauri-drag-region="false"
           >
             {theme === 'dark' ? '☀️' : '🌙'}
           </button>
-          <div className={`status-pill ${connectionStatus}`}>
+          <div className={`status-pill ${connectionStatus}`} data-tauri-drag-region="false">
             <span className="status-dot" />
             {statusLabel}
           </div>
         </div>
       </header>
 
-      <div className="pane-layout" style={{ gridTemplateColumns: `${treeWidth}px 8px 1fr` }}>
+      <div
+        className="pane-layout"
+        style={{
+          gridTemplateColumns: `${treeWidth}px 8px minmax(320px, 1fr) 8px ${rightWidth}px`,
+        }}
+      >
         <section className="panel tree-panel">
           <div className="panel-header">
             <div>
@@ -237,11 +428,8 @@ function App() {
                 )}
               </div>
             </div>
-            <div className="panel-body scroll-body">
+            <div className="panel-body scroll-body" ref={treeBodyRef}>
               {root && (() => {
-                const filtered = filteredLayers();
-                const layersForTree = filtered || layers;
-                const rootEntry = layersForTree ? layersForTree[root_id] : null;
                 if (!rootEntry) {
                   return <div className="empty-state">No layers match your search.</div>;
                 }
@@ -251,8 +439,10 @@ function App() {
                     layer={rootEntry}
                     layers={layersForTree}
                     sendMessage={sendMessage}
-                    setSelectedLayer={setSelectedLayer}
-                    selectedLayer={selectedLayer}
+                    setSelectedLayerId={setSelectedLayerId}
+                    selectedLayerId={selectedLayerId}
+                    isExpanded={isExpanded}
+                    toggleExpanded={toggleExpanded}
                   />
                 );
               })()}
@@ -262,7 +452,7 @@ function App() {
         <div
           className="resize-handle"
           onMouseDown={(ev) => {
-            resizing.current = { startX: ev.clientX, startWidth: treeWidth };
+            resizing.current = { startX: ev.clientX, startWidth: treeWidth, target: 'tree' };
           }}
         />
 
@@ -275,7 +465,42 @@ function App() {
           </div>
           <div className="panel-body scroll-body">
             {selectedLayer ? (
-              <LayerDetails layer={selectedLayer} rootLayer={root} layers={layers} rootId={root_id} />
+              <LayerDetails
+                layer={selectedLayer}
+                rootLayer={root}
+                layers={layers}
+                rootId={root_id}
+                visibleSections={['identity', 'preview']}
+              />
+            ) : (
+              <div className="empty-state">Select a layer from the tree.</div>
+            )}
+          </div>
+        </section>
+
+        <div
+          className="resize-handle"
+          onMouseDown={(ev) => {
+            resizing.current = { startX: ev.clientX, startWidth: rightWidth, target: 'right' };
+          }}
+        />
+
+        <section className="panel details-panel details-side-panel">
+          <div className="panel-header">
+            <div>
+              <div className="panel-title">Layout & Appearance</div>
+            </div>
+            {selectedLayer && <div className="pill muted">#{selectedLayer[0]}</div>}
+          </div>
+          <div className="panel-body scroll-body">
+            {selectedLayer ? (
+              <LayerDetails
+                layer={selectedLayer}
+                rootLayer={root}
+                layers={layers}
+                rootId={root_id}
+                visibleSections={['layout', 'appearance']}
+              />
             ) : (
               <div className="empty-state">Select a layer from the tree.</div>
             )}

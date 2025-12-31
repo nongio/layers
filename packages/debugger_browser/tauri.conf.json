@@ -54,6 +54,8 @@
         "url": "http://localhost:8000/client",
         "fullscreen": false,
         "height": 600,
+        "decorations": false,
+        "transparent": true,
         "resizable": true,
         "title": "Layers Inspector",
         "width": 800

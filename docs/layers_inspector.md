@@ -2,6 +2,13 @@
 
 The Layers Inspector is a lightweight debugger that exposes a live view of the engine scene graph in the browser. It ships with a web client for navigation and a small Warp server that bridges the client to the engine at runtime.
 
+## Project context
+- Repository: `layers` Rust workspace.
+- Inspector client: `packages/debugger_server/client` (React app).
+- Inspector server: `packages/debugger_server` (Warp HTTP + WebSocket bridge).
+- Tauri wrapper: `packages/debugger_browser` (desktop shell pointing at the server URL).
+- Main entry point (engine side): `engine.start_debugger()` with the `debugger` feature enabled.
+
 ## What you get
 - Live scene graph tree with search that hides non‑matching branches while you type.
 - Click a layer to inspect its attributes; use the viewport highlight toggle to ask the engine to outline the node.
@@ -22,6 +29,17 @@ The Layers Inspector is a lightweight debugger that exposes a live view of the e
 2. Call `engine.start_debugger()` once after creating the engine to spawn the Warp server.
 3. Open `http://localhost:8000/client/index.html` in your browser. The left column shows the current tree with a search input; the right column displays details for the selected layer.
 4. Toggle the dot icon on any row to highlight or clear the node in the viewport; the client sends `highlight`/`unhighlight` messages that the engine handles via `DebugServer`.
+
+## Build the inspector client
+1. Install dependencies in `packages/debugger_server/client`:
+   ```bash
+   npm install
+   ```
+2. Build the static assets:
+   ```bash
+   npm run build
+   ```
+3. The build output is written to `packages/debugger_server/client/build` and served by the debug server.
 
 ## Extending the inspector
 - The web client lives in `packages/debugger_server/client` (React). Update the UI, run `npm run build`, and rebuild your Rust target to ship the new assets.

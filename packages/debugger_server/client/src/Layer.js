@@ -1,7 +1,14 @@
 import React, { useState } from 'react';
 
-function Layer({ layer, layers, sendMessage, setSelectedLayer, selectedLayer }) {
-  let [expanded, setExpanded] = useState(true);
+function Layer({
+  layer,
+  layers,
+  sendMessage,
+  setSelectedLayerId,
+  selectedLayerId,
+  isExpanded,
+  toggleExpanded,
+}) {
   let [highlighted, setHighlighted] = useState(false);
 
   if (!layer) return null;
@@ -10,7 +17,8 @@ function Layer({ layer, layers, sendMessage, setSelectedLayer, selectedLayer }) 
   let attrs = layer[1];
   let children = layer[2];
   const label = attrs.key && attrs.key.trim() !== '' ? attrs.key : `[${id}]`;
-  let selected = selectedLayer && selectedLayer[0] === id;
+  let selected = selectedLayerId === id;
+  const expanded = isExpanded(id);
 
   const toggleHighlight = (ev) => {
     ev.stopPropagation();
@@ -26,18 +34,19 @@ function Layer({ layer, layers, sendMessage, setSelectedLayer, selectedLayer }) 
   return (
     <div
       className={`layer-row ${selected ? 'selected' : ''}`}
+      data-layer-id={id}
       onClick={(ev) => {
         ev.stopPropagation();
-        setSelectedLayer(layer);
+        setSelectedLayerId(id);
       }}
     >
-      <div className="layer-meta">
+      <div className="layer-meta" data-layer-row-id={id}>
         {children && children.length > 0 ? (
           <span
             className="caret"
             onClick={(ev) => {
               ev.stopPropagation();
-              setExpanded(!expanded);
+              toggleExpanded(id);
             }}
             aria-label={expanded ? "Collapse children" : "Expand children"}
           >
@@ -66,8 +75,10 @@ function Layer({ layer, layers, sendMessage, setSelectedLayer, selectedLayer }) 
                 layer={childLayer}
                 layers={layers}
                 sendMessage={sendMessage}
-                setSelectedLayer={setSelectedLayer}
-                selectedLayer={selectedLayer}
+                setSelectedLayerId={setSelectedLayerId}
+                selectedLayerId={selectedLayerId}
+                isExpanded={isExpanded}
+                toggleExpanded={toggleExpanded}
               />
             );
           })}

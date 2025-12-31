@@ -11,17 +11,21 @@ function safeFormatRect(rect) {
   return `${Math.round(rect.x)}, ${Math.round(rect.y)} • ${Math.round(rect.width)} × ${Math.round(rect.height)}`;
 }
 
-function LayerDetails({ layer, rootLayer, layers, rootId }) {
+function LayerDetails({ layer, rootLayer, layers, rootId, visibleSections }) {
   let id = layer[0];
   let attrs = layer[1];
-  let visible = attrs.visible ?? true;
-  const [openSections, setOpenSections] = React.useState({
-    identity: true,
-    layout: false,
-    appearance: false,
-    preview: true,
-  });
+  let hidden = attrs.hidden ?? false;
+  const [openSections, setOpenSections] = React.useState(() => ({
+    identity: !visibleSections || visibleSections.includes('identity'),
+    layout: !visibleSections || visibleSections.includes('layout'),
+    appearance: !visibleSections || visibleSections.includes('appearance'),
+    preview: !visibleSections || visibleSections.includes('preview'),
+  }));
   const [zoom, setZoom] = React.useState(1);
+  const shouldShow = (key) => {
+    if (!visibleSections || visibleSections.length === 0) return true;
+    return visibleSections.includes(key);
+  };
   const parentChain = React.useMemo(() => {
     if (!layers) return [];
     const parentMap = {};
@@ -105,184 +109,192 @@ function LayerDetails({ layer, rootLayer, layers, rootId }) {
 
   return (
     <div className={`layer-details`}>
-      <div className="section identity-section">
-        <button className="section-toggle" onClick={() => toggleSection('identity')}>
-          <span className="chevron">{openSections.identity ? '▾' : '▸'}</span>
-          <span className="section-title">Identity</span>
-        </button>
-        {openSections.identity && (
-          <>
-            <div className="kv-row">
-              <span className="label">Key</span>
-              <span className="value">{attrs.key}</span>
-            </div>
-            <div className="kv-row">
-              <span className="label">Layer ID</span>
-              <span className="value">[{id}]</span>
-            </div>
-            <div className="kv-row">
-              <span className="label">Visibility</span>
-              <span className={`badge ${visible ? 'green' : 'red'}`}>{visible ? 'Visible' : 'Hidden'}</span>
-            </div>
-          </>
-        )}
-      </div>
-
-      <div className="section">
-        <button className="section-toggle" onClick={() => toggleSection('layout')}>
-          <span className="chevron">{openSections.layout ? '▾' : '▸'}</span>
-          <span className="section-title">Layout</span>
-        </button>
-        {openSections.layout && (
-          <>
-            <div className="kv-row">
-              <span className="label">Style size</span>
-              <span className="value code">{attrs.size ? `${attrs.size.x} × ${attrs.size.y}` : '-'}</span>
-            </div>
-            <div className="kv-row">
-              <span className="label">Bounds</span>
-              <span className="value code">{safeFormatRect(attrs.bounds)}</span>
-            </div>
-            <div className="kv-row">
-              <span className="label">Transformed</span>
-              <span className="value code">{safeFormatRect(attrs.transformed_bounds)}</span>
-            </div>
-            <div className="kv-row">
-              <span className="label">With children</span>
-              <span className="value code">{safeFormatRect(attrs.bounds_with_children)}</span>
-            </div>
-          </>
-        )}
-      </div>
-
-      <div className="section">
-        <button className="section-toggle" onClick={() => toggleSection('appearance')}>
-          <span className="chevron">{openSections.appearance ? '▾' : '▸'}</span>
-          <span className="section-title">Appearance</span>
-        </button>
-        {openSections.appearance && (
-          <>
-            <div className="kv-row preview-inline">
-              <div className="layer-preview square"
-                style={{
-                  backgroundColor: backgroundColor ?? 'transparent',
-                  borderColor: borderColor ?? 'transparent',
-                  borderWidth: borderWidth,
-                  borderRadius: borderRadius,
-                  opacity: opacity,
-                  boxShadow: `${shadowOffset.x}px ${shadowOffset.y}px ${shadowRadius}px ${shadowColor}`,
-                  borderStyle: borderStyle
-                }}
-              >
-                {attrs.key}
+      {shouldShow('identity') && (
+        <div className="section identity-section">
+          <button className="section-toggle" onClick={() => toggleSection('identity')}>
+            <span className="chevron">{openSections.identity ? '▾' : '▸'}</span>
+            <span className="section-title">Identity</span>
+          </button>
+          {openSections.identity && (
+            <>
+              <div className="kv-row">
+                <span className="label">Key</span>
+                <span className="value">{attrs.key}</span>
               </div>
-            </div>
-            <div className="kv-row">
-              <span className="label">Background</span>
-              <span className="value swatch-row">
-                {backgroundColor && <span className="swatch" style={{ background: backgroundColor }} />}
-                <span className="code">{backgroundColor ?? 'none'}</span>
-              </span>
-            </div>
-            <div className="kv-row">
-              <span className="label">Border</span>
-              <span className="value swatch-row">
-                {borderColor && <span className="swatch" style={{ background: borderColor }} />}
-                <span className="code">
-                  {borderStyle} {borderWidth}px
+              <div className="kv-row">
+                <span className="label">Layer ID</span>
+                <span className="value">[{id}]</span>
+              </div>
+              <div className="kv-row">
+                <span className="label">Visibility</span>
+                <span className={`badge ${hidden ? 'red' : 'green'}`}>{hidden ? 'Hidden' : 'Visible'}</span>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {shouldShow('layout') && (
+        <div className="section">
+          <button className="section-toggle" onClick={() => toggleSection('layout')}>
+            <span className="chevron">{openSections.layout ? '▾' : '▸'}</span>
+            <span className="section-title">Layout</span>
+          </button>
+          {openSections.layout && (
+            <>
+              <div className="kv-row">
+                <span className="label">Style size</span>
+                <span className="value code">{attrs.size ? `${attrs.size.x} × ${attrs.size.y}` : '-'}</span>
+              </div>
+              <div className="kv-row">
+                <span className="label">Bounds</span>
+                <span className="value code">{safeFormatRect(attrs.bounds)}</span>
+              </div>
+              <div className="kv-row">
+                <span className="label">Transformed</span>
+                <span className="value code">{safeFormatRect(attrs.transformed_bounds)}</span>
+              </div>
+              <div className="kv-row">
+                <span className="label">With children</span>
+                <span className="value code">{safeFormatRect(attrs.bounds_with_children)}</span>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {shouldShow('appearance') && (
+        <div className="section">
+          <button className="section-toggle" onClick={() => toggleSection('appearance')}>
+            <span className="chevron">{openSections.appearance ? '▾' : '▸'}</span>
+            <span className="section-title">Appearance</span>
+          </button>
+          {openSections.appearance && (
+            <>
+              <div className="kv-row preview-inline">
+                <div className="layer-preview square"
+                  style={{
+                    backgroundColor: backgroundColor ?? 'transparent',
+                    borderColor: borderColor ?? 'transparent',
+                    borderWidth: borderWidth,
+                    borderRadius: borderRadius,
+                    opacity: opacity,
+                    boxShadow: `${shadowOffset.x}px ${shadowOffset.y}px ${shadowRadius}px ${shadowColor}`,
+                    borderStyle: borderStyle
+                  }}
+                >
+                  {attrs.key}
+                </div>
+              </div>
+              <div className="kv-row">
+                <span className="label">Background</span>
+                <span className="value swatch-row">
+                  {backgroundColor && <span className="swatch" style={{ background: backgroundColor }} />}
+                  <span className="code">{backgroundColor ?? 'none'}</span>
                 </span>
-              </span>
-            </div>
-            <div className="kv-row">
-              <span className="label">Radius</span>
-              <span className="value code">{borderRadius}px</span>
-            </div>
-            <div className="kv-row">
-              <span className="label">Opacity</span>
-              <span className="value code">{opacity}</span>
-            </div>
-            <div className="kv-row">
-              <span className="label">Shadow</span>
-              <span className="value code">
-                {shadowOffset ? `${shadowOffset.x}, ${shadowOffset.y}` : '-'} / {shadowRadius}px
-              </span>
-            </div>
-            <div className="kv-row">
-              <span className="label">Shadow color</span>
-              <span className="value swatch-row">
-                <span className="swatch" style={{ background: shadowColor }} />
-                <span className="code">{shadowColor}</span>
-              </span>
-            </div>
-            <div className="kv-row">
-              <span className="label">Blend mode</span>
-              <span className="value code">{attrs.blend_mode}</span>
-            </div>
-          </>
-        )}
-      </div>
+              </div>
+              <div className="kv-row">
+                <span className="label">Border</span>
+                <span className="value swatch-row">
+                  {borderColor && <span className="swatch" style={{ background: borderColor }} />}
+                  <span className="code">
+                    {borderStyle} {borderWidth}px
+                  </span>
+                </span>
+              </div>
+              <div className="kv-row">
+                <span className="label">Radius</span>
+                <span className="value code">{borderRadius}px</span>
+              </div>
+              <div className="kv-row">
+                <span className="label">Opacity</span>
+                <span className="value code">{opacity}</span>
+              </div>
+              <div className="kv-row">
+                <span className="label">Shadow</span>
+                <span className="value code">
+                  {shadowOffset ? `${shadowOffset.x}, ${shadowOffset.y}` : '-'} / {shadowRadius}px
+                </span>
+              </div>
+              <div className="kv-row">
+                <span className="label">Shadow color</span>
+                <span className="value swatch-row">
+                  <span className="swatch" style={{ background: shadowColor }} />
+                  <span className="code">{shadowColor}</span>
+                </span>
+              </div>
+              <div className="kv-row">
+                <span className="label">Blend mode</span>
+                <span className="value code">{attrs.blend_mode}</span>
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
-      <div className="section preview">
-        <button className="section-toggle" onClick={() => toggleSection('preview')}>
-          <span className="chevron">{openSections.preview ? '▾' : '▸'}</span>
-          <span className="section-title">Preview</span>
-        </button>
-        {openSections.preview && (
-          <>
-            <div className="preview-toolbar">
+      {shouldShow('preview') && (
+        <div className="section preview">
+          <button className="section-toggle" onClick={() => toggleSection('preview')}>
+            <span className="chevron">{openSections.preview ? '▾' : '▸'}</span>
+            <span className="section-title">Preview</span>
+          </button>
+          {openSections.preview && (
+            <>
+              <div className="preview-toolbar">
               <div className="zoom-controls">
-                <button className="ghost-btn" onClick={() => setZoom((z) => Math.min(z * 1.25, 8))}>+</button>
-                <button className="ghost-btn" onClick={() => setZoom((z) => Math.max(z / 1.25, 0.25))}>-</button>
+                <button className="ghost-btn zoom-btn" onClick={() => setZoom((z) => Math.min(z * 1.25, 8))}>+</button>
+                <button className="ghost-btn zoom-btn" onClick={() => setZoom((z) => Math.max(z / 1.25, 0.25))}>-</button>
               </div>
             </div>
-            <div className="svg-preview">
-              <svg viewBox={`${viewBoxX} ${viewBoxY} ${viewBoxWidth} ${viewBoxHeight}`} preserveAspectRatio="xMinYMin meet">
-                {hasShadow && (
-                  <defs>
-                    <filter id={filterId} x="-50%" y="-50%" width="200%" height="200%">
-                      <feDropShadow
-                        dx={shadowOffset.x}
-                        dy={shadowOffset.y}
-                        stdDeviation={Math.max(shadowRadius, 0.5) / 2}
-                        floodColor={shadowColor}
-                        floodOpacity="1"
+              <div className="svg-preview">
+                <svg viewBox={`${viewBoxX} ${viewBoxY} ${viewBoxWidth} ${viewBoxHeight}`} preserveAspectRatio="xMinYMin meet">
+                  {hasShadow && (
+                    <defs>
+                      <filter id={filterId} x="-50%" y="-50%" width="200%" height="200%">
+                        <feDropShadow
+                          dx={shadowOffset.x}
+                          dy={shadowOffset.y}
+                          stdDeviation={Math.max(shadowRadius, 0.5) / 2}
+                          floodColor={shadowColor}
+                          floodOpacity="1"
+                        />
+                      </filter>
+                    </defs>
+                  )}
+                  <rect className="svg-root" x={rootX} y={rootY} width={viewWidth} height={viewHeight} />
+                  <rect className="svg-viewport" x={rootX} y={rootY} width={viewWidth} height={viewHeight} />
+                  <text className="svg-label" x={rootX + 6} y={rootY + 14}>viewport</text>
+                  {transformedBounds && parentChain.map((pid) => {
+                    const parentLayer = layers?.[pid];
+                    const pb = parentLayer?.[1]?.transformed_bounds;
+                    if (!pb) return null;
+                    return (
+                      <rect
+                        key={`anc-${pid}`}
+                        className="svg-ancestor"
+                        x={pb.x}
+                        y={pb.y}
+                        width={pb.width}
+                        height={pb.height}
                       />
-                    </filter>
-                  </defs>
-                )}
-                <rect className="svg-root" x={rootX} y={rootY} width={viewWidth} height={viewHeight} />
-                <rect className="svg-viewport" x={rootX} y={rootY} width={viewWidth} height={viewHeight} />
-                <text className="svg-label" x={rootX + 6} y={rootY + 14}>viewport</text>
-                {transformedBounds && parentChain.map((pid) => {
-                  const parentLayer = layers?.[pid];
-                  const pb = parentLayer?.[1]?.transformed_bounds;
-                  if (!pb) return null;
-                  return (
+                    );
+                  })}
+                  {transformedBounds && (
                     <rect
-                      key={`anc-${pid}`}
-                      className="svg-ancestor"
-                      x={pb.x}
-                      y={pb.y}
-                      width={pb.width}
-                      height={pb.height}
+                      x={transformedBounds.x}
+                      y={transformedBounds.y}
+                      width={transformedBounds.width}
+                      height={transformedBounds.height}
+                      className="svg-layer"
                     />
-                  );
-                })}
-                {transformedBounds && (
-                  <rect
-                    x={transformedBounds.x}
-                    y={transformedBounds.y}
-                    width={transformedBounds.width}
-                    height={transformedBounds.height}
-                    className="svg-layer"
-                  />
-                )}
-              </svg>
-              <div className="preview-caption">Transformed bounds in root space</div>
-            </div>
-          </>
-        )}
-      </div>
+                  )}
+                </svg>
+                <div className="preview-caption">Transformed bounds in root space</div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }

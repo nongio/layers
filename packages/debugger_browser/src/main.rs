@@ -7,6 +7,7 @@ fn main() {
     tauri::Builder::default()
         .setup(|app| {
             let window = app.get_window("main").unwrap();
+            let _ = window.set_decorations(false);
             window
                 .eval("window.location.href = 'http://localhost:8000/client/index.html';")
                 .unwrap();
