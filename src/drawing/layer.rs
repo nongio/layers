@@ -42,10 +42,22 @@ pub fn draw_layer(
                 background_paint.set_blend_mode(skia_safe::BlendMode::Luminosity);
             }
             if background_color.a > 0.0 {
-                canvas.draw_paint(&background_paint);
+                canvas.draw_rrect(rrbounds, &background_paint);
             }
-            canvas.restore_to_count(save_count);
 
+            if layer.blend_mode == crate::types::BlendMode::BackgroundBlur {
+                let mut paint = skia_safe::Paint::default();
+                let noise = skia_safe::shaders::fractal_noise((0.7, 0.7), 3, 0.0, None)
+                    .expect("noise shader");
+
+                paint.set_shader(noise);
+                paint.set_blend_mode(skia_safe::BlendMode::SoftLight);
+                paint.set_alpha(100);
+
+                canvas.draw_paint(&paint);
+            }
+
+            canvas.restore_to_count(save_count);
             draw_damage.join(bounds);
         }
     }
