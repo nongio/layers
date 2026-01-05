@@ -7,10 +7,12 @@ All notable changes to this project will be documented in this file.
 ### 🚀 Features
 
 - Ui update layers_inspector
+- Add fractal noise overlay for BackgroundBlur blend mode
 
 ### 🐛 Bug Fixes
 
 - Node removed checks + expose Spring timing
+- Implement backdrop blur region bubbling for image-cached layers
 
 ## [1.0.0] - 2025-12-08
 
