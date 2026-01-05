@@ -1,7 +1,7 @@
 #![allow(warnings)]
 
 use indextree::{Arena, NodeId};
-use skia::{FontStyle, Surface};
+use skia::{gpu::ganesh::gl::direct_contexts, FontStyle, Surface};
 use skia_safe::Canvas;
 use skia_safe::Contains;
 
@@ -15,11 +15,83 @@ use crate::{
     },
     layers::layer::render_layer::{self, RenderLayer},
     types::Color,
-    utils,
+    utils::{self, save_image},
 };
 
 use super::layer::{draw_debug, draw_layer};
 use std::{collections::HashMap, iter::IntoIterator};
+
+/// Creates a backdrop filter based on blend mode configuration.
+/// Returns an ImageFilter that can be applied to save layers.
+///
+/// # Parameters
+/// - `blend_mode`: The blend mode to create a backdrop filter for
+/// - `blur_sigma`: The blur radius (typically BACKGROUND_BLUR_SIGMA)
+/// - `crop_rect`: Optional crop rectangle for the filter
+/// - `apply_vibrancy`: Whether to apply vibrancy/saturation enhancement
+#[profiling::function]
+fn create_backdrop_filter(
+    blend_mode: crate::types::BlendMode,
+    blur_sigma: f32,
+    crop_rect: Option<skia_safe::image_filters::CropRect>,
+    apply_vibrancy: bool,
+) -> Option<skia_safe::ImageFilter> {
+    use crate::types::BlendMode;
+
+    match blend_mode {
+        BlendMode::BackgroundBlur => {
+            // Create the blur filter
+            let blur = skia_safe::image_filters::blur(
+                (blur_sigma, blur_sigma),
+                skia_safe::TileMode::Mirror,
+                None,
+                crop_rect.clone(),
+            )?;
+
+            if apply_vibrancy {
+                // Add a mild tone map to feel more "material".
+                // Slightly increase contrast and saturation.
+                let sat = 1.10_f32;
+                let con = 1.06_f32;
+
+                // A very rough "contrast + saturation-ish" matrix.
+                // You can tune this for different vibrancy models.
+                let matrix = skia_safe::ColorMatrix::new(
+                    con * (0.213 + 0.787 * sat),
+                    con * (0.715 - 0.715 * sat),
+                    con * (0.072 - 0.072 * sat),
+                    0.0,
+                    0.0,
+                    con * (0.213 - 0.213 * sat),
+                    con * (0.715 + 0.285 * sat),
+                    con * (0.072 - 0.072 * sat),
+                    0.0,
+                    0.0,
+                    con * (0.213 - 0.213 * sat),
+                    con * (0.715 - 0.715 * sat),
+                    con * (0.072 + 0.928 * sat),
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0,
+                    0.0,
+                );
+
+                let tone_filter = skia_safe::color_filters::matrix(&matrix, None);
+
+                // Compose blur then tone. Order matters: blur first, then tone-map.
+                skia_safe::image_filters::color_filter(tone_filter, None, crop_rect)
+                    .and_then(|cf| skia_safe::image_filters::compose(cf, blur))
+            } else {
+                Some(blur)
+            }
+        }
+        // Add other blend modes here as needed
+        _ => None,
+    }
+}
 
 pub trait DrawScene {
     fn draw_scene(
@@ -405,6 +477,52 @@ pub fn render_node_tree(
                     let x = render_layer.bounds_with_children.x() - surface_offset.x;
                     let y = render_layer.bounds_with_children.y() - surface_offset.y;
 
+                    let opacity = context_opacity * render_layer.opacity;
+
+                    // Apply backdrop effects for descendant regions that need it
+                    // Converts Vec<RRect> to Path for clipping with rounded rectangles
+                    if let Some(backdrop_rrects) = &render_layer.backdrop_blur_region {
+                        profiling::scope!("background_blur_image_cached_descendants");
+
+                        let before_backdrop = render_canvas.save();
+
+                        // Build a path from all the rounded rects
+                        let mut backdrop_path = skia_safe::Path::new();
+                        for rrect in backdrop_rrects {
+                            backdrop_path.add_rrect(*rrect, None);
+                        }
+
+                        // Clip to the backdrop path (supports rounded rects)
+                        render_canvas.clip_path(&backdrop_path, skia_safe::ClipOp::Intersect, true);
+
+                        // Get the bounding box of the path for the crop rect
+                        let path_bounds = backdrop_path.bounds();
+                        let blur_outset = BACKGROUND_BLUR_SIGMA;
+                        let crop_rect_bounds = path_bounds.with_outset((blur_outset, blur_outset));
+                        let crop_rect =
+                            Some(skia_safe::image_filters::CropRect::from(crop_rect_bounds));
+
+                        // Create the backdrop filter based on blend mode
+                        // For now, all descendants use BackgroundBlur mode with vibrancy
+                        if let Some(backdrop_filter) = create_backdrop_filter(
+                            crate::types::BlendMode::BackgroundBlur,
+                            BACKGROUND_BLUR_SIGMA,
+                            crop_rect,
+                            true, // apply_vibrancy
+                        ) {
+                            profiling::scope!("apply backdrop descendants");
+                            let mut backdrop_paint = skia_safe::Paint::default();
+                            backdrop_paint.set_alpha_f(opacity);
+                            let mut save_layer_rec = skia_safe::canvas::SaveLayerRec::default();
+                            save_layer_rec =
+                                save_layer_rec.bounds(&path_bounds).paint(&backdrop_paint);
+                            save_layer_rec = save_layer_rec.backdrop(&backdrop_filter);
+                            render_canvas.save_layer(&save_layer_rec);
+                        }
+
+                        render_canvas.restore_to_count(before_backdrop);
+                    }
+
                     render_canvas.draw_image(&image, (x, y), Some(&paint));
 
                     render_canvas.restore_to_count(restore_point);
@@ -481,7 +599,7 @@ pub(crate) fn paint_node(
 
         let blur = skia_safe::image_filters::blur(
             (BACKGROUND_BLUR_SIGMA, BACKGROUND_BLUR_SIGMA),
-            skia_safe::TileMode::Clamp,
+            skia_safe::TileMode::Mirror,
             None,
             crop_rect,
         );

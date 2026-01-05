@@ -187,7 +187,7 @@ impl<S: Hash + Clone> View<S> {
     pub fn viewlayer_node_map_insert(&self, key: impl Into<String>, node: NodeRef) {
         let key = key.into();
         let mut viewlayer_node_map = self.viewlayer_node_map.write().unwrap();
-        let entry = viewlayer_node_map.entry(key).or_insert_with(VecDeque::new);
+        let entry = viewlayer_node_map.entry(key).or_default();
         entry.push_back(node);
     }
 

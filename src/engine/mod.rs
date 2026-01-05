@@ -78,6 +78,7 @@ use crate::{
     prelude::ContentDrawFunction,
     types::Point,
 };
+use skia_safe::RoundOut;
 
 #[derive(Clone)]
 pub struct Timestamp(f32);
@@ -1138,7 +1139,24 @@ impl Engine {
                 self.bubble_up_bounds_to_parent(*node_id);
             }
 
-            // Phase 6: Rebuild hit test node list if dirty
+            // Phase 6: Clear all backdrop blur regions before rebuilding
+            // This prevents accumulation across frames
+            self.scene.with_arena_mut(|arena| {
+                for node_id in nodes_post_order.iter() {
+                    if let Some(node) = arena.get_mut(*node_id) {
+                        node.get_mut().render_layer.backdrop_blur_region = None;
+                    }
+                }
+            });
+
+            // Phase 7: Bubble up backdrop blur regions from children to parents
+            // Done in post-order so children's regions are finalized before bubbling to parents
+            // Only process nodes that have BackgroundBlur or have children with backdrop regions
+            for node_id in nodes_post_order.iter() {
+                self.bubble_up_backdrop_blur_regions(*node_id);
+            }
+
+            // Phase 8: Rebuild hit test node list if dirty
             if self.hit_test_node_list_dirty.load(Ordering::Relaxed) {
                 self.rebuild_hit_test_node_list(*root_id);
             }
@@ -1272,6 +1290,83 @@ impl Engine {
                     .transform_33
                     .map_rect(parent.render_layer.bounds_with_children);
                 parent.render_layer.global_transformed_bounds_with_children = global_bwc;
+            }
+        });
+    }
+
+    /// Bubble up backdrop blur regions from children to parents.
+    /// Transforms child's backdrop blur regions (including its own if it has BackgroundBlur)
+    /// into parent's coordinate space and merges them into parent's backdrop_blur_region.
+    /// Uses Vec<RRect> for thread safety, converted to Path during rendering.
+    fn bubble_up_backdrop_blur_regions(&self, node_id: indextree::NodeId) {
+        self.scene.with_arena_mut(|arena| {
+            // Collect child's backdrop blur rrects, blend mode, and rounded bounds
+            let (child_blend_mode, child_rbounds, child_rrects, child_transform) = {
+                let Some(child_node) = arena.get(node_id) else {
+                    return;
+                };
+                let child = child_node.get();
+
+                // Early exit: skip if child has no backdrop blur and no backdrop rrects from descendants
+                let has_backdrop_blur =
+                    child.render_layer.blend_mode == crate::types::BlendMode::BackgroundBlur;
+                if !has_backdrop_blur && child.render_layer.backdrop_blur_region.is_none() {
+                    return;
+                }
+
+                (
+                    child.render_layer.blend_mode,
+                    child.render_layer.rbounds,
+                    child.render_layer.backdrop_blur_region.clone(),
+                    child.render_layer.local_transform.to_m33(),
+                )
+            };
+
+            let parent_id = arena.get(node_id).and_then(|n| n.parent());
+            let Some(parent_id) = parent_id else {
+                return;
+            };
+
+            if let Some(parent_node) = arena.get_mut(parent_id) {
+                let parent = parent_node.get_mut();
+
+                // Get or create parent's rrects vector
+                let parent_rrects = parent
+                    .render_layer
+                    .backdrop_blur_region
+                    .get_or_insert_with(Vec::new);
+
+                // If child itself has BackgroundBlur, add its rounded bounds
+                if child_blend_mode == crate::types::BlendMode::BackgroundBlur {
+                    // Transform child's rrect to parent's coordinate space
+                    // Since we can't directly transform rrects, transform the rect and preserve radii
+                    let (transformed_rect, _) = child_transform.map_rect(child_rbounds.rect());
+                    let radii = [
+                        child_rbounds.radii(skia_safe::rrect::Corner::UpperLeft),
+                        child_rbounds.radii(skia_safe::rrect::Corner::UpperRight),
+                        child_rbounds.radii(skia_safe::rrect::Corner::LowerRight),
+                        child_rbounds.radii(skia_safe::rrect::Corner::LowerLeft),
+                    ];
+                    let transformed_rrect =
+                        skia_safe::RRect::new_rect_radii(transformed_rect, &radii);
+                    parent_rrects.push(transformed_rrect);
+                }
+
+                // Merge child's backdrop rrects (from its descendants) transformed to parent space
+                if let Some(child_rrects) = child_rrects {
+                    for rrect in child_rrects {
+                        let (transformed_rect, _) = child_transform.map_rect(rrect.rect());
+                        let radii = [
+                            rrect.radii(skia_safe::rrect::Corner::UpperLeft),
+                            rrect.radii(skia_safe::rrect::Corner::UpperRight),
+                            rrect.radii(skia_safe::rrect::Corner::LowerRight),
+                            rrect.radii(skia_safe::rrect::Corner::LowerLeft),
+                        ];
+                        let transformed =
+                            skia_safe::RRect::new_rect_radii(transformed_rect, &radii);
+                        parent_rrects.push(transformed);
+                    }
+                }
             }
         });
     }

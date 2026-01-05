@@ -70,6 +70,10 @@ pub struct RenderLayer {
     pub image_filter: Option<ImageFilter>,
     pub image_filter_bounds: Option<skia::Rect>,
     pub color_filter: Option<ColorFilter>,
+    /// Rounded rectangles of descendants with BackgroundBlur blend mode (in local coordinates)
+    /// Used by image-cached layers to apply backdrop blur to specific regions
+    /// Stored as Vec<RRect> for thread safety, converted to Path during rendering
+    pub backdrop_blur_region: Option<Vec<skia_safe::RRect>>,
 }
 
 impl RenderLayer {
@@ -389,6 +393,7 @@ impl RenderLayer {
                 .pointer_events
                 .load(std::sync::atomic::Ordering::Relaxed),
             visible: true,
+            backdrop_blur_region: None,
         };
 
         render_layer.visible = render_layer.has_visible_drawables();
@@ -437,6 +442,7 @@ impl Default for RenderLayer {
             color_filter: None,
             pointer_events: false,
             visible: false,
+            backdrop_blur_region: None,
         }
     }
 }
