@@ -266,6 +266,10 @@ pub(crate) fn update_layout_tree(engine: &Engine) {
 
 #[profiling::function]
 pub(crate) fn trigger_callbacks(engine: &Engine, started_animations: &[FlatStorageId]) {
+    // First, trigger animation callbacks for started/running/finished animations
+    trigger_animation_callbacks(engine, started_animations);
+
+    // Then, trigger transaction callbacks as before
     engine.transactions.with_data_cloned(|transactions| {
         let scene = engine.scene.clone();
         transactions.iter().for_each(|(transaction_id, command)| {
@@ -318,6 +322,84 @@ pub(crate) fn trigger_callbacks(engine: &Engine, started_animations: &[FlatStora
             }
         });
     });
+}
+
+#[profiling::function]
+fn trigger_animation_callbacks(engine: &Engine, started_animations: &[FlatStorageId]) {
+    engine.animations.with_data_cloned(|animations| {
+        animations
+            .iter()
+            .for_each(|(animation_id, animation_state)| {
+                let acallbacks = { engine.animation_handlers.get(animation_id) };
+
+                if let Some(callbacks) = acallbacks {
+                    let started = started_animations.contains(animation_id);
+                    let callbacks_to_remove =
+                        animation_callbacks(animation_state, &callbacks, started);
+
+                    engine.animation_handlers.with_data_mut(|handlers| {
+                        if let Some(handler) = handlers.get_mut(animation_id) {
+                            callbacks_to_remove.iter().for_each(|callback| {
+                                handler.remove(callback);
+                            });
+                        }
+                    });
+                }
+            });
+    });
+}
+
+#[profiling::function]
+fn animation_callbacks(
+    animation_state: &AnimationState,
+    a_handler: &crate::engine::AnimationCallbacks,
+    on_start: bool,
+) -> Vec<crate::engine::AnimationCallback> {
+    let mut to_remove: Vec<crate::engine::AnimationCallback> = Vec::new();
+
+    if animation_state.is_running {
+        if on_start {
+            let callbacks = &a_handler.on_start;
+            callbacks.iter().for_each(|callback_item| {
+                let callback = &callback_item.callback;
+                callback(animation_state.progress);
+                if callback_item.once {
+                    to_remove.push(callback_item.clone());
+                }
+            });
+        }
+
+        let callbacks = &a_handler.on_update;
+        callbacks.iter().for_each(|callback_item| {
+            let callback = &callback_item.callback;
+            callback(animation_state.progress);
+            if callback_item.once {
+                to_remove.push(callback_item.clone());
+            }
+        });
+    } else if animation_state.is_finished {
+        // Call update one last time with progress = 1.0
+        let callbacks = &a_handler.on_update;
+        callbacks.iter().for_each(|callback_item| {
+            let callback = &callback_item.callback;
+            callback(1.0);
+            if callback_item.once {
+                to_remove.push(callback_item.clone());
+            }
+        });
+
+        // Call finish callbacks
+        let callbacks = &a_handler.on_finish;
+        callbacks.iter().for_each(|callback_item| {
+            let callback = &callback_item.callback;
+            callback(1.0);
+            if callback_item.once {
+                to_remove.push(callback_item.clone());
+            }
+        });
+    }
+
+    to_remove
 }
 
 #[profiling::function]
@@ -425,6 +507,21 @@ pub(crate) fn cleanup_animations(engine: &Engine, finished_animations: Vec<FlatS
         let animations_finished_to_remove = finished_animations;
         for animation_id in animations_finished_to_remove.iter() {
             animations.remove(animation_id);
+            // Also cleanup animation handlers for finished animations
+            engine.animation_handlers.with_data_mut(|handlers| {
+                if let Some(handler) = handlers.get_mut(animation_id) {
+                    handler.cleanup_once_callbacks();
+                }
+                // Optionally remove the handler entirely if all callbacks are gone
+                if let Some(handler) = handlers.get(animation_id) {
+                    if handler.on_start.is_empty()
+                        && handler.on_update.is_empty()
+                        && handler.on_finish.is_empty()
+                    {
+                        handlers.remove(animation_id);
+                    }
+                }
+            });
         }
     });
 }

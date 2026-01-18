@@ -307,6 +307,52 @@ impl LayersEngine {
         handler.once = once;
         self.engine.on_start_value(value_id, handler, once);
     }
+
+    /// Add a callback that is triggered when the animation is started.
+    ///
+    /// # Arguments
+    /// * `animation`: the animation reference
+    /// * `handler`: the callback function to be called with (layer, progress)
+    /// * `once`: if true, the callback is removed after it is triggered
+    pub fn on_animation_start<F: Into<TransactionCallback>>(
+        &self,
+        animation: AnimationRef,
+        handler: F,
+        once: bool,
+    ) {
+        self.engine.on_animation_start(animation, handler, once);
+    }
+
+    /// Add a callback that is triggered when the animation is updated.
+    ///
+    /// # Arguments
+    /// * `animation`: the animation reference
+    /// * `handler`: the callback function to be called with (layer, progress)
+    /// * `once`: if true, the callback is removed after it is triggered
+    pub fn on_animation_update<F: Into<TransactionCallback>>(
+        &self,
+        animation: AnimationRef,
+        handler: F,
+        once: bool,
+    ) {
+        self.engine.on_animation_update(animation, handler, once);
+    }
+
+    /// Add a callback that is triggered when the animation is finished.
+    ///
+    /// # Arguments
+    /// * `animation`: the animation reference
+    /// * `handler`: the callback function to be called with (layer, progress)
+    /// * `once`: if true, the callback is removed after it is triggered
+    pub fn on_animation_finish<F: Into<TransactionCallback>>(
+        &self,
+        animation: AnimationRef,
+        handler: F,
+        once: bool,
+    ) {
+        self.engine.on_animation_finish(animation, handler, once);
+    }
+
     pub fn cancel_animation(&self, animation: AnimationRef) {
         self.engine.cancel_animation(animation);
     }

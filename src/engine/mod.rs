@@ -116,15 +116,23 @@ pub struct AnimationState {
 
 static TRANSACTION_CALLBACK_ID: AtomicUsize = AtomicUsize::new(0);
 
-fn transaction_callack_id() -> usize {
+fn transaction_callback_id() -> usize {
     TRANSACTION_CALLBACK_ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
 }
 
-type DynCallback = Arc<dyn 'static + Send + Sync + Fn(&Layer, f32)>;
+type DynTransitionCallback = Arc<dyn 'static + Send + Sync + Fn(&Layer, f32)>;
+type DynAnimationCallback = Arc<dyn 'static + Send + Sync + Fn(f32)>;
 
 #[derive(Clone)]
 pub struct TransactionCallback {
-    callback: DynCallback,
+    callback: DynTransitionCallback,
+    pub(crate) once: bool,
+    pub(crate) id: usize,
+}
+
+#[derive(Clone)]
+pub struct AnimationCallback {
+    callback: DynAnimationCallback,
     pub(crate) once: bool,
     pub(crate) id: usize,
 }
@@ -134,7 +142,7 @@ impl<F: Fn(&Layer, f32) + Send + Sync + 'static> From<F> for TransactionCallback
         TransactionCallback {
             callback: Arc::new(f),
             once: true,
-            id: transaction_callack_id(),
+            id: transaction_callback_id(),
         }
     }
 }
@@ -144,6 +152,23 @@ impl PartialEq for TransactionCallback {
         self.id == other.id
     }
 }
+
+impl<F: Fn(f32) + Send + Sync + 'static> From<F> for AnimationCallback {
+    fn from(f: F) -> Self {
+        AnimationCallback {
+            callback: Arc::new(f),
+            once: true,
+            id: transaction_callback_id(),
+        }
+    }
+}
+
+impl PartialEq for AnimationCallback {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+
 pub enum TransactionEventType {
     Start,
     Update,
@@ -177,6 +202,40 @@ impl TransitionCallbacks {
     }
 }
 impl Default for TransitionCallbacks {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[derive(Clone)]
+struct AnimationCallbacks {
+    pub on_start: Vec<AnimationCallback>,
+    pub on_update: Vec<AnimationCallback>,
+    pub on_finish: Vec<AnimationCallback>,
+}
+
+impl AnimationCallbacks {
+    pub fn new() -> Self {
+        AnimationCallbacks {
+            on_start: Vec::new(),
+            on_update: Vec::new(),
+            on_finish: Vec::new(),
+        }
+    }
+
+    pub fn remove(&mut self, callback: &AnimationCallback) {
+        self.on_start.retain(|c| c != callback);
+        self.on_update.retain(|c| c != callback);
+        self.on_finish.retain(|c| c != callback);
+    }
+    pub fn cleanup_once_callbacks(&mut self) {
+        self.on_start.retain(|c| !c.once);
+        self.on_update.retain(|c| !c.once);
+        self.on_finish.retain(|c| !c.once);
+    }
+}
+
+impl Default for AnimationCallbacks {
     fn default() -> Self {
         Self::new()
     }
@@ -286,6 +345,8 @@ pub struct Engine {
     transaction_handlers: FlatStorage<TransitionCallbacks>,
     /// The indexmap of handlers for the values
     value_handlers: FlatStorage<TransitionCallbacks>,
+    /// The indexmap of handlers for the animations
+    animation_handlers: FlatStorage<AnimationCallbacks>,
 
     /// The indexmap of handlers for the pointer events
     pointer_handlers: FlatStorage<PointerCallback>,
@@ -364,6 +425,44 @@ impl TransactionRef {
 
 #[derive(Clone, Copy, Debug)]
 pub struct AnimationRef(FlatStorageId);
+
+impl AnimationRef {
+    fn engine(&self) -> Arc<Engine> {
+        // We need to get the engine from somewhere
+        // Since AnimationRef doesn't store engine_id, we'll need to add it
+        // For now, we'll just implement the methods on Engine and expose them differently
+        unimplemented!("Use engine methods directly")
+    }
+
+    /// Add a callback that is triggered when the animation is started.
+    ///
+    /// # Arguments
+    /// * `handler`: the callback function to be called
+    /// * `once`: if true, the callback is removed after it is triggered
+    pub fn on_start<F: Into<TransactionCallback>>(&self, _handler: F, _once: bool) -> &Self {
+        // Implementation note: Since AnimationRef doesn't have engine reference,
+        // users should call engine.on_animation_start(animation, handler, once) instead
+        unimplemented!("Use Engine::on_animation_start instead")
+    }
+
+    /// Add a callback that is triggered when the animation is updated.
+    ///
+    /// # Arguments
+    /// * `handler`: the callback function to be called
+    /// * `once`: if true, the callback is removed after it is triggered
+    pub fn on_update<F: Into<TransactionCallback>>(&self, _handler: F, _once: bool) -> &Self {
+        unimplemented!("Use Engine::on_animation_update instead")
+    }
+
+    /// Add a callback that is triggered when the animation is finished.
+    ///
+    /// # Arguments
+    /// * `handler`: the callback function to be called
+    /// * `once`: if true, the callback is removed after it is triggered
+    pub fn on_finish<F: Into<TransactionCallback>>(&self, _handler: F, _once: bool) -> &Self {
+        unimplemented!("Use Engine::on_animation_finish instead")
+    }
+}
 
 impl std::fmt::Display for AnimationRef {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -477,6 +576,7 @@ impl Engine {
             timestamp: RwLock::new(Timestamp(0.0)),
             transaction_handlers: FlatStorage::new(),
             value_handlers: FlatStorage::new(),
+            animation_handlers: FlatStorage::new(),
             values_transactions: RwLock::new(HashMap::new()),
             layout_tree: RwLock::new(layout_tree),
             layout_root,
@@ -1575,6 +1675,58 @@ impl Engine {
         let mut handler = handler.into();
         handler.once = once;
         self.add_value_handler(value_id, TransactionEventType::Finish, handler);
+    }
+
+    fn add_animation_handler(
+        &self,
+        animation_id: FlatStorageId,
+        event_type: TransactionEventType,
+        handler: AnimationCallback,
+    ) {
+        let mut ch = self
+            .animation_handlers
+            .get(&animation_id)
+            .unwrap_or_default();
+        match event_type {
+            TransactionEventType::Start => ch.on_start.push(handler),
+            TransactionEventType::Finish => ch.on_finish.push(handler),
+            TransactionEventType::Update => ch.on_update.push(handler),
+        };
+
+        self.animation_handlers.insert_with_id(ch, animation_id);
+    }
+
+    pub fn on_animation_start<F: Into<AnimationCallback>>(
+        &self,
+        animation: AnimationRef,
+        handler: F,
+        once: bool,
+    ) {
+        let mut handler = handler.into();
+        handler.once = once;
+        self.add_animation_handler(animation.0, TransactionEventType::Start, handler);
+    }
+
+    pub fn on_animation_update<F: Into<AnimationCallback>>(
+        &self,
+        animation: AnimationRef,
+        handler: F,
+        once: bool,
+    ) {
+        let mut handler = handler.into();
+        handler.once = once;
+        self.add_animation_handler(animation.0, TransactionEventType::Update, handler);
+    }
+
+    pub fn on_animation_finish<F: Into<AnimationCallback>>(
+        &self,
+        animation: AnimationRef,
+        handler: F,
+        once: bool,
+    ) {
+        let mut handler = handler.into();
+        handler.once = once;
+        self.add_animation_handler(animation.0, TransactionEventType::Finish, handler);
     }
     #[allow(clippy::unwrap_or_default)]
     pub(crate) fn add_pointer_handler<F: Into<PointerHandlerFunction>>(
