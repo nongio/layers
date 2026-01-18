@@ -1256,7 +1256,23 @@ impl Engine {
                 self.bubble_up_backdrop_blur_regions(*node_id);
             }
 
-            // Phase 8: Rebuild hit test node list if dirty
+            // Phase 8: Include backdrop blur regions in damage if damage is not empty
+            // After bubbling up, the root node contains all backdrop blur regions
+            if !total_damage.is_empty() {
+                self.scene.with_arena(|arena| {
+                    if let Some(root_node) = arena.get(*root_id) {
+                        if let Some(backdrop_rrects) =
+                            &root_node.get().render_layer.backdrop_blur_region
+                        {
+                            for rrect in backdrop_rrects {
+                                total_damage.join(rrect.rect());
+                            }
+                        }
+                    }
+                });
+            }
+
+            // Phase 9: Rebuild hit test node list if dirty
             if self.hit_test_node_list_dirty.load(Ordering::Relaxed) {
                 self.rebuild_hit_test_node_list(*root_id);
             }
@@ -1398,6 +1414,7 @@ impl Engine {
     /// Transforms child's backdrop blur regions (including its own if it has BackgroundBlur)
     /// into parent's coordinate space and merges them into parent's backdrop_blur_region.
     /// Uses Vec<RRect> for thread safety, converted to Path during rendering.
+    /// Skips hidden nodes and their subtrees.
     fn bubble_up_backdrop_blur_regions(&self, node_id: indextree::NodeId) {
         self.scene.with_arena_mut(|arena| {
             // Collect child's backdrop blur rrects, blend mode, and rounded bounds
@@ -1406,6 +1423,11 @@ impl Engine {
                     return;
                 };
                 let child = child_node.get();
+
+                // Early exit: skip if child is hidden (entire subtree is hidden)
+                if child.hidden() {
+                    return;
+                }
 
                 // Early exit: skip if child has no backdrop blur and no backdrop rrects from descendants
                 let has_backdrop_blur =
