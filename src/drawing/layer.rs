@@ -52,7 +52,7 @@ pub fn draw_layer(
 
                 paint.set_shader(noise);
                 paint.set_blend_mode(skia_safe::BlendMode::SoftLight);
-                paint.set_alpha(100);
+                paint.set_alpha(70);
 
                 canvas.draw_paint(&paint);
             }
