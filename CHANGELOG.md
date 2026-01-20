@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.0] - 2026-01-20
+
+### 🚀 Features
+
+- Ui update layers_inspector
+- Add fractal noise overlay for BackgroundBlur blend mode
+- Animation callbacks
+- Adjust background blur noise alpha to 70
+
+### 🐛 Bug Fixes
+
+- Node removed checks + expose Spring timing
+- Implement backdrop blur region bubbling for image-cached layers
+
+### 📚 Documentation
+
+- Update changelog for backdrop blur damage tracking
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump version to 1.1.0
+
 ## [unreleased]
 
 ### 🚀 Features
