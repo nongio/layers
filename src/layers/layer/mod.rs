@@ -177,7 +177,7 @@ impl Layer {
     ///
     /// # Examples
     /// ```ignore
-    /// use lay_rs::prelude::*;
+    /// use layers::prelude::*;
     ///
     /// // Create a triangle path
     /// let mut path = skia_safe::Path::new();
