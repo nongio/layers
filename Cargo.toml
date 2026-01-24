@@ -1,11 +1,12 @@
 [package]
-name = "lay-rs"
-version = "1.2.0"
+name = "laye-rs"
+version = "1.3.0"
 edition = "2021"
 build = "build.rs"
 rust-version = "1.83.0"
 
 [lib]
+name = "layers"
 crate-type = ["lib", "cdylib"] # Creates dynamic lib
 
 [package.metadata.docs.rs]

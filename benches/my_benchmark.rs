@@ -3,7 +3,7 @@ use std::time::Duration;
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 
 use ::taffy::Style;
-use lay_rs::{engine::Engine, prelude::*, types::*};
+use layers::{engine::Engine, prelude::*, types::*};
 
 #[allow(dead_code)]
 fn criterion_benchmark_update(c: &mut Criterion) {

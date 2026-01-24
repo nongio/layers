@@ -1,4 +1,4 @@
-use lay_rs::{
+use layers::{
     prelude::*,
     renderer::skia_image::SkiaImageRenderer,
     types::{BorderRadius, Color, Size},

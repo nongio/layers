@@ -136,6 +136,9 @@ impl BuildLayerTree for Layer {
         } else {
             scene_layer.set_color_filter(None);
         }
+        if let Some(shape) = viewlayer_tree.shape.clone() {
+            scene_layer.shape(shape);
+        }
 
         // Handlers
         scene_layer.remove_all_pointer_handlers();

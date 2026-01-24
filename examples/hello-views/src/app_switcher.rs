@@ -1,11 +1,11 @@
 #![allow(dead_code)]
 use std::hash::Hash;
 
-use lay_rs::{
+use layers::{
     prelude::*,
     skia::{Color4f, Font},
 };
-use lay_rs::{skia, types::Size};
+use layers::{skia, types::Size};
 
 #[derive(Clone, Hash, Debug)]
 pub struct AppSwitcherState {
@@ -41,12 +41,12 @@ pub fn view_app_icon(state: &AppIconState, view: &View<AppIconState>) -> LayerTr
     let index = state.index;
     let val = layer.with_state(|state| state.get::<i32>("notification").unwrap_or_default());
     let id: usize = layer.id.0.into();
-    let font_mgr = lay_rs::skia::FontMgr::default();
+    let font_mgr = layers::skia::FontMgr::default();
     let typeface = font_mgr
-        .match_family_style("Inter", lay_rs::skia::FontStyle::default())
+        .match_family_style("Inter", layers::skia::FontStyle::default())
         .unwrap();
 
-    let draw_picture = move |canvas: &lay_rs::skia::Canvas, w: f32, h: f32| -> lay_rs::skia::Rect {
+    let draw_picture = move |canvas: &layers::skia::Canvas, w: f32, h: f32| -> layers::skia::Rect {
         let paint = skia::Paint::new(Color4f::new(1.0, 1.0, 0.0, 0.5), None);
         let width = (w - PADDING * 2.0).max(0.0);
         canvas.draw_rrect(
@@ -57,7 +57,7 @@ pub fn view_app_icon(state: &AppIconState, view: &View<AppIconState>) -> LayerTr
             ),
             &paint,
         );
-        let font = lay_rs::skia::Font::from_typeface_with_params(typeface.clone(), 30.0, 1.0, 0.0);
+        let font = layers::skia::Font::from_typeface_with_params(typeface.clone(), 30.0, 1.0, 0.0);
         let paint = skia::Paint::new(Color4f::new(0.0, 0.0, 0.0, 1.0), None);
         let text = format!("index:{} id:{} state:{}", index, id, val);
         canvas.draw_str(text, (60.0, width + 100.0), &font, &paint);
@@ -135,7 +135,7 @@ impl AppIconView {
         });
     }
 }
-impl lay_rs::prelude::RenderLayerTree for AppIconView {
+impl layers::prelude::RenderLayerTree for AppIconView {
     fn get_key(&self) -> String {
         self.view.get_key()
     }

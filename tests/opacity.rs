@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use lay_rs::prelude::*;
+    use layers::prelude::*;
 
     #[test]
     pub fn layer_opacity() {

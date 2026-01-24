@@ -16,7 +16,7 @@
 //! # Usage
 //! ```rust
 //! // use default easing function
-//! use lay_rs::prelude::*;
+//! use layers::prelude::*;
 //!
 //! let engine = Engine::create(1000.0, 1000.0);
 //! let layer = engine.new_layer();
@@ -33,7 +33,7 @@
 //!
 //! # Advanced Easing usage
 //! ```rust
-//! use lay_rs::prelude::*;
+//! use layers::prelude::*;
 //!
 //! let engine = Engine::create(1000.0, 1000.0);
 //! let layer = engine.new_layer();

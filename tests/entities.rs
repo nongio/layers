@@ -1,4 +1,4 @@
-use lay_rs::{prelude::*, types::Point};
+use layers::{prelude::*, types::Point};
 
 #[test]
 pub fn change_layer_position() {

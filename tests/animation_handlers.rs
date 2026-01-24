@@ -1,4 +1,4 @@
-use lay_rs::prelude::*;
+use layers::prelude::*;
 use std::sync::{Arc, RwLock};
 
 /// Test that animation callbacks are triggered correctly

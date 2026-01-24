@@ -7,8 +7,84 @@ use glutin::event::WindowEvent;
 use glutin::event_loop::{ControlFlow, EventLoop};
 use glutin::window::WindowBuilder;
 use glutin::GlProfile;
-use lay_rs::types::Size;
-use lay_rs::{prelude::*, skia};
+use layers::types::Size;
+use layers::{prelude::*, skia};
+
+#[allow(clippy::too_many_arguments)]
+pub fn draw_balloon_rect(
+    x: f32,
+    y: f32,
+    width: f32,
+    height: f32,
+    corner_radius: f32,
+    arrow_width: f32,
+    arrow_height: f32,
+    arrow_position: f32, // Position of the arrow along the bottom edge (0.0 to 1.0)
+    arrow_corner_radius: f32,
+) -> layers::skia::Path {
+    let mut path = layers::skia::Path::new();
+
+    // Calculate the arrow tip position
+    let arrow_tip_x = x + arrow_position * width;
+    let arrow_base_left_x = arrow_tip_x - arrow_width / 2.0;
+    let arrow_base_right_x = arrow_tip_x + arrow_width / 2.0;
+
+    // Move to the starting point (top-left corner)
+    path.move_to((x + corner_radius, y));
+
+    // Top edge
+    path.line_to((x + width - corner_radius, y));
+    path.arc_to_tangent(
+        (x + width, y),
+        (x + width, y + corner_radius),
+        corner_radius,
+    );
+
+    // Right edge
+    path.line_to((x + width, y + height - corner_radius - arrow_height));
+    path.arc_to_tangent(
+        (x + width, y + height - arrow_height),
+        (x + width - corner_radius, y + height - arrow_height),
+        corner_radius,
+    );
+
+    // Arrow with rounded corners
+    path.line_to((
+        arrow_base_right_x, //- arrow_corner_radius,
+        y + height - arrow_height,
+    ));
+    path.arc_to_tangent(
+        (arrow_base_right_x, y + height - arrow_height),
+        (arrow_tip_x, y + height),
+        arrow_corner_radius,
+    );
+    path.arc_to_tangent(
+        (arrow_tip_x, y + height),
+        (arrow_base_left_x, y + height - arrow_height),
+        arrow_corner_radius,
+    );
+    path.arc_to_tangent(
+        (arrow_base_left_x, y + height - arrow_height),
+        (x + corner_radius, y + height - arrow_height),
+        arrow_corner_radius,
+    );
+
+    // Bottom edge
+    path.line_to((x + corner_radius, y + height - arrow_height));
+    path.arc_to_tangent(
+        (x, y + height - arrow_height),
+        (x, y + height - corner_radius - arrow_height),
+        corner_radius,
+    );
+
+    // Left edge
+    path.line_to((x, y + corner_radius));
+    path.arc_to_tangent((x, y), (x + corner_radius, y), corner_radius);
+
+    // Close the path
+    path.close();
+    path
+}
 
 #[allow(unused_assignments)]
 #[tokio::main]
@@ -58,7 +134,7 @@ async fn main() {
 
     env.windowed_context = unsafe { env.windowed_context.make_current().unwrap() };
 
-    let mut skia_renderer = lay_rs::renderer::skia_fbo::SkiaFboRenderer::create(
+    let mut skia_renderer = layers::renderer::skia_fbo::SkiaFboRenderer::create(
         size.width as i32,
         size.height as i32,
         sample_count,
@@ -105,22 +181,30 @@ async fn main() {
     layer.set_anchor_point((0.5, 0.5), None);
     layer.set_key("test_layer");
     layer.set_position((100.0, 0.0), None);
-    layer.set_size(Size::points(100.0, 100.0), None);
+    layer.set_size(Size::points(500.0, 500.0), None);
     layer.set_background_color(
         PaintColor::Solid {
-            color: Color::new_rgba255(255, 0, 0, 255),
+            color: Color::new_rgba255(150, 150, 150, 100),
         },
         None,
     );
-    layer.set_border_width(5.0, None);
+    layer.set_blend_mode(BlendMode::BackgroundBlur);
+    layer.set_border_width(2.0, None);
     layer.set_border_color(
         PaintColor::Solid {
-            color: Color::new_rgba255(0, 0, 0, 255),
+            color: Color::new_rgba255(0, 0, 0, 100),
         },
         None,
     );
-    layer.set_border_corner_radius(BorderRadius::new_single(50.0), None);
 
+    layer.set_shadow_color(Color::new_rgba255(0, 0, 0, 255), None);
+    layer.set_shadow_offset((0.0, 0.0), None);
+    layer.set_shadow_radius(20.0, None);
+    layer.set_picture_cached(true);
+    // layer.set_border_corner_radius(BorderRadius::new_single(50.0), None);
+    let balloon = draw_balloon_rect(0.0, 0.0, 500.0, 500.0, 30.0, 100.0, 70.0, 0.5, 3.0);
+
+    layer.shape(layers::prelude::Shape::from_path(&balloon));
     engine.add_layer(&layer);
 
     // engine.start_debugger();
@@ -130,9 +214,9 @@ async fn main() {
     let animation_start = std::sync::Arc::new(AtomicBool::new(false));
     let animation_finished = std::sync::Arc::new(AtomicBool::new(false));
     let animation_progress = std::sync::Arc::new(AtomicI32::new(0));
-    let font_mgr = lay_rs::skia::FontMgr::default();
+    let font_mgr = layers::skia::FontMgr::default();
     let typeface = font_mgr
-        .match_family_style("Inter", lay_rs::skia::FontStyle::default())
+        .match_family_style("Inter", layers::skia::FontStyle::default())
         .unwrap();
 
     events_loop.run(move |event, _, control_flow| {
@@ -152,7 +236,7 @@ async fn main() {
                     if current_surface.width() != size.width as i32
                         || current_surface.height() != size.height as i32
                     {
-                        skia_renderer = lay_rs::renderer::skia_fbo::SkiaFboRenderer::create(
+                        skia_renderer = layers::renderer::skia_fbo::SkiaFboRenderer::create(
                             (size.width) as i32,
                             (size.height) as i32,
                             sample_count,
@@ -311,20 +395,21 @@ async fn main() {
                         // // draw background white
                         canvas.draw_rect(bounds, &paint);
 
-                        // render the scene
-                        canvas.save();
-                        skia_renderer.draw_scene(engine.scene(), root, None);
-                        canvas.restore();
-
-                        let c: skia::Color4f = skia::Color::GRAY.into();
+                        let c: skia::Color4f = skia::Color::BLACK.into();
                         let paint = skia::Paint::new(&c, None);
 
                         // draw a grid of circles
                         for x in (0..3000).step_by(100) {
                             for y in (0..2000).step_by(100) {
-                                canvas.draw_circle((x as f32, y as f32), 5.0, &paint);
+                                canvas.draw_circle((x as f32, y as f32), 20.0, &paint);
                             }
                         }
+
+                        // render the scene
+                        canvas.save();
+                        skia_renderer.draw_scene(engine.scene(), root, None);
+                        canvas.restore();
+
                         let c: skia::Color4f = skia::Color::BLACK.into();
                         let paint = skia::Paint::new(&c, None);
                         let font = skia::Font::from_typeface(&typeface, 30.0);

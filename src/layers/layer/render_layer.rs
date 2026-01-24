@@ -1,5 +1,9 @@
 use super::model::{ContentDrawFunctionInternal, ModelLayer};
-use crate::types::{BlendMode, Color, Point, *};
+use crate::{
+    shape::Shape,
+    types::{BlendMode, Color, Point, *},
+};
+use skia_safe::Contains;
 
 use serde::{ser::SerializeStruct, Serialize};
 use skia::{ColorFilter, ImageFilter};
@@ -13,6 +17,10 @@ pub struct RenderLayer {
     pub bounds: skia_safe::Rect,
     /// The rounded rectangle representing the bounds of the layer
     pub rbounds: skia_safe::RRect,
+    /// The bounds of the shape (for hit-testing custom shapes)
+    pub shape_bounds: skia_safe::Rect,
+    /// The transformed shape bounds in global coordinates
+    pub global_shape_bounds: skia_safe::Rect,
     /// The transformed bounds of the layer, relative to the parent
     pub local_transformed_bounds: skia_safe::Rect,
     /// The transformed bounds of the layer, relative to the parent, including children bounds
@@ -74,6 +82,8 @@ pub struct RenderLayer {
     /// Used by image-cached layers to apply backdrop blur to specific regions
     /// Stored as Vec<RRect> for thread safety, converted to Path during rendering
     pub backdrop_blur_region: Option<Vec<skia_safe::RRect>>,
+    /// The shape definition for this layer
+    pub shape: Shape,
 }
 
 impl RenderLayer {
@@ -208,6 +218,17 @@ impl RenderLayer {
         self.premultiplied_opacity = opacity * context_opacity;
         self.bounds = bounds;
         self.rbounds = skia_safe::RRect::new_rect_radii(bounds, &border_corner_radius.into());
+
+        // Calculate shape bounds for hit-testing
+        // For RoundRect this is the same as bounds, for custom paths we compute actual bounds
+        let shape = model.shape.read().unwrap().clone();
+        self.shape = shape.clone();
+        self.shape_bounds = shape.bounds(bounds, &border_corner_radius);
+
+        // Transform shape bounds to global coordinates for hit-testing
+        let (global_shape_bounds, _) = self.transform_33.map_rect(self.shape_bounds);
+        self.global_shape_bounds = global_shape_bounds;
+
         self.bounds_with_children = bounds;
         self.local_transformed_bounds = local_transformed_bounds;
         self.local_transformed_bounds_with_children = local_transformed_bounds;
@@ -253,6 +274,64 @@ impl RenderLayer {
         }
     }
 
+    /// Generate the shape path in local coordinates on-demand.
+    /// Called during drawing to avoid caching non-Sync Skia Path.
+    pub fn shape_path(&self) -> skia_safe::Path {
+        self.shape.to_path(self.bounds, &self.border_corner_radius)
+    }
+
+    /// Clip canvas to shape (optimized for RoundRect).
+    pub fn clip_to_shape(
+        &self,
+        canvas: &skia_safe::Canvas,
+        op: skia_safe::ClipOp,
+        antialias: bool,
+    ) {
+        match &self.shape {
+            Shape::RoundRect => {
+                // Fast path: use rrect clipping directly
+                canvas.clip_rrect(self.rbounds, op, Some(antialias));
+            }
+            _ => {
+                let path = self.shape_path();
+                canvas.clip_path(&path, op, antialias);
+            }
+        }
+    }
+
+    /// Draw shape path with paint (optimized for RoundRect).
+    pub fn draw_shape(&self, canvas: &skia_safe::Canvas, paint: &skia_safe::Paint) {
+        match &self.shape {
+            Shape::RoundRect => {
+                // Fast path: use rrect drawing directly
+                canvas.draw_rrect(self.rbounds, paint);
+            }
+            _ => {
+                let path = self.shape_path();
+                canvas.draw_path(&path, paint);
+            }
+        }
+    }
+
+    /// Check if a point (in local coordinates) is inside the shape.
+    pub fn contains_point(&self, point: skia_safe::Point) -> bool {
+        match &self.shape {
+            Shape::RoundRect => {
+                // Fast path: check if point is in bounds
+                self.bounds.contains(point)
+            }
+            _ => {
+                // Use shape_bounds for bounding box rejection first
+                if !self.shape_bounds.contains(point) {
+                    return false;
+                }
+                // For custom paths, do precise containment test
+                let path = self.shape_path();
+                path.contains(point)
+            }
+        }
+    }
+
     #[allow(dead_code)]
     pub(crate) fn from_model_and_layout(
         model: &ModelLayer,
@@ -277,6 +356,11 @@ impl RenderLayer {
         let bounds = skia_safe::Rect::from_xywh(0.0, 0.0, size.width, size.height);
         let border_corner_radius = model.border_corner_radius.value();
         let rbounds = skia_safe::RRect::new_rect_radii(bounds, &border_corner_radius.into());
+
+        // Get shape from model
+        let shape = model.shape.read().unwrap().clone();
+        let shape_bounds = shape.bounds(bounds, &border_corner_radius);
+
         let rotation = model.rotation.value();
         let anchor_point = model.anchor_point.value();
         let scale = model.scale.value();
@@ -356,6 +440,9 @@ impl RenderLayer {
         let clip_content = model.clip_content.value();
         let clip_children = model.clip_children.value();
 
+        // Transform shape bounds to global coordinates
+        let (global_shape_bounds, _) = transform.to_m33().map_rect(shape_bounds);
+
         let mut render_layer = Self {
             key,
             size,
@@ -383,6 +470,9 @@ impl RenderLayer {
             global_transformed_bounds_with_children: transformed_bounds,
             content_draw_func,
             rbounds,
+            shape_bounds,
+            global_shape_bounds,
+            shape: shape.clone(),
             global_transformed_rbounds: transformed_rbounds,
             clip_content,
             clip_children,
@@ -428,6 +518,9 @@ impl Default for RenderLayer {
             premultiplied_opacity: 1.0,
             bounds: skia_safe::Rect::default(),
             rbounds: skia_safe::RRect::default(),
+            shape_bounds: skia_safe::Rect::default(),
+            global_shape_bounds: skia_safe::Rect::default(),
+            shape: Shape::default(),
             local_transformed_bounds: skia_safe::Rect::default(),
             local_transformed_bounds_with_children: skia_safe::Rect::default(),
             bounds_with_children: skia_safe::Rect::default(),
@@ -452,7 +545,7 @@ impl Serialize for RenderLayer {
     where
         S: serde::Serializer,
     {
-        let mut seq = serializer.serialize_struct("RenderLayer", 17)?;
+        let mut seq = serializer.serialize_struct("RenderLayer", 18)?;
         // let mut seq = serializer.serialize_seq(Some(15))?;
         // seq.serialize_element(&Rectangle::from(self.rbounds))?;
         // seq.serialize_element(&self.transformed_rbounds.into())?;
@@ -479,6 +572,7 @@ impl Serialize for RenderLayer {
         seq.serialize_field("blend_mode", &self.blend_mode)?;
         seq.serialize_field("opacity", &self.opacity)?;
         seq.serialize_field("visible", &self.visible)?;
+        seq.serialize_field("shape", &self.shape)?;
         // seq.serialize_element(&self.content)?;
         // seq.serialize_element(&self.transform)?;
         seq.end()
