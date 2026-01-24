@@ -281,7 +281,12 @@ impl RenderLayer {
     }
 
     /// Clip canvas to shape (optimized for RoundRect).
-    pub fn clip_to_shape(&self, canvas: &skia_safe::Canvas, op: skia_safe::ClipOp, antialias: bool) {
+    pub fn clip_to_shape(
+        &self,
+        canvas: &skia_safe::Canvas,
+        op: skia_safe::ClipOp,
+        antialias: bool,
+    ) {
         match &self.shape {
             Shape::RoundRect => {
                 // Fast path: use rrect clipping directly
