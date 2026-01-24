@@ -189,15 +189,20 @@ async fn main() {
         None,
     );
     layer.set_blend_mode(BlendMode::BackgroundBlur);
-    layer.set_border_width(5.0, None);
+    layer.set_border_width(2.0, None);
     layer.set_border_color(
         PaintColor::Solid {
-            color: Color::new_rgba255(0, 0, 0, 255),
+            color: Color::new_rgba255(0, 0, 0, 100),
         },
         None,
     );
+
+    layer.set_shadow_color(Color::new_rgba255(0, 0, 0, 255), None);
+    layer.set_shadow_offset((0.0, 0.0), None);
+    layer.set_shadow_radius(20.0, None);
+    layer.set_picture_cached(true);
     // layer.set_border_corner_radius(BorderRadius::new_single(50.0), None);
-    let balloon = draw_balloon_rect(0.0, 0.0, 500.0, 500.0, 30.0, 40.0, 30.0, 0.5, 10.0);
+    let balloon = draw_balloon_rect(0.0, 0.0, 500.0, 500.0, 30.0, 100.0, 70.0, 0.5, 3.0);
 
     layer.shape(layers::prelude::Shape::from_path(&balloon));
     engine.add_layer(&layer);

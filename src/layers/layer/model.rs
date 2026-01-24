@@ -9,6 +9,7 @@ use taffy::style::Display;
 
 use crate::{
     engine::command::Attribute,
+    shape::Shape,
     types::{BlendMode, Color, Point, *},
 };
 
@@ -125,6 +126,7 @@ pub(crate) struct ModelLayer {
     pub image_filter_progress: Attribute<f32>,
     pub clip_content: Attribute<bool>,
     pub clip_children: Attribute<bool>,
+    pub shape: Arc<RwLock<Shape>>,
 }
 
 impl Default for ModelLayer {
@@ -164,6 +166,7 @@ impl Default for ModelLayer {
         let clip_content = Attribute::new(false);
         let clip_children = Attribute::new(false);
         let pointer_events = Arc::new(AtomicBool::new(true));
+        let shape = Arc::new(RwLock::new(Shape::default()));
         // let hidden = Arc::new(AtomicBool::new(false));
 
         Self {
@@ -193,6 +196,7 @@ impl Default for ModelLayer {
             filter_bounds,
             clip_content,
             clip_children,
+            shape,
         }
     }
 }

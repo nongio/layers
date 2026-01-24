@@ -15,7 +15,8 @@ impl ContainsPoint for SceneNode {
         let inverse = matrix.invert().unwrap();
         let point = inverse.map_point(SkiaPoint::new(point.x, point.y));
 
-        self.render_layer.bounds.contains(point)
+        // Use shape_bounds for accurate hit-testing with custom shapes
+        self.render_layer.shape_bounds.contains(point)
     }
 }
 

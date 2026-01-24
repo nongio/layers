@@ -111,6 +111,8 @@ pub struct LayerTree {
     pub clip_children: Option<bool>,
     #[builder(setter(into), default)]
     pub color_filter: Option<skia::ColorFilter>,
+    #[builder(setter(into, strip_option), default)]
+    pub shape: Option<Shape>,
 }
 
 impl AsRef<LayerTree> for LayerTree {

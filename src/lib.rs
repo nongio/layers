@@ -62,6 +62,7 @@ pub mod engine;
 mod layers;
 pub mod prelude;
 pub mod renderer;
+mod shape;
 pub mod types;
 pub mod utils;
 pub mod view;

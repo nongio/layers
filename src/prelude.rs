@@ -8,6 +8,7 @@ pub use super::{
         layer::Effect,
         layer::Layer,
     },
+    shape::Shape,
     types::{
         BlendMode, BorderRadius, BorderStyle, Color, Image, Matrix, PaintColor, Point, Rectangle,
     },

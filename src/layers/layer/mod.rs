@@ -21,6 +21,7 @@ use self::model::{ContentDrawFunction, PointerHandlerFunction};
 use crate::engine::{command::*, PointerEventType};
 use crate::engine::{node::RenderableFlags, TransactionCallback};
 use crate::engine::{Engine, NodeRef, TransactionRef};
+use crate::shape::Shape;
 use crate::types::*;
 use crate::{
     drawing::render_node_tree,
@@ -168,6 +169,31 @@ impl Layer {
     change_model!(image_filter_progress, f32, RenderableFlags::NEEDS_PAINT);
     change_model!(clip_content, bool, RenderableFlags::NEEDS_PAINT);
     change_model!(clip_children, bool, RenderableFlags::NEEDS_PAINT);
+
+    /// Set a custom shape for this layer.
+    ///
+    /// The shape affects the layer's visual boundary for rendering, hit-testing, and clipping.
+    /// By default, layers use `Shape::RoundRect` with the `border_corner_radius` attribute.
+    ///
+    /// # Examples
+    /// ```ignore
+    /// use lay_rs::prelude::*;
+    ///
+    /// // Create a triangle path
+    /// let mut path = skia_safe::Path::new();
+    /// path.move_to((50.0, 0.0));
+    /// path.line_to((100.0, 100.0));
+    /// path.line_to((0.0, 100.0));
+    /// path.close();
+    ///
+    /// layer.shape(Shape::from_path(&path));
+    /// ```
+    pub fn shape(&self, shape: Shape) {
+        *self.model.shape.write().unwrap() = shape;
+        // Trigger repaint to regenerate shape bounds and redraw
+        self.engine
+            .set_node_flags(self.id, RenderableFlags::NEEDS_PAINT);
+    }
 
     /// Sets the anchor point while compensating the `position` so the layer stays in the
     /// same place on screen. Returns the newly applied position.

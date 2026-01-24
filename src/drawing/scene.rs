@@ -308,11 +308,8 @@ pub fn paint_node_tree(
     // TODO: clip bounds only if the layer is set to clip children
     let restore_point = render_canvas.save();
     if render_layer.clip_children {
-        render_canvas.clip_rrect(
-            render_layer.rbounds,
-            Some(skia_safe::ClipOp::Intersect),
-            Some(true),
-        );
+        let shape_path = render_layer.shape_path();
+        render_canvas.clip_path(&shape_path, Some(skia_safe::ClipOp::Intersect), Some(true));
     }
     // let bounds = skia_safe::Rect::from_wh(render_layer.size.x, render_layer.size.y);
     // canvas.clip_rect(bounds, None, None);
@@ -589,9 +586,8 @@ pub(crate) fn paint_node(
 
     if blend_mode == crate::prelude::BlendMode::BackgroundBlur && opacity > 0.0 {
         profiling::scope!("background_blur");
-        let border_corner_radius = render_layer.border_corner_radius;
-        let rrbounds = render_layer.rbounds;
-        canvas.clip_rrect(rrbounds, skia_safe::ClipOp::Intersect, Some(true));
+        let shape_path = render_layer.shape_path();
+        canvas.clip_path(&shape_path, skia_safe::ClipOp::Intersect, true);
 
         let crop_rect = Some(skia_safe::image_filters::CropRect::from(
             bounds_to_origin.with_outset((BACKGROUND_BLUR_SIGMA, BACKGROUND_BLUR_SIGMA)),
