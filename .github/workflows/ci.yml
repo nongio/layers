@@ -95,7 +95,7 @@ jobs:
         run: cargo doc --no-deps --features "default" -p laye-rs
       
       - name: Rename docs folder
-        run: mv ./target/doc/laye_rs ./target/doc/docs
+        run: mv ./target/doc/layers ./target/doc/docs
         
       - name: Deploy
         if: ${{ github.event_name == 'push' }}
