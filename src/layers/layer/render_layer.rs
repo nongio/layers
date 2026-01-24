@@ -3,7 +3,6 @@ use crate::{
     shape::Shape,
     types::{BlendMode, Color, Point, *},
 };
-use skia_safe::Path;
 
 use serde::{ser::SerializeStruct, Serialize};
 use skia::{ColorFilter, ImageFilter};
@@ -222,14 +221,6 @@ impl RenderLayer {
         // Calculate shape bounds for hit-testing
         // For RoundRect this is the same as bounds, for custom paths we compute actual bounds
         let shape = model.shape.read().unwrap().clone();
-        // Convert RoundRect to cached path for performance (avoid regenerating each frame)
-        let shape = match shape {
-            Shape::RoundRect => {
-                let path = Path::rrect(self.rbounds, None);
-                Shape::Path(crate::shape::PathData::from_path(&path))
-            }
-            _ => shape,
-        };
         self.shape = shape.clone();
         self.shape_bounds = shape.bounds(bounds, &border_corner_radius);
 
@@ -315,14 +306,6 @@ impl RenderLayer {
 
         // Get shape from model
         let shape = model.shape.read().unwrap().clone();
-        // Convert RoundRect to cached path for performance (avoid regenerating each frame)
-        let shape = match shape {
-            Shape::RoundRect => {
-                let path = Path::rrect(rbounds, None);
-                Shape::Path(crate::shape::PathData::from_path(&path))
-            }
-            _ => shape,
-        };
         let shape_bounds = shape.bounds(bounds, &border_corner_radius);
 
         let rotation = model.rotation.value();
