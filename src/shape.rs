@@ -17,7 +17,7 @@ pub enum Shape {
     /// Arbitrary Skia path.
     /// The path should be defined in local coordinates relative to the layer's bounds.
     ///
-    /// Note: Skia Path is not thread-safe. Custom paths should be regenerated per-layer.
+    /// Thread-safety is handled automatically via serialization in PathData.
     Path(PathData),
 }
 
