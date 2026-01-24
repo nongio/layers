@@ -1,4 +1,8 @@
-on: [pull_request]
+on:
+  pull_request:
+  push:
+    branches:
+      - main
 
 name: Continuous Integration
 jobs:
@@ -89,6 +93,9 @@ jobs:
         env: 
           RUSTDOCFLAGS: --cfg=docsrs
         run: cargo doc --no-deps --features "default" -p laye-rs
+      
+      - name: Rename docs folder
+        run: mv ./target/doc/layers ./target/doc/docs
         
       - name: Deploy
         if: ${{ github.event_name == 'push' }}

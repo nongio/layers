@@ -1,6 +1,6 @@
 
 <p align="center">
-  <img src="https://github.com/nongio/layers/blob/main/assets/lay-rs.jpg?raw=true" alt="Layers Engine Logo" width="384" height="192">
+  <img src="https://github.com/nongio/layers/blob/main/assets/laye-rs.jpg?raw=true" alt="Layers Engine Logo" width="384" height="192">
 </p>
 
 ## laye-rs engine
@@ -9,7 +9,7 @@
 
 
 
-laye-rs is a rendering engine for animated user interfaces, mainly designed in support of the ScreenComposer [project](https://github.com/nongio/screencomposer).
+laye-rs is a rendering engine for animated user interfaces, mainly designed in support of the Otto compositor [project](https://github.com/nongio/otto).
 
 It uses a scene graph to render the nodes in retained mode, optmising the most common UI interpolations (opacity, 2d transformations, blending).
 Nodes of the scene graph are graphical layers like text or simple shapes like rectangles but can also be external textures.
@@ -21,7 +21,7 @@ Nodes of the scene graph are graphical layers like text or simple shapes like re
 
 ## Read the docs
 The api is getting documented, be aware that is also still in evolution.
-[documentation](https://nongio.github.io/layers/layers/)
+[documentation](https://nongio.github.io/layers/docs/)
 
 - Engine update pipeline & damage tracking: see `docs/` for a deep dive into frame stages and redraw rules.
 - Layers Inspector: a browser-based debugger that shows the live scene graph with search and highlights (`docs/layers_inspector.md`).
