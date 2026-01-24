@@ -1,5 +1,5 @@
-use skia_safe::{Path, RRect, Rect};
 use serde::Serialize;
+use skia_safe::{Path, RRect, Rect};
 
 use crate::types::BorderRadius;
 

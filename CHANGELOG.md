@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.0] - 2026-01-24
+
+### 🚀 Features
+
+- Add custom shapes support for layers
+
+### ⚙️ Miscellaneous Tasks
+
+- Rename library to laye-rs / layers
+
 ## [1.2.0] - 2026-01-20
 
 ### 🚀 Features
