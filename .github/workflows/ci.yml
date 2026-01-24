@@ -5,6 +5,10 @@ on:
       - main
 
 name: Continuous Integration
+
+permissions:
+  contents: write
+
 jobs:
   check-msrv:
     env:
