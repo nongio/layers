@@ -3,6 +3,7 @@ use crate::{
     shape::Shape,
     types::{BlendMode, Color, Point, *},
 };
+use skia_safe::Contains;
 
 use serde::{ser::SerializeStruct, Serialize};
 use skia::{ColorFilter, ImageFilter};
@@ -277,6 +278,53 @@ impl RenderLayer {
     /// Called during drawing to avoid caching non-Sync Skia Path.
     pub fn shape_path(&self) -> skia_safe::Path {
         self.shape.to_path(self.bounds, &self.border_corner_radius)
+    }
+
+    /// Clip canvas to shape (optimized for RoundRect).
+    pub fn clip_to_shape(&self, canvas: &skia_safe::Canvas, op: skia_safe::ClipOp, antialias: bool) {
+        match &self.shape {
+            Shape::RoundRect => {
+                // Fast path: use rrect clipping directly
+                canvas.clip_rrect(self.rbounds, op, Some(antialias));
+            }
+            _ => {
+                let path = self.shape_path();
+                canvas.clip_path(&path, op, antialias);
+            }
+        }
+    }
+
+    /// Draw shape path with paint (optimized for RoundRect).
+    pub fn draw_shape(&self, canvas: &skia_safe::Canvas, paint: &skia_safe::Paint) {
+        match &self.shape {
+            Shape::RoundRect => {
+                // Fast path: use rrect drawing directly
+                canvas.draw_rrect(self.rbounds, paint);
+            }
+            _ => {
+                let path = self.shape_path();
+                canvas.draw_path(&path, paint);
+            }
+        }
+    }
+
+    /// Check if a point (in local coordinates) is inside the shape.
+    pub fn contains_point(&self, point: skia_safe::Point) -> bool {
+        match &self.shape {
+            Shape::RoundRect => {
+                // Fast path: check if point is in bounds
+                self.bounds.contains(point)
+            }
+            _ => {
+                // Use shape_bounds for bounding box rejection first
+                if !self.shape_bounds.contains(point) {
+                    return false;
+                }
+                // For custom paths, do precise containment test
+                let path = self.shape_path();
+                path.contains(point)
+            }
+        }
     }
 
     #[allow(dead_code)]

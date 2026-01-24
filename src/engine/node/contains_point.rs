@@ -13,10 +13,10 @@ impl ContainsPoint for SceneNode {
     fn contains(&self, point: Point) -> bool {
         let matrix = self.render_layer.transform_33;
         let inverse = matrix.invert().unwrap();
-        let point = inverse.map_point(SkiaPoint::new(point.x, point.y));
+        let local_point = inverse.map_point(SkiaPoint::new(point.x, point.y));
 
-        // Use shape_bounds for accurate hit-testing with custom shapes
-        self.render_layer.shape_bounds.contains(point)
+        // Use RenderLayer's optimized contains_point (fast for RoundRect, precise for custom shapes)
+        self.render_layer.contains_point(local_point)
     }
 }
 

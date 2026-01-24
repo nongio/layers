@@ -23,7 +23,6 @@ pub fn draw_layer(
 
     // let bounds = Rect::from_xywh(0.0, 0.0, layer.size.width, layer.size.height);
     let bounds = layer.bounds;
-    let shape_path = layer.shape_path();
     let background_color = match layer.background_color {
         PaintColor::Solid { color } => Color4f::from(color),
         _ => Color4f::new(1.0, 1.0, 1.0, opacity),
@@ -31,7 +30,7 @@ pub fn draw_layer(
     {
         if (background_color.a * opacity) > 0.0 {
             let save_count = canvas.save();
-            canvas.clip_path(&shape_path, None, None);
+            layer.clip_to_shape(canvas, skia_safe::ClipOp::Intersect, false);
 
             // Draw the background color.
 
@@ -42,7 +41,7 @@ pub fn draw_layer(
                 background_paint.set_blend_mode(skia_safe::BlendMode::Luminosity);
             }
             if background_color.a > 0.0 {
-                canvas.draw_path(&shape_path, &background_paint);
+                layer.draw_shape(canvas, &background_paint);
             }
 
             if layer.blend_mode == crate::types::BlendMode::BackgroundBlur {
@@ -84,7 +83,7 @@ pub fn draw_layer(
             .to_path(shadow_rect, &layer.border_corner_radius);
 
         let save_count = canvas.save();
-        canvas.clip_path(&shape_path, Some(ClipOp::Difference), Some(true));
+        layer.clip_to_shape(canvas, ClipOp::Difference, true);
         shadow_paint.set_alpha_f(opacity * layer.shadow_color.alpha);
         canvas.draw_path(&shadow_path, &shadow_paint);
         canvas.restore_to_count(save_count);
@@ -97,7 +96,7 @@ pub fn draw_layer(
     if let Some(content) = renderable.content_cache.as_ref() {
         let save_count = canvas.save();
         if layer.clip_content {
-            canvas.clip_path(&shape_path, Some(ClipOp::Intersect), Some(true));
+            layer.clip_to_shape(canvas, ClipOp::Intersect, true);
         }
         content.playback(canvas);
         canvas.restore_to_count(save_count);
@@ -105,7 +104,7 @@ pub fn draw_layer(
     } else if let Some(draw_func) = layer.content_draw_func.as_ref() {
         let save_count = canvas.save();
         if layer.clip_content {
-            canvas.clip_path(&shape_path, Some(ClipOp::Intersect), Some(true));
+            layer.clip_to_shape(canvas, ClipOp::Intersect, true);
         }
         let caller = draw_func.0.as_ref();
         let content_damage = caller(canvas, layer.size.width, layer.size.height);
@@ -125,7 +124,7 @@ pub fn draw_layer(
         border_paint.set_anti_alias(true);
         border_paint.set_style(PaintStyle::Stroke);
         border_paint.set_stroke_width(layer.border_width);
-        canvas.draw_path(&shape_path, &border_paint);
+        layer.draw_shape(canvas, &border_paint);
         draw_damage.join(bounds.with_outset((layer.border_width / 2.0, layer.border_width / 2.0)));
     }
 
