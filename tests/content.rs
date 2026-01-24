@@ -1,15 +1,15 @@
-use lay_rs::prelude::*;
-use lay_rs::types::Size;
+use layers::prelude::*;
+use layers::types::Size;
 
 pub fn setup_layer(layer: &Layer) {
     layer.set_size(Size::points(100.0, 100.0), None);
     layer.set_position((100.0, 100.0), None);
-    layer.set_background_color(lay_rs::types::Color::new_hex("#4043d1"), None);
+    layer.set_background_color(layers::types::Color::new_hex("#4043d1"), None);
     layer.set_border_corner_radius(20.0, None);
 }
 // #[test]
 // pub fn load_content_from_encoded_buffer() {
-//     let mut renderer = lay_rs::renderer::skia_image::SkiaImageRenderer::new(
+//     let mut renderer = layers::renderer::skia_image::SkiaImageRenderer::new(
 //         500,
 //         500,
 //         "./tests/content/test_scene_node_content_encoded.png".to_string(),
@@ -30,7 +30,7 @@ pub fn setup_layer(layer: &Layer) {
 
 // #[test]
 // pub fn load_content_from_decoded_buffer() {
-//     let mut renderer = lay_rs::renderer::skia_image::SkiaImageRenderer::new(
+//     let mut renderer = layers::renderer::skia_image::SkiaImageRenderer::new(
 //         1000,
 //         1000,
 //         "./tests/content/test_scene_node_content_decoded.png".to_string(),

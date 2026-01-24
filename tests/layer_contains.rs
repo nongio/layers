@@ -1,5 +1,5 @@
-use lay_rs::prelude::*;
-use lay_rs::types::{Point, Size};
+use layers::prelude::*;
+use layers::types::{Point, Size};
 
 #[test]
 pub fn layer_contains() {

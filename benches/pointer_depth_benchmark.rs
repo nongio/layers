@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 
-use lay_rs::{engine::Engine, prelude::*, types::*};
+use layers::{engine::Engine, prelude::*, types::*};
 
 /// Creates a tree of layers with specified depth
 /// Each layer has a single child, creating a straight vertical line

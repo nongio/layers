@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use lay_rs::{
+    use layers::{
         prelude::*,
         types::{Color, PaintColor, Size},
     };

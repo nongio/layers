@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use lay_rs::{
+    use layers::{
         drawing::draw_layer,
         prelude::*,
         renderer::skia_image::SkiaImageRenderer,
@@ -147,7 +147,7 @@ mod tests {
         );
 
         // test layer with blend blur
-        layer.set_blend_mode(lay_rs::types::BlendMode::BackgroundBlur);
+        layer.set_blend_mode(layers::types::BlendMode::BackgroundBlur);
 
         engine.update(0.016);
 
@@ -426,8 +426,8 @@ mod tests {
         let engine = Engine::create(1000.0, 1000.0);
         let layer = engine.new_layer();
         engine.add_layer(&layer);
-        layer.set_layout_style(lay_rs::taffy::Style {
-            position: lay_rs::taffy::Position::Absolute,
+        layer.set_layout_style(layers::taffy::Style {
+            position: layers::taffy::Position::Absolute,
             ..Default::default()
         });
         layer.set_position((100.0, 100.0), None);
@@ -470,7 +470,7 @@ mod tests {
         );
 
         engine.clear_damage();
-        layer.set_blend_mode(lay_rs::types::BlendMode::BackgroundBlur);
+        layer.set_blend_mode(layers::types::BlendMode::BackgroundBlur);
         layer.set_opacity(0.1, None);
 
         engine.update(0.016);
@@ -488,8 +488,8 @@ mod tests {
         let engine = Engine::create(1000.0, 1000.0);
         let layer = engine.new_layer();
         engine.add_layer(&layer);
-        layer.set_layout_style(lay_rs::taffy::Style {
-            position: lay_rs::taffy::Position::Absolute,
+        layer.set_layout_style(layers::taffy::Style {
+            position: layers::taffy::Position::Absolute,
             ..Default::default()
         });
         layer.set_position((0.0, 0.0), None);
@@ -528,8 +528,8 @@ mod tests {
         let engine = Engine::create(1000.0, 1000.0);
         let layer = engine.new_layer();
         engine.add_layer(&layer);
-        layer.set_layout_style(lay_rs::taffy::Style {
-            position: lay_rs::taffy::Position::Absolute,
+        layer.set_layout_style(layers::taffy::Style {
+            position: layers::taffy::Position::Absolute,
             ..Default::default()
         });
         layer.set_position((0.0, 0.0), None);
@@ -564,8 +564,8 @@ mod tests {
         let engine = Engine::create(1000.0, 1000.0);
         let layer = engine.new_layer();
         engine.add_layer(&layer);
-        layer.set_layout_style(lay_rs::taffy::Style {
-            position: lay_rs::taffy::Position::Absolute,
+        layer.set_layout_style(layers::taffy::Style {
+            position: layers::taffy::Position::Absolute,
             ..Default::default()
         });
         layer.set_position((0.0, 0.0), None);
@@ -599,16 +599,16 @@ mod tests {
         let engine = Engine::create(1000.0, 1000.0);
         let root = engine.new_layer();
         engine.add_layer(&root);
-        root.set_layout_style(lay_rs::taffy::Style {
-            position: lay_rs::taffy::Position::Absolute,
+        root.set_layout_style(layers::taffy::Style {
+            position: layers::taffy::Position::Absolute,
             ..Default::default()
         });
         root.set_position((0.0, 0.0), None);
         root.set_size(Size::points(400.0, 400.0), None);
 
         let child = engine.new_layer();
-        child.set_layout_style(lay_rs::taffy::Style {
-            position: lay_rs::taffy::Position::Absolute,
+        child.set_layout_style(layers::taffy::Style {
+            position: layers::taffy::Position::Absolute,
             ..Default::default()
         });
         child.set_position((100.0, 100.0), None);
@@ -647,8 +647,8 @@ mod tests {
         engine.add_layer(&wrap);
 
         let layer = engine.new_layer();
-        layer.set_layout_style(lay_rs::taffy::Style {
-            position: lay_rs::taffy::Position::Absolute,
+        layer.set_layout_style(layers::taffy::Style {
+            position: layers::taffy::Position::Absolute,
             ..Default::default()
         });
         layer.set_position((-50.0, -50.0), None);
@@ -682,8 +682,8 @@ mod tests {
 
         // Leader layer A: at position (0,0), size 100x100
         let leader = engine.new_layer();
-        leader.set_layout_style(lay_rs::taffy::Style {
-            position: lay_rs::taffy::Position::Absolute,
+        leader.set_layout_style(layers::taffy::Style {
+            position: layers::taffy::Position::Absolute,
             ..Default::default()
         });
         leader.set_position((0.0, 0.0), None);
@@ -702,8 +702,8 @@ mod tests {
         // Follower layer B: manually uses as_content() to replicate leader
         // Position (200,200) with scale 0.5x
         let follower = engine.new_layer();
-        follower.set_layout_style(lay_rs::taffy::Style {
-            position: lay_rs::taffy::Position::Absolute,
+        follower.set_layout_style(layers::taffy::Style {
+            position: layers::taffy::Position::Absolute,
             ..Default::default()
         });
         follower.set_position((200.0, 200.0), None);

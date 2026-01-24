@@ -1,7 +1,7 @@
 #[cfg(feature = "layer_state")]
 #[test]
 pub fn state_for_layer() {
-    use lay_rs::engine::Engine;
+    use layers::engine::Engine;
 
     let engine = Engine::create(1000.0, 1000.0);
     let layer = engine.new_layer();
