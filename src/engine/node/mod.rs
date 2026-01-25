@@ -84,6 +84,8 @@ pub struct SceneNode {
     pub(crate) picture_cached: bool,
     pub(crate) is_deleted: bool,
     pub(crate) followers: HashSet<NodeRef>,
+    /// The node this layer is following (for replicate_node)
+    pub(crate) following: Option<NodeRef>,
     pub(crate) _debug_info: Option<DrawDebugInfo>,
     pub(crate) frame_number: usize,
 }
@@ -100,6 +102,7 @@ impl Default for SceneNode {
             _debug_info: None,
             frame_number: 0,
             followers: HashSet::new(),
+            following: None,
         }
     }
 }

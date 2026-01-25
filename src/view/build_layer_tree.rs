@@ -171,6 +171,14 @@ impl BuildLayerTree for Layer {
             if let Some(replicate_layer) = engine.get_layer(&replicate_node) {
                 scene_layer.set_draw_content(replicate_layer.as_content());
                 replicate_layer.add_follower_node(scene_layer.id());
+                
+                // Set the following relationship so this layer knows which node it's replicating
+                engine.scene.with_arena_mut(|arena| {
+                    if let Some(node) = arena.get_mut(layer_id.0) {
+                        let scene_node = node.get_mut();
+                        scene_node.following = Some(replicate_node);
+                    }
+                });
             }
         }
 

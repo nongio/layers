@@ -392,7 +392,23 @@ pub fn render_node_tree(
 
                     // draw into the offscreen surface
                     let current_frame = scene_node.frame_number;
-                    if current_frame != recorded_frame || dbg_info.is_some() {
+                    
+                    // If this node is following another node (replicate_node), 
+                    // we need to check BOTH:
+                    // 1. Has the follower itself changed? (its own frame)
+                    // 2. Has the followed node's content changed? (source frame)
+                    let needs_repaint = if let Some(following_ref) = scene_node.following {
+                        let followed_frame = scene_arena
+                            .get(following_ref.0)
+                            .map(|n| n.get().frame_number)
+                            .unwrap_or(0);
+                        // Repaint if either the follower or the followed node changed
+                        current_frame != recorded_frame || followed_frame != recorded_frame
+                    } else {
+                        current_frame != recorded_frame
+                    };
+                    
+                    if needs_repaint || dbg_info.is_some() {
                         let surface_bounds = skia::Rect::from_wh(
                             recording_surface.width() as f32,
                             recording_surface.height() as f32,
@@ -439,6 +455,8 @@ pub fn render_node_tree(
                         recording_canvas.restore();
 
                         image = recording_surface.image_snapshot();
+                        // Store the current frame as the recorded frame
+                        // (we've now rendered with both our state and the followed state)
                         set_surface_for_node(
                             &node_ref,
                             recording_surface.clone(),
