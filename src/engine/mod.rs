@@ -1106,6 +1106,8 @@ impl Engine {
         *timestamp = Timestamp(timestamp.0 + dt);
     }
     #[profiling::function]
+    /// Update the engine state by dt seconds
+    /// Returns true if a redraw is needed
     pub fn update(&self, dt: f32) -> bool {
         let timestamp = {
             let mut timestamp = self.timestamp.write().unwrap();

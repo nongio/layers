@@ -332,6 +332,9 @@ impl Layer {
     pub fn size(&self) -> Size {
         self.model.size.value()
     }
+    pub fn get_node_layout_style(&self) -> Style {
+        self.engine.get_node_layout_style(self.layout_id)
+    }
     pub fn set_layout_style(&self, style: Style) {
         self.engine.set_node_layout_style(self.layout_id, style);
     }

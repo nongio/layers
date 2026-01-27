@@ -392,8 +392,8 @@ pub fn render_node_tree(
 
                     // draw into the offscreen surface
                     let current_frame = scene_node.frame_number;
-                    
-                    // If this node is following another node (replicate_node), 
+
+                    // If this node is following another node (replicate_node),
                     // we need to check BOTH:
                     // 1. Has the follower itself changed? (its own frame)
                     // 2. Has the followed node's content changed? (source frame)
@@ -407,7 +407,7 @@ pub fn render_node_tree(
                     } else {
                         current_frame != recorded_frame
                     };
-                    
+
                     if needs_repaint || dbg_info.is_some() {
                         let surface_bounds = skia::Rect::from_wh(
                             recording_surface.width() as f32,

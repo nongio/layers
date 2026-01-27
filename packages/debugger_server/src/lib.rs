@@ -1,6 +1,7 @@
 mod handler;
 
 use std::{
+    env,
     path::PathBuf,
     sync::{Arc, OnceLock},
 };
@@ -38,6 +39,8 @@ type Client = RwLock<Option<DebuggerClient>>;
 
 pub(crate) static CLIENT: OnceLock<Client> = OnceLock::new();
 pub(crate) static SERVER: OnceLock<Server> = OnceLock::new();
+pub(crate) static LAST_SCENE_SNAPSHOT: OnceLock<RwLock<Option<String>>> = OnceLock::new();
+pub(crate) static DEBUGGER_PORT: OnceLock<u16> = OnceLock::new();
 
 async fn with_client<F: FnOnce(DebuggerClient)>(f: F) {
     if let Some(client) = CLIENT.get() {
@@ -62,8 +65,26 @@ pub fn start_debugger_server(debug_server: Arc<dyn DebugServer>) {
 async fn start_debugger(debug_server: Arc<dyn DebugServer>) {
     let _ = SERVER.set(RwLock::new(Some(debug_server)));
     let _ = CLIENT.set(RwLock::new(None)); // Initialize CLIENT as needed
+    let _ = LAST_SCENE_SNAPSHOT.set(RwLock::new(None));
+
+    let desired_port = env::var("LAYERS_DEBUGGER_PORT")
+        .ok()
+        .and_then(|v| v.parse::<u16>().ok())
+        .filter(|p| *p != 0)
+        .unwrap_or(8000);
+
+    let _ = DEBUGGER_PORT.set(desired_port);
 
     let health_route = warp::path!("health").and_then(handler::health_handler);
+
+    let scene_route = warp::path("scene")
+        .and(warp::get())
+        .and(
+            warp::path::param::<usize>()
+                .or(warp::path::end().map(|| 0))
+                .unify(),
+        )
+        .and_then(handler::scene_handler);
 
     let register = warp::path("register");
     let register_routes = register
@@ -90,12 +111,20 @@ async fn start_debugger(debug_server: Arc<dyn DebugServer>) {
     let package_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("client/build");
     let client_files = warp::path("client").and(warp::fs::dir(package_dir));
 
+    let allowed_origins: Vec<String> = vec![
+        "http://localhost:3000".to_string(),
+        "http://127.0.0.1:3000".to_string(),
+        format!("http://localhost:{}", desired_port),
+        format!("http://127.0.0.1:{}", desired_port),
+    ];
+
     let cors = warp::cors()
-        .allow_origins(vec![
-            "http://localhost:3000",
-            "http://localhost:8000",
-            "http://192.168.122.246:8000",
-        ])
+        .allow_origins(
+            allowed_origins
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>(),
+        )
         .allow_headers(vec![
             "User-Agent",
             "Sec-Fetch-Mode",
@@ -112,13 +141,30 @@ async fn start_debugger(debug_server: Arc<dyn DebugServer>) {
         ])
         .allow_methods(vec!["GET", "POST", "DELETE", "OPTIONS"]);
     let routes = health_route
+        .or(scene_route)
         .or(register_routes)
         .or(ws_route)
         .or(publish)
         .or(client_files)
         .with(cors);
 
-    warp::serve(routes).run(([0, 0, 0, 0], 8000)).await;
+    let bind_addr = ([0, 0, 0, 0], desired_port);
+
+    // Prefer the configured port; if it's taken, fall back to any free port.
+    if let Ok((bound_addr, server_fut)) = warp::serve(routes.clone()).try_bind_ephemeral(bind_addr)
+    {
+        let _ = DEBUGGER_PORT.set(bound_addr.port());
+        server_fut.await;
+        return;
+    }
+
+    eprintln!(
+        "debugger server: failed to bind to port {} — falling back to an ephemeral port",
+        desired_port
+    );
+    let (bound_addr, server_fut) = warp::serve(routes).bind_ephemeral(([0, 0, 0, 0], 0));
+    let _ = DEBUGGER_PORT.set(bound_addr.port());
+    server_fut.await;
 }
 
 pub struct DebugServerError;
@@ -128,6 +174,10 @@ pub trait DebugServer: Send + Sync + 'static {
 
 pub fn send_debugger_message(message: String) {
     tokio::spawn(async move {
+        if let Some(snapshot) = LAST_SCENE_SNAPSHOT.get() {
+            let mut snapshot = snapshot.write().await;
+            snapshot.replace(message.clone());
+        }
         with_client(|client| {
             if let Some(sender) = &client.sender {
                 let _ = sender.send(Ok(Message::text(message.clone())));

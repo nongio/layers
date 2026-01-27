@@ -78,8 +78,8 @@ pub fn load_svg_image(
 ) -> Result<skia_safe::Image, String> {
     let size: skia_safe::ISize = size.into();
 
-    println!("Loading image from path: {}", image_path);
-    println!("Loading image with size: {:?}", size);
+    // println!("Loading image from path: {}", image_path);
+    // println!("Loading image with size: {:?}", size);
 
     // let svg = svg_dom(image_path, size)?;
 

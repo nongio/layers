@@ -42,7 +42,7 @@ impl layers_debug_server::DebugServer for crate::engine::Engine {
 impl crate::engine::Engine {
     /// Start the debugger server
     ///
-    /// Can be accessed at `http://localhost:8000/client/index.html`
+    /// Can be accessed at `http://localhost:8000/client/index.html` (the port can be overridden with LAYERS_DEBUGGER_PORT).
     pub fn start_debugger(&self) {
         layers_debug_server::start_debugger_server(self.get_arc_ref());
     }
