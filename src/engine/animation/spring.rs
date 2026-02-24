@@ -118,8 +118,9 @@ impl Spring {
     }
 
     pub fn update_at(&mut self, elapsed: f32) -> f32 {
-        // let dt = elapsed - self.last_update;
-        self.update_pos_vel_at(elapsed).0
+        // Clamp negative elapsed (i.e. still within the transition delay) to 0 so
+        // the spring stays at its initial position until the delay has expired.
+        self.update_pos_vel_at(elapsed.max(0.0)).0
     }
 
     pub fn done(&self, elapsed: f32) -> bool {
