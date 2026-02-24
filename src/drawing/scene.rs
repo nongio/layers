@@ -537,7 +537,12 @@ pub fn render_node_tree(
                         render_canvas.restore_to_count(before_backdrop);
                     }
 
-                    render_canvas.draw_image(&image, (x, y), Some(&paint));
+                    render_canvas.draw_image_with_sampling_options(
+                        &image,
+                        (x, y),
+                        skia_safe::SamplingOptions::from(skia_safe::CubicResampler::catmull_rom()),
+                        Some(&paint),
+                    );
 
                     render_canvas.restore_to_count(restore_point);
                     return;
