@@ -138,7 +138,9 @@ pub async fn client_connection(ws: WebSocket, _id: String) {
     // Process incoming WebSocket messages
     while let Some(result) = client_ws_rcv.next().await {
         let result = result
-            .map(|m| m.to_str().unwrap().to_string())
+            .map(|m|{
+                m.to_str().unwrap().to_string()
+            })
             .map_err(|_e| DebugServerError {});
 
         with_server(|server| {

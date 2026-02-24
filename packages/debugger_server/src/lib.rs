@@ -173,16 +173,20 @@ pub trait DebugServer: Send + Sync + 'static {
 }
 
 pub fn send_debugger_message(message: String) {
-    tokio::spawn(async move {
-        if let Some(snapshot) = LAST_SCENE_SNAPSHOT.get() {
-            let mut snapshot = snapshot.write().await;
-            snapshot.replace(message.clone());
-        }
-        with_client(|client| {
-            if let Some(sender) = &client.sender {
-                let _ = sender.send(Ok(Message::text(message.clone())));
+    // Only spawn if we're in a tokio runtime (main thread has the server running)
+    // The renderer thread doesn't have a tokio runtime, so we skip
+    if tokio::runtime::Handle::try_current().is_ok() {
+        tokio::spawn(async move {
+            if let Some(snapshot) = LAST_SCENE_SNAPSHOT.get() {
+                let mut snapshot = snapshot.write().await;
+                snapshot.replace(message.clone());
             }
-        })
-        .await;
-    });
+            with_client(|client| {
+                if let Some(sender) = &client.sender {
+                    let _ = sender.send(Ok(Message::text(message.clone())));
+                }
+            })
+            .await;
+        });
+    }
 }
