@@ -2,15 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
-## [1.3.0] - 2026-01-24
-
-### 🚀 Features
-
-- Add custom shapes support for layers
+## [1.3.0] - 2026-01-25
 
 ### ⚙️ Miscellaneous Tasks
 
-- Rename library to laye-rs / layers
+- *(ci)* Add ci permission to write to ghpages
+- *(agent)* Instruction for copilot reviews
 
 ## [1.2.0] - 2026-01-20
 
@@ -33,38 +30,7 @@ All notable changes to this project will be documented in this file.
 ### ⚙️ Miscellaneous Tasks
 
 - Bump version to 1.1.0
-
-## [unreleased]
-
-### 🚀 Features
-
-- Ui update layers_inspector
-- Add fractal noise overlay for BackgroundBlur blend mode
-- Animation callbacks
-- Adjust background blur noise alpha to 70
-
-### 🐛 Bug Fixes
-
-- Node removed checks + expose Spring timing
-- Implement backdrop blur region bubbling for image-cached layers
-
-### ⚙️ Miscellaneous Tasks
-
-- Bump version to 1.1.0
-
-## [1.1.0] - 2026-01-18
-
-### 🚀 Features
-
-- Ui update layers_inspector
-- Add fractal noise overlay for BackgroundBlur blend mode
-- Animation callbacks
-- Adjust background blur noise alpha to 70
-
-### 🐛 Bug Fixes
-
-- Node removed checks + expose Spring timing
-- Implement backdrop blur region bubbling for image-cached layers
+- Bump version to 1.2.0
 
 ## [1.0.0] - 2025-12-08
 
