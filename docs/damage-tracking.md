@@ -6,6 +6,7 @@ This document explains how Layers computes frame damage so renderers can use thi
 
 - **Geometry**: `RenderLayer::global_transformed_bounds` and `global_transformed_bounds_with_children` capture a node’s own bounds and the union with descendants. Differences between the previous and current values are unioned into damage.
 - **Visibility**: `RenderLayer::has_visible_drawables()` reports whether the node can draw anything (background, border, shadow, content, or filters) after premultiplying opacity. Invisible nodes suppress geometry damage unless debug overlays are active.
+- **Layout-only passthrough**: Nodes with no drawables, no filters, no clipping, and normal blend mode are treated as pass-through containers. Their update skips repaint and avoids adding parent-level self geometry damage; descendant nodes contribute the actual global damage rectangles.
 - **Opacity**: Changes to premultiplied opacity determine whether a node faded in, faded out, or adjusted alpha while visible.
 - **Content repaint**: `do_repaint` records Skia draw commands into `SceneNodeRenderable::draw_cache` and returns a layer-space damage rectangle. This rectangle is mapped into global coordinates via the node’s `transform_33` matrix.
 
@@ -13,6 +14,7 @@ This document explains how Layers computes frame damage so renderers can use thi
 
 - **Early exit**: If parents were stable, repaint flags are clear, geometry/opacity/visibility are unchanged, and the render layer did not mutate, the function returns an empty rectangle.
 - **Content damage**: Non-empty rectangles returned by `do_repaint` are transformed to global coordinates and seeded into the total damage.
+- **Passthrough fast path**: For strict layout-only containers (`RenderLayer::is_layout_only_passthrough()`), `update_node_single` bypasses `do_repaint` and does not union parent-level subtree geometry/opacity rectangles. Child updates provide the precise damage instead.
 - **Geometry unions**: When size or position changes, the union of old and new bounds is joined to damage. Child-aggregated bounds behave the same way so container nodes repaint around resized descendants.
 - **Visibility flips**: When a node becomes hidden, previous bounds are damaged so pixels can be cleared. When it becomes visible, new bounds are damaged so pixels can be drawn. Partial opacity transitions damage the current bounds while the node remains visible.
 - **Debug overlays**: Nodes with `_debug_info` set force geometry damage even if they have no drawables, which helps tooling visualize updates.
