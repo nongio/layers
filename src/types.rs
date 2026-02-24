@@ -18,6 +18,14 @@ impl Color {
     pub fn c4f(&self) -> skia::Color4f {
         Color4f::from(*self)
     }
+    pub fn opacity(&self, alpha: f32) -> Self {
+        Color {
+            l: self.l,
+            a: self.a,
+            b: self.b,
+            alpha,
+        }
+    }
 }
 #[derive(Clone, Copy, Serialize, Debug)]
 #[repr(C)]
