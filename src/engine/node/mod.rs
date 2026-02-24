@@ -292,6 +292,10 @@ impl SceneNode {
     pub fn contains_point(&self, point: &skia::Point) -> bool {
         self.render_layer.global_transformed_bounds.contains(point)
     }
+    /// Returns the current frame number for this node, incremented each time the node is repainted.
+    pub fn frame_number(&self) -> usize {
+        self.frame_number
+    }
 }
 
 impl SceneNodeRenderable {
