@@ -52,7 +52,8 @@ pub(crate) fn update_node_single(
         prev_visible,
         prev_needs_paint,
         prev_has_filters,
-        prev_is_layout_only_passthrough,    ) = engine.scene.with_arena(|arena| {
+        prev_is_layout_only_passthrough,
+    ) = engine.scene.with_arena(|arena| {
         if let Some(node) = arena.get(node_id) {
             let scene_node = node.get();
             (

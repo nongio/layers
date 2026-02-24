@@ -917,7 +917,6 @@ mod tests {
         );
     }
 
-
     /// damage from the leader is correctly transformed to the follower's
     /// global coordinates.
     #[test]

@@ -1,5 +1,4 @@
 use futures::{FutureExt, StreamExt};
-use serde_json;
 use tokio::sync::{mpsc, RwLock};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use uuid::Uuid;
@@ -74,6 +73,7 @@ pub async fn scene_handler(node_id: usize) -> Result<warp::reply::Response> {
 
 fn filter_subtree(snapshot: &str, root_node_id: usize) -> Option<String> {
     // Parse the snapshot: (root_id, HashMap<usize, (id, layer, children, node_id)>)
+    #[allow(clippy::type_complexity)]
     let parsed: (
         usize,
         HashMap<usize, (usize, serde_json::Value, Vec<usize>, serde_json::Value)>,
@@ -138,9 +138,7 @@ pub async fn client_connection(ws: WebSocket, _id: String) {
     // Process incoming WebSocket messages
     while let Some(result) = client_ws_rcv.next().await {
         let result = result
-            .map(|m|{
-                m.to_str().unwrap().to_string()
-            })
+            .map(|m| m.to_str().unwrap().to_string())
             .map_err(|_e| DebugServerError {});
 
         with_server(|server| {
