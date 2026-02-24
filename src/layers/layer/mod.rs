@@ -476,7 +476,9 @@ impl Layer {
     }
     pub fn render_size(&self) -> Point {
         self.engine.scene.with_arena(|arena| {
-            let node = arena.get(self.id.into()).unwrap();
+            let Some(node) = arena.get(self.id.into()) else {
+                return Point { x: 0.0, y: 0.0 };
+            };
             let node = node.get();
             let render_layer = &node.render_layer;
             let rl = render_layer;

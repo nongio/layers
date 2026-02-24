@@ -194,7 +194,10 @@ macro_rules! change_model {
                         start: t.delay + self.engine.now(),
                     }, true)
                 });
-
+                if animation.is_none() {
+                    // if there is no transition, apply the change immediately
+                    self.model.$variable_name.set(value);
+                }
                 self.engine.schedule_change(self.id, change, animation)
             }
             pub fn $variable_name(&self) -> $variable_type {
