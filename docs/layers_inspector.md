@@ -15,9 +15,11 @@ The Layers Inspector is a lightweight debugger that exposes a live view of the e
 - Resizeable tree/details panes with light/dark themes for quick checks during development.
 
 ## How it works
-- The `layers-debug-server` crate hosts HTTP and WebSocket endpoints on port `8000` and serves the built React client from `packages/debugger_server/client/build`.
+- The `layers-debug-server` crate hosts HTTP and WebSocket endpoints (default port `8000`) and serves the built React client from `packages/debugger_server/client/build`.
 - The engine implements the `layers_debug_server::DebugServer` trait (behind the `debugger` feature) and responds to client commands such as `["highlight", <node_id>]` and `["unhighlight", <node_id>]`.
 - The client registers via `POST /register`, then opens a WebSocket at `/ws/{uuid}` to receive serialized layer trees and send commands back.
+- You can also fetch the latest scene snapshot over HTTP via `GET /scene` (returns the same JSON payload the client receives over the WebSocket).
+  - To get only a subtree: `GET /scene/42` returns the subtree rooted at node 42.
 - Layer tree snapshots include node ids and keys, which the client renders as the searchable tree on the left.
   - Quick filter syntax: type `id:33` to jump directly to node `33` by id; any other text matches layer keys.
 
@@ -27,8 +29,12 @@ The Layers Inspector is a lightweight debugger that exposes a live view of the e
    cargo run --features "default,debugger" -p hello-views
    ```
 2. Call `engine.start_debugger()` once after creating the engine to spawn the Warp server.
-3. Open `http://localhost:8000/client/index.html` in your browser. The left column shows the current tree with a search input; the right column displays details for the selected layer.
+3. Open `http://localhost:$LAYERS_DEBUGGER_PORT/client/index.html` in your browser (defaults to port `8000`). The left column shows the current tree with a search input; the right column displays details for the selected layer.
 4. Toggle the dot icon on any row to highlight or clear the node in the viewport; the client sends `highlight`/`unhighlight` messages that the engine handles via `DebugServer`.
+
+### Port configuration
+- Set `LAYERS_DEBUGGER_PORT` to change the port (e.g. `LAYERS_DEBUGGER_PORT=9000`).
+- If the requested port is already in use, the server falls back to an ephemeral free port and `POST /register` returns the actual bound port.
 
 ## Build the inspector client
 1. Install dependencies in `packages/debugger_server/client`:

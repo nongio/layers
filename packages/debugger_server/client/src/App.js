@@ -499,7 +499,7 @@ function App() {
                 rootLayer={root}
                 layers={layers}
                 rootId={root_id}
-                visibleSections={['layout', 'appearance']}
+                visibleSections={['layout', 'appearance', 'flags']}
               />
             ) : (
               <div className="empty-state">Select a layer from the tree.</div>

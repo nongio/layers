@@ -45,29 +45,40 @@ pub(crate) fn update_node_single(
     let node_layout = layout_tree.layout(layer.layout_id).unwrap();
 
     // First, read the previous state for comparisons
-    let (prev_transformed_bounds, prev_global_bounds, prev_opacity, prev_visible, prev_needs_paint) =
-        engine.scene.with_arena(|arena| {
-            if let Some(node) = arena.get(node_id) {
-                let scene_node = node.get();
-                (
-                    scene_node
-                        .render_layer
-                        .global_transformed_bounds_with_children,
-                    scene_node.render_layer.global_transformed_bounds,
-                    scene_node.render_layer.premultiplied_opacity,
-                    scene_node.render_layer.has_visible_drawables(),
-                    scene_node.needs_repaint(),
-                )
-            } else {
-                (
-                    skia_safe::Rect::default(),
-                    skia_safe::Rect::default(),
-                    0.0,
-                    false,
-                    false,
-                )
-            }
-        });
+    let (
+        prev_transformed_bounds,
+        prev_global_bounds,
+        prev_opacity,
+        prev_visible,
+        prev_needs_paint,
+        prev_has_filters,
+        prev_is_layout_only_passthrough,
+    ) = engine.scene.with_arena(|arena| {
+        if let Some(node) = arena.get(node_id) {
+            let scene_node = node.get();
+            (
+                scene_node
+                    .render_layer
+                    .global_transformed_bounds_with_children,
+                scene_node.render_layer.global_transformed_bounds,
+                scene_node.render_layer.premultiplied_opacity,
+                scene_node.render_layer.has_visible_drawables(),
+                scene_node.needs_repaint(),
+                scene_node.render_layer.has_filters(),
+                scene_node.render_layer.is_layout_only_passthrough(),
+            )
+        } else {
+            (
+                skia_safe::Rect::default(),
+                skia_safe::Rect::default(),
+                0.0,
+                false,
+                false,
+                false,
+                false,
+            )
+        }
+    });
 
     let prev_children_visible = engine.scene.with_arena(|arena| {
         node_id
@@ -132,20 +143,29 @@ pub(crate) fn update_node_single(
     });
 
     // Capture the new state after the update
-    let (new_transformed_bounds, new_global_bounds, new_opacity, new_visible, current_needs_paint) =
-        engine.scene.with_arena(|arena| {
-            let node = arena.get(node_id).unwrap();
-            let scene_node = node.get();
-            (
-                scene_node
-                    .render_layer
-                    .global_transformed_bounds_with_children,
-                scene_node.render_layer.global_transformed_bounds,
-                scene_node.render_layer.premultiplied_opacity,
-                scene_node.render_layer.has_visible_drawables(),
-                scene_node.needs_repaint(),
-            )
-        });
+    let (
+        new_transformed_bounds,
+        new_global_bounds,
+        new_opacity,
+        new_visible,
+        current_needs_paint,
+        new_has_filters,
+        new_is_layout_only_passthrough,
+    ) = engine.scene.with_arena(|arena| {
+        let node = arena.get(node_id).unwrap();
+        let scene_node = node.get();
+        (
+            scene_node
+                .render_layer
+                .global_transformed_bounds_with_children,
+            scene_node.render_layer.global_transformed_bounds,
+            scene_node.render_layer.premultiplied_opacity,
+            scene_node.render_layer.has_visible_drawables(),
+            scene_node.needs_repaint(),
+            scene_node.render_layer.has_filters(),
+            scene_node.render_layer.is_layout_only_passthrough(),
+        )
+    });
 
     let new_children_visible = engine.scene.with_arena(|arena| {
         node_id
@@ -188,8 +208,14 @@ pub(crate) fn update_node_single(
             propagate_to_children: parent_changed,
         };
     }
+    let changed_filters = prev_has_filters != new_has_filters;
 
-    // Trigger repaint if required and capture content damage
+    // A node is passthrough-only when both before and after the update it has no own
+    // visible drawables, no filters, no clipping, and uses Normal blend mode.
+    // In that case geometry changes on the node itself don't produce damage – only
+    // the children's damage matters.
+    let passthrough_only = prev_is_layout_only_passthrough && new_is_layout_only_passthrough;
+
     let mut updated_renderable = None;
     let content_damage = engine.scene.with_arena(|arena| {
         let opt_renderable = engine.scene.renderables.get(&node_id.into());
@@ -202,6 +228,7 @@ pub(crate) fn update_node_single(
                 || layout_changed
                 || position_changed
                 || opacity_changed
+            // || changed_filters
             {
                 let new_renderable = do_repaint(&renderable, scene_node);
                 repaint_damage = new_renderable.repaint_damage;
@@ -240,13 +267,16 @@ pub(crate) fn update_node_single(
 
     let mut total_damage = mapped_content_damage;
     let has_visible_drawables = prev_effective_visible || new_effective_visible;
+    let self_contributes_visual_output = !passthrough_only;
 
-    if geometry_changed_self && (has_visible_drawables || is_debug) {
+    if geometry_changed_self
+        && ((has_visible_drawables && self_contributes_visual_output) || is_debug)
+    {
         total_damage.join(prev_global_bounds);
         total_damage.join(new_global_bounds);
     }
 
-    if geometry_changed_children && (has_visible_drawables || is_debug) {
+    if geometry_changed_children && (has_visible_drawables || is_debug) && !passthrough_only {
         total_damage.join(prev_transformed_bounds);
         total_damage.join(new_transformed_bounds);
     }
@@ -255,7 +285,7 @@ pub(crate) fn update_node_single(
         total_damage.join(prev_transformed_bounds);
     }
 
-    if opacity_changed && has_visible_drawables {
+    if opacity_changed && has_visible_drawables && !passthrough_only {
         if prev_opacity <= 0.0 && new_opacity > 0.0 {
             total_damage.join(new_transformed_bounds);
         } else if prev_opacity > 0.0 && new_opacity <= 0.0 {
@@ -264,7 +294,13 @@ pub(crate) fn update_node_single(
             total_damage.join(new_transformed_bounds);
         }
     }
-
+    // When only a filter is added/removed and the node has no own visible drawables
+    // (pure filter container), do_repaint produces no picture so content_damage is empty.
+    // We must still damage the full subtree bounds so the compositor redraws the children.
+    if changed_filters && has_visible_drawables && content_damage.is_empty() {
+        total_damage.join(prev_transformed_bounds);
+        total_damage.join(new_transformed_bounds);
+    }
     let content_repainted = !content_damage.is_empty();
     let damaged = content_repainted
         || (geometry_changed_self && (has_visible_drawables || is_debug))
@@ -272,7 +308,8 @@ pub(crate) fn update_node_single(
         || opacity_changed
         || parent_changed
         || visibility_changed
-        || changed_render_layer;
+        || changed_render_layer
+        || changed_filters;
 
     if damaged {
         engine.scene.with_arena_mut(|arena| {
@@ -283,7 +320,10 @@ pub(crate) fn update_node_single(
     }
 
     let propagate_to_children = parent_changed || geometry_changed_self || opacity_changed;
-
+    let nid: usize = node_id.into();
+    if nid == 8 && total_damage.width() == 1000.0 {
+        println!("update_node_single: node_id={:?}, damage={:?}, layout_changed={}, position_changed={}, opacity_changed={}, visibility_changed={}, changed_render_layer={}, prev_has_filters={}, new_has_filters={}, propagate_to_children={}", nid, total_damage, layout_changed, position_changed, opacity_changed, visibility_changed, changed_render_layer, prev_has_filters, new_has_filters, propagate_to_children);
+    }
     NodeUpdateResult {
         damage: total_damage,
         propagate_to_children,

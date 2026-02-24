@@ -489,6 +489,17 @@ impl RenderLayer {
         render_layer.visible = render_layer.has_visible_drawables();
         render_layer
     }
+    pub fn has_filters(&self) -> bool {
+        self.image_filter.is_some() || self.color_filter.is_some()
+    }
+
+    pub(crate) fn is_layout_only_passthrough(&self) -> bool {
+        !self.has_visible_drawables()
+            && !self.has_filters()
+            && !self.clip_content
+            && !self.clip_children
+            && self.blend_mode == BlendMode::Normal
+    }
 }
 
 impl Default for RenderLayer {
@@ -545,7 +556,7 @@ impl Serialize for RenderLayer {
     where
         S: serde::Serializer,
     {
-        let mut seq = serializer.serialize_struct("RenderLayer", 18)?;
+        let mut seq = serializer.serialize_struct("RenderLayer", 22)?;
         // let mut seq = serializer.serialize_seq(Some(15))?;
         // seq.serialize_element(&Rectangle::from(self.rbounds))?;
         // seq.serialize_element(&self.transformed_rbounds.into())?;
@@ -573,6 +584,16 @@ impl Serialize for RenderLayer {
         seq.serialize_field("opacity", &self.opacity)?;
         seq.serialize_field("visible", &self.visible)?;
         seq.serialize_field("shape", &self.shape)?;
+        seq.serialize_field("image_filter", &self.image_filter.is_some())?;
+        seq.serialize_field(
+            "image_filter_bounds",
+            &self.image_filter_bounds.map(Rectangle::from),
+        )?;
+        seq.serialize_field("color_filter", &self.color_filter.is_some())?;
+        seq.serialize_field(
+            "backdrop_blur_regions",
+            &self.backdrop_blur_region.as_ref().map(|v| v.len()),
+        )?;
         // seq.serialize_element(&self.content)?;
         // seq.serialize_element(&self.transform)?;
         seq.end()

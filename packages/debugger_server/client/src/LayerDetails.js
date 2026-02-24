@@ -19,6 +19,7 @@ function LayerDetails({ layer, rootLayer, layers, rootId, visibleSections }) {
     identity: !visibleSections || visibleSections.includes('identity'),
     layout: !visibleSections || visibleSections.includes('layout'),
     appearance: !visibleSections || visibleSections.includes('appearance'),
+    flags: !visibleSections || visibleSections.includes('flags'),
     preview: !visibleSections || visibleSections.includes('preview'),
   }));
   const [zoom, setZoom] = React.useState(1);
@@ -226,6 +227,49 @@ function LayerDetails({ layer, rootLayer, layers, rootId, visibleSections }) {
               <div className="kv-row">
                 <span className="label">Blend mode</span>
                 <span className="value code">{attrs.blend_mode}</span>
+              </div>
+              <div className="kv-row">
+                <span className="label">Image filter</span>
+                <span className={`badge ${attrs.image_filter ? 'green' : 'gray'}`}>{attrs.image_filter ? 'Yes' : 'No'}</span>
+              </div>
+              {attrs.image_filter && attrs.image_filter_bounds && (
+                <div className="kv-row">
+                  <span className="label">Filter bounds</span>
+                  <span className="value code">{safeFormatRect(attrs.image_filter_bounds)}</span>
+                </div>
+              )}
+              <div className="kv-row">
+                <span className="label">Color filter</span>
+                <span className={`badge ${attrs.color_filter ? 'green' : 'gray'}`}>{attrs.color_filter ? 'Yes' : 'No'}</span>
+              </div>
+              <div className="kv-row">
+                <span className="label">Backdrop blur regions</span>
+                <span className="value code">{attrs.backdrop_blur_regions ?? 0}</span>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {shouldShow('flags') && (
+        <div className="section">
+          <button className="section-toggle" onClick={() => toggleSection('flags')}>
+            <span className="chevron">{openSections.flags ? '▾' : '▸'}</span>
+            <span className="section-title">Flags</span>
+          </button>
+          {openSections.flags && (
+            <>
+              <div className="kv-row">
+                <span className="label">Frame</span>
+                <span className="value code">{attrs.frame_number ?? '-'}</span>
+              </div>
+              <div className="kv-row">
+                <span className="label">Picture cached</span>
+                <span className={`badge ${attrs.picture_cached ? 'green' : 'gray'}`}>{attrs.picture_cached ? 'Yes' : 'No'}</span>
+              </div>
+              <div className="kv-row">
+                <span className="label">Image cached</span>
+                <span className={`badge ${attrs.image_cached ? 'green' : 'gray'}`}>{attrs.image_cached ? 'Yes' : 'No'}</span>
               </div>
             </>
           )}

@@ -25,6 +25,11 @@ The api is getting documented, be aware that is also still in evolution.
 
 - Engine update pipeline & damage tracking: see `docs/` for a deep dive into frame stages and redraw rules.
 - Layers Inspector: a browser-based debugger that shows the live scene graph with search and highlights (`docs/layers_inspector.md`).
+  - **Web UI**: `http://localhost:8000/client/index.html`
+  - **HTTP API**: The debugger server exposes a REST endpoint to fetch the scene graph:
+    - `GET /scene` — returns the full scene tree as JSON
+    - `GET /scene/{node_id}` — returns only the subtree rooted at the specified node
+    - Port defaults to `8000`, configurable via `LAYERS_DEBUGGER_PORT` env var
 
 
 ## Rendering

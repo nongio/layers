@@ -76,6 +76,43 @@ pub fn spring_animation() {
     // assert!(i < 1.0)
 }
 
+/// it should not move the layer while the delay has not expired
+#[test]
+pub fn spring_animation_with_delay() {
+    let engine = Engine::create(1000.0, 1000.0);
+    let layer = engine.new_layer();
+    engine.add_layer(&layer);
+
+    let initial_position = layer.position();
+
+    layer.set_position(
+        (100.0, 100.0),
+        Transition {
+            delay: 0.5,
+            timing: TimingFunction::spring(1.0, 0.2),
+        },
+    );
+
+    // Advance time to 0.4s — still within the delay window
+    engine.update(0.2);
+    engine.update(0.2);
+
+    assert_eq!(
+        layer.position(),
+        initial_position,
+        "position should not change before the delay expires"
+    );
+
+    // Advance past the delay
+    engine.update(0.2);
+
+    assert_ne!(
+        layer.position(),
+        initial_position,
+        "position should start changing after the delay expires"
+    );
+}
+
 /// it should call the finish handler when the transaction is finished 1 time
 #[test]
 pub fn merge_spring_animation() {

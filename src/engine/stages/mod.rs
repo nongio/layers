@@ -57,7 +57,7 @@ pub(crate) fn update_animations(
                     started_animations.write().unwrap().push(*id);
                 }
                 *progress = animation_progress;
-                *time = time_progress.clamp(0.0, time_progress);
+                *time = time_progress.clamp(0.0, 1.0);
                 if animation.done(timestamp.0) {
                     *is_running = false;
                     *is_finished = true;
@@ -603,8 +603,10 @@ pub fn send_debugger(scene: Arc<crate::engine::scene::Scene>, scene_root: NodeRe
         #[serde(flatten)]
         render_layer: RenderLayer,
         hidden: bool,
+        frame_number: usize,
+        picture_cached: bool,
+        image_cached: bool,
     }
-
     let s = scene.clone();
     s.with_arena(|arena| {
         let render_layers: std::collections::HashMap<
@@ -625,6 +627,9 @@ pub fn send_debugger(scene: Arc<crate::engine::scene::Scene>, scene_root: NodeRe
                 let render_layer = DebugRenderLayer {
                     render_layer: scene_node.render_layer.clone(),
                     hidden: scene_node.hidden(),
+                    frame_number: scene_node.frame_number,
+                    picture_cached: scene_node.picture_cached,
+                    image_cached: scene_node.image_cached,
                 };
                 let id: usize = node_id.into();
                 Some((id, (id, render_layer, children, node_id)))

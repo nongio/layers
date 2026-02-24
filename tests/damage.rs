@@ -160,6 +160,33 @@ mod tests {
     }
 
     #[test]
+    pub fn backdrop_blur_does_not_bubble_through_hidden_parent() {
+        let engine = Engine::create(1000.0, 1000.0);
+
+        let root = engine.new_layer();
+        root.set_position((0.0, 0.0), None);
+        root.set_size(Size::points(600.0, 600.0), None);
+        engine.add_layer(&root.id);
+
+        let hidden_parent = engine.new_layer();
+        hidden_parent.set_position((100.0, 100.0), None);
+        hidden_parent.set_size(Size::points(300.0, 300.0), None);
+        hidden_parent.set_hidden(true);
+        engine.append_layer(&hidden_parent.id, Some(root.id));
+
+        let child = engine.new_layer();
+        child.set_position((20.0, 20.0), None);
+        child.set_size(Size::points(100.0, 100.0), None);
+        child.set_blend_mode(layers::types::BlendMode::BackgroundBlur);
+        engine.append_layer(&child.id, Some(hidden_parent.id));
+
+        engine.update(0.016);
+
+        let root_render_layer = engine.render_layer(&root.id).unwrap();
+        assert!(root_render_layer.backdrop_blur_region.is_none());
+    }
+
+    #[test]
     pub fn damage_rect() {
         let engine = Engine::create(1000.0, 1000.0);
         let layer = engine.new_layer();
@@ -422,6 +449,36 @@ mod tests {
     }
 
     #[test]
+    pub fn damage_move_layout_only_parent_passes_children_damage_only() {
+        let engine = Engine::create(1000.0, 1000.0);
+
+        let parent = engine.new_layer();
+        parent.set_position((100.0, 100.0), None);
+        parent.set_size(Size::points(300.0, 300.0), None);
+        engine.add_layer(&parent.id);
+
+        let child = engine.new_layer();
+        child.set_position((100.0, 100.0), None);
+        child.set_size(Size::points(50.0, 50.0), None);
+        child.set_background_color(Color::new_hex("#ff0000ff"), None);
+        engine.append_layer(&child, parent.id);
+
+        engine.update(0.016);
+        engine.clear_damage();
+
+        parent.set_position((200.0, 200.0), None);
+        engine.update(0.016);
+        let scene_damage = engine.damage();
+
+        // Child moves from (200,200)-(250,250) to (300,300)-(350,350),
+        // so damage is the union of those two child rects only.
+        assert_eq!(
+            scene_damage,
+            skia_safe::Rect::from_xywh(200.0, 200.0, 150.0, 150.0)
+        );
+    }
+
+    #[test]
     pub fn damage_opacity() {
         let engine = Engine::create(1000.0, 1000.0);
         let layer = engine.new_layer();
@@ -667,8 +724,199 @@ mod tests {
         );
     }
 
-    /// Tests that when a follower layer (B) replicates a leader layer (A) using as_content(),
-    /// and the follower has its own transform (position and scale),
+    #[test]
+    pub fn damage_color_filter() {
+        let engine = Engine::create(1000.0, 1000.0);
+        let layer = engine.new_layer();
+        layer.set_picture_cached(false);
+        // layer.set_image_cached(true);
+        layer.set_position((100.0, 100.0), None);
+        layer.set_size(Size::points(100.0, 100.0), None);
+        layer.set_background_color(Color::new_hex("#ff0000ff"), None);
+        engine.add_layer(&layer.id);
+
+        engine.update(0.016);
+
+        let frame_1 = engine
+            .scene_get_node(layer.id())
+            .unwrap()
+            .get()
+            .frame_number();
+        let damage = engine.damage();
+        assert_eq!(
+            damage,
+            skia_safe::Rect::from_xywh(100.0, 100.0, 100.0, 100.0)
+        );
+        engine.clear_damage();
+        engine.update(0.016);
+        let frame_1_after = engine
+            .scene_get_node(layer.id())
+            .unwrap()
+            .get()
+            .frame_number();
+        assert_eq!(
+            frame_1, frame_1_after,
+            "frame_number should not increase if there are no changes to the layer"
+        );
+        println!("frame_1: {}, frame_1_after: {}", frame_1, frame_1_after);
+        // Add a color filter — frame_number should increase and bounds should be damaged
+        let mut cm = skia_safe::ColorMatrix::default();
+        cm.set_saturation(0.0);
+        let filter = skia_safe::color_filters::matrix(&cm, None);
+        layer.set_color_filter(filter);
+        engine.update(0.016);
+
+        let frame_2 = engine
+            .scene_get_node(layer.id())
+            .unwrap()
+            .get()
+            .frame_number();
+        assert!(
+            frame_2 > frame_1,
+            "frame_number should increase after adding a color filter"
+        );
+        let damage = engine.damage();
+        assert_eq!(
+            damage,
+            skia_safe::Rect::from_xywh(100.0, 100.0, 100.0, 100.0),
+            "adding a color filter should damage the layer bounds"
+        );
+        engine.clear_damage();
+
+        // No changes — no damage, frame_number stays the same
+        engine.update(0.016);
+        let frame_3 = engine
+            .scene_get_node(layer.id())
+            .unwrap()
+            .get()
+            .frame_number();
+        let damage = engine.damage();
+        assert_eq!(
+            damage,
+            skia_safe::Rect::from_xywh(0.0, 0.0, 0.0, 0.0),
+            "no changes should produce no damage"
+        );
+        assert_eq!(
+            frame_3, frame_2,
+            "frame_number should not change when there is nothing to repaint"
+        );
+
+        // Remove the filter — frame_number should increase and bounds should be damaged again
+        layer.set_color_filter(None);
+        engine.update(0.016);
+
+        let frame_4 = engine
+            .scene_get_node(layer.id())
+            .unwrap()
+            .get()
+            .frame_number();
+        assert!(
+            frame_4 > frame_3,
+            "frame_number should increase after removing the color filter"
+        );
+        let damage = engine.damage();
+        assert_eq!(
+            damage,
+            skia_safe::Rect::from_xywh(100.0, 100.0, 100.0, 100.0),
+            "removing a color filter should damage the layer bounds"
+        );
+    }
+
+    /// Tests the bug case: a layer with no visible drawables acting as a
+    /// filter container must still bump frame_number and produce damage when
+    /// a color filter is added or removed, because the filter visually affects
+    /// how its children are drawn.
+    #[test]
+    pub fn damage_color_filter_container_no_background() {
+        let engine = Engine::create(1000.0, 1000.0);
+
+        // Parent: pure filter container — no background, no content
+        let container = engine.new_layer();
+        container.set_layout_style(layers::taffy::Style {
+            position: layers::taffy::Position::Absolute,
+            ..Default::default()
+        });
+        container.set_position((100.0, 100.0), None);
+        container.set_size(Size::points(200.0, 200.0), None);
+        engine.add_layer(&container.id);
+
+        // Child: has background so subtree is visually non-empty
+        let child = engine.new_layer();
+        child.set_layout_style(layers::taffy::Style {
+            position: layers::taffy::Position::Absolute,
+            ..Default::default()
+        });
+        child.set_position((0.0, 0.0), None);
+        child.set_size(Size::points(200.0, 200.0), None);
+        child.set_background_color(Color::new_hex("#ff0000ff"), None);
+        engine.append_layer(&child.id, Some(container.id));
+
+        engine.update(0.016);
+        engine.clear_damage();
+
+        let frame_before = engine
+            .scene_get_node(container.id())
+            .unwrap()
+            .get()
+            .frame_number();
+
+        // Add a color filter to the container (no background on container)
+        let mut cm = skia_safe::ColorMatrix::default();
+        cm.set_saturation(0.0);
+        let filter = skia_safe::color_filters::matrix(&cm, None);
+        container.set_color_filter(filter);
+        engine.update(0.016);
+
+        let frame_after_add = engine
+            .scene_get_node(container.id())
+            .unwrap()
+            .get()
+            .frame_number();
+        assert!(
+            frame_after_add > frame_before,
+            "frame_number must increase when a color filter is added to a filter-container node"
+        );
+        let damage = engine.damage();
+        assert!(
+            !damage.is_empty(),
+            "adding a color filter to a filter-container must produce scene damage"
+        );
+        engine.clear_damage();
+
+        // No changes — no damage, frame stays
+        engine.update(0.016);
+        let frame_stable = engine
+            .scene_get_node(container.id())
+            .unwrap()
+            .get()
+            .frame_number();
+        assert_eq!(
+            frame_stable, frame_after_add,
+            "frame_number must not change when nothing changed"
+        );
+        assert_eq!(engine.damage(), skia_safe::Rect::default());
+        engine.clear_damage();
+
+        // Remove the filter
+        container.set_color_filter(None);
+        engine.update(0.016);
+
+        let frame_after_remove = engine
+            .scene_get_node(container.id())
+            .unwrap()
+            .get()
+            .frame_number();
+        assert!(
+            frame_after_remove > frame_stable,
+            "frame_number must increase when the color filter is removed"
+        );
+        let damage = engine.damage();
+        assert!(
+            !damage.is_empty(),
+            "removing a color filter from a filter-container must produce scene damage"
+        );
+    }
+
     /// damage from the leader is correctly transformed to the follower's
     /// global coordinates.
     #[test]

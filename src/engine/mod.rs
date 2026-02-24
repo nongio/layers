@@ -1106,6 +1106,8 @@ impl Engine {
         *timestamp = Timestamp(timestamp.0 + dt);
     }
     #[profiling::function]
+    /// Update the engine state by dt seconds
+    /// Returns true if a redraw is needed
     pub fn update(&self, dt: f32) -> bool {
         let timestamp = {
             let mut timestamp = self.timestamp.write().unwrap();
@@ -1384,6 +1386,15 @@ impl Engine {
             let Some(parent_id) = parent_id else {
                 return;
             };
+
+            // Stop bubbling across hidden ancestors.
+            // If the immediate parent is hidden, descendants should not contribute
+            // backdrop regions outside that hidden subtree.
+            if let Some(parent_node) = arena.get(parent_id) {
+                if parent_node.get().hidden() {
+                    return;
+                }
+            }
 
             if let Some(parent_node) = arena.get_mut(parent_id) {
                 let parent = parent_node.get_mut();
