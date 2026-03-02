@@ -285,7 +285,7 @@ impl Layer {
         let value_id = self.model.size.id;
 
         let change: Arc<ModelChange<Size>> = Arc::new(ModelChange {
-            value_change: self.model.size.to(value, transition),
+            value_change: self.model.size.to(value.clone(), transition),
             flag: flags,
         });
 
@@ -326,7 +326,9 @@ impl Layer {
                 true,
             )
         });
-
+        if animation.is_none() {
+            self.model.size.set(value);
+        }
         self.engine.schedule_change(self.id, change, animation)
     }
     pub fn size(&self) -> Size {

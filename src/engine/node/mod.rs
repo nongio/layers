@@ -213,10 +213,6 @@ impl SceneNode {
         force_update: bool,
     ) -> bool {
         let is_hidden = self.hidden();
-        self.render_layer.visible = !is_hidden;
-        if is_hidden {
-            return false;
-        }
         let current_width = self.render_layer.size.width;
         let current_height = self.render_layer.size.height;
         let current_x = self.render_layer.local_transformed_bounds.x();
@@ -269,7 +265,7 @@ impl SceneNode {
                 || current_x != self.render_layer.local_transformed_bounds.x()
                 || current_y != self.render_layer.local_transformed_bounds.y();
         }
-        self.render_layer.visible = self.render_layer.has_visible_drawables();
+        self.render_layer.visible = !is_hidden && self.render_layer.has_visible_drawables();
         changed
     }
     pub fn set_needs_repaint(&mut self, need_repaint: bool) {

@@ -53,6 +53,9 @@ pub(crate) fn update_node_single(
         prev_needs_paint,
         prev_has_filters,
         prev_is_layout_only_passthrough,
+        // render_layer.visible accounts for the hidden flag (set by update_render_layer_if_needed);
+        // this lets us detect hidden-state changes separately from drawable-content changes.
+        prev_render_layer_visible,
     ) = engine.scene.with_arena(|arena| {
         if let Some(node) = arena.get(node_id) {
             let scene_node = node.get();
@@ -66,12 +69,14 @@ pub(crate) fn update_node_single(
                 scene_node.needs_repaint(),
                 scene_node.render_layer.has_filters(),
                 scene_node.render_layer.is_layout_only_passthrough(),
+                scene_node.render_layer.visible,
             )
         } else {
             (
                 skia_safe::Rect::default(),
                 skia_safe::Rect::default(),
                 0.0,
+                false,
                 false,
                 false,
                 false,
@@ -151,6 +156,7 @@ pub(crate) fn update_node_single(
         current_needs_paint,
         new_has_filters,
         new_is_layout_only_passthrough,
+        is_now_hidden,
     ) = engine.scene.with_arena(|arena| {
         let node = arena.get(node_id).unwrap();
         let scene_node = node.get();
@@ -164,6 +170,7 @@ pub(crate) fn update_node_single(
             scene_node.needs_repaint(),
             scene_node.render_layer.has_filters(),
             scene_node.render_layer.is_layout_only_passthrough(),
+            scene_node.hidden(),
         )
     });
 
@@ -281,8 +288,23 @@ pub(crate) fn update_node_single(
         total_damage.join(new_transformed_bounds);
     }
 
+    // When a layer loses all drawable content, damage its previous bounds so the
+    // compositor redraws the area it occupied.
     if prev_effective_visible && !new_effective_visible {
         total_damage.join(prev_transformed_bounds);
+    }
+
+    // Hidden-state changes: use render_layer.visible (reflects the hidden flag) to distinguish
+    // a visibility change due to set_hidden() from a change due to gaining/losing drawables.
+    // - visible→hidden: damage previous bounds (area must be cleared)
+    // - hidden→visible: damage new bounds (area must be drawn)
+    if prev_render_layer_visible && is_now_hidden {
+        total_damage.join(prev_transformed_bounds);
+    }
+    if !prev_render_layer_visible && prev_visible && !is_now_hidden {
+        // The layer had drawables before (prev_visible=true) but was suppressed by the hidden
+        // flag (prev_render_layer_visible=false); it is now un-hidden, so damage its new bounds.
+        total_damage.join(new_transformed_bounds);
     }
 
     if opacity_changed && has_visible_drawables && !passthrough_only {

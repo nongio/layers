@@ -398,8 +398,11 @@ pub fn render_node_tree(
                     // 1. Has the follower itself changed? (its own frame)
                     // 2. Has the followed node's content changed? (source frame)
                     let needs_repaint = if let Some(following_ref) = scene_node.following {
+                        // Guard against a freed leader node — indextree's Node::get() panics
+                        // on freed slots, so we must check is_removed() first.
                         let followed_frame = scene_arena
                             .get(following_ref.0)
+                            .filter(|n| !n.is_removed())
                             .map(|n| n.get().frame_number)
                             .unwrap_or(0);
                         // Repaint if either the follower or the followed node changed
