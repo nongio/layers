@@ -664,13 +664,15 @@ impl Engine {
             // if the layer has an id, then remove it from the layout tree
             let mut layout_tree = self.layout_tree.write().unwrap();
 
-            if let Err(_) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            if std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                 if let Some(layout_parent) = layout_tree.parent(layout) {
                     if let Err(e) = layout_tree.remove_child(layout_parent, layout) {
                         error!("Failed to remove layout child (node may be freed): {}", e);
                     }
                 }
-            })) {
+            }))
+            .is_err()
+            {
                 error!("layout_detach_layer panicked (likely invalid layout node)");
             }
         }
@@ -727,7 +729,7 @@ impl Engine {
         layer_id: impl Into<&'a NodeRef>,
         parent: impl Into<Option<NodeRef>>,
     ) {
-        if let Err(_) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        if std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             let layer_id = layer_id.into();
             if let Some(layer) = self.get_layer(layer_id) {
                 let parent = parent.into();
@@ -737,19 +739,19 @@ impl Engine {
                     scene_root
                 });
 
-                if new_parent.is_none() {
-                    // if we append to a scene without a root, we set the layer as the root
-                    self.scene_set_root(layer);
-                } else {
-                    let new_parent = new_parent.unwrap();
-
+                if let Some(new_parent) = new_parent {
                     self.scene.append_node_to(layer.id, new_parent);
                     self.layout_append_layer(&layer, new_parent);
+                } else {
+                    // if we append to a scene without a root, we set the layer as the root
+                    self.scene_set_root(layer);
                 }
                 // Invalidate hit test node list since tree structure changed
                 self.invalidate_hit_test_node_list();
             }
-        })) {
+        }))
+        .is_err()
+        {
             error!("append_layer panicked (likely invalid layout node)");
         }
     }
@@ -763,7 +765,7 @@ impl Engine {
     /// Prepend the layer to the root of the scene or to a parent node
     /// if the parent is provided
     pub fn prepend_layer(&self, layer: impl Into<Layer>, parent: impl Into<Option<NodeRef>>) {
-        if let Err(_) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        if std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             let layer: Layer = layer.into();
             let layer_id = layer.id;
             let parent = parent.into();
@@ -776,18 +778,18 @@ impl Engine {
                 scene_root
             });
 
-            if new_parent.is_none() {
-                // if we append to a scene without a root, we set the layer as the root
-                self.scene_set_root(layer);
-            } else {
-                let new_parent = new_parent.unwrap();
-
+            if let Some(new_parent) = new_parent {
                 self.scene.prepend_node_to(layer_id, new_parent);
                 self.layout_prepend_layer(&layer, new_parent);
+            } else {
+                // if we append to a scene without a root, we set the layer as the root
+                self.scene_set_root(layer);
             }
             // Invalidate hit test node list since tree structure changed
             self.invalidate_hit_test_node_list();
-        })) {
+        }))
+        .is_err()
+        {
             error!("prepend_layer panicked (likely invalid layout node)");
         }
     }
