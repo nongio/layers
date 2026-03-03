@@ -137,6 +137,11 @@ impl LayersEngine {
     pub fn update(&self, dt: f32) -> bool {
         self.engine.update(dt)
     }
+    /// Returns the number of transactions currently pending execution.
+    /// A non-zero value means another call to `update` is needed.
+    pub fn pending_transactions_count(&self) -> usize {
+        self.engine.pending_transactions_count()
+    }
     /// Update the nodes in the scene and returns the bounding box of the changes
     pub fn update_nodes(&self) -> skia_safe::Rect {
         self.engine.update_nodes()

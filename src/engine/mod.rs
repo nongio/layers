@@ -995,6 +995,11 @@ impl Engine {
     pub fn now(&self) -> f32 {
         self.timestamp.read().unwrap().0
     }
+    /// Returns the number of transactions currently scheduled to be executed.
+    /// Use this to determine whether another call to `update` is needed.
+    pub fn pending_transactions_count(&self) -> usize {
+        self.transactions.with_data(|d| d.len())
+    }
     pub fn add_animation_from_transition(
         &self,
         transition: &Transition,
