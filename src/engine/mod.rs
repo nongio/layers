@@ -24,6 +24,7 @@
 
 pub use node::SceneNode;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
+use tracing::error;
 
 mod debug_server;
 
@@ -663,8 +664,14 @@ impl Engine {
             // if the layer has an id, then remove it from the layout tree
             let mut layout_tree = self.layout_tree.write().unwrap();
 
-            if let Some(layout_parent) = layout_tree.parent(layout) {
-                layout_tree.remove_child(layout_parent, layout).unwrap();
+            if let Err(_) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                if let Some(layout_parent) = layout_tree.parent(layout) {
+                    if let Err(e) = layout_tree.remove_child(layout_parent, layout) {
+                        error!("Failed to remove layout child (node may be freed): {}", e);
+                    }
+                }
+            })) {
+                error!("layout_detach_layer panicked (likely invalid layout node)");
             }
         }
     }
@@ -681,10 +688,12 @@ impl Engine {
         }
         let parent_layout = parent_layout.unwrap();
         let mut layout_tree = self.layout_tree.write().unwrap();
-        layout_tree.add_child(parent_layout, layout).unwrap();
+        if let Err(e) = layout_tree.add_child(parent_layout, layout) {
+            error!("Failed to add layout child (node may be freed): {}", e);
+        }
         let res = layout_tree.mark_dirty(parent_layout);
         if let Some(err) = res.err() {
-            println!("layout err {}", err);
+            error!("Failed to mark layout dirty: {}", err);
         }
     }
 
@@ -700,12 +709,13 @@ impl Engine {
         }
         let parent_layout = parent_layout.unwrap();
         let mut layout_tree = self.layout_tree.write().unwrap();
-        layout_tree
-            .insert_child_at_index(parent_layout, 0, layout)
-            .unwrap();
+        if let Err(e) = layout_tree
+            .insert_child_at_index(parent_layout, 0, layout) {
+            error!("Failed to insert layout child (node may be freed): {}", e);
+        }
         let res = layout_tree.mark_dirty(parent_layout);
         if let Some(err) = res.err() {
-            println!("layout err {}", err);
+            error!("Failed to mark layout dirty: {}", err);
         }
     }
 
@@ -717,26 +727,30 @@ impl Engine {
         layer_id: impl Into<&'a NodeRef>,
         parent: impl Into<Option<NodeRef>>,
     ) {
-        let layer_id = layer_id.into();
-        if let Some(layer) = self.get_layer(layer_id) {
-            let parent = parent.into();
-            self.layout_detach_layer(&layer);
-            let new_parent = parent.or_else(|| {
-                let scene_root = *self.scene_root.read().unwrap();
-                scene_root
-            });
+        if let Err(_) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let layer_id = layer_id.into();
+            if let Some(layer) = self.get_layer(layer_id) {
+                let parent = parent.into();
+                self.layout_detach_layer(&layer);
+                let new_parent = parent.or_else(|| {
+                    let scene_root = *self.scene_root.read().unwrap();
+                    scene_root
+                });
 
-            if new_parent.is_none() {
-                // if we append to a scene without a root, we set the layer as the root
-                self.scene_set_root(layer);
-            } else {
-                let new_parent = new_parent.unwrap();
+                if new_parent.is_none() {
+                    // if we append to a scene without a root, we set the layer as the root
+                    self.scene_set_root(layer);
+                } else {
+                    let new_parent = new_parent.unwrap();
 
-                self.scene.append_node_to(layer.id, new_parent);
-                self.layout_append_layer(&layer, new_parent);
+                    self.scene.append_node_to(layer.id, new_parent);
+                    self.layout_append_layer(&layer, new_parent);
+                }
+                // Invalidate hit test node list since tree structure changed
+                self.invalidate_hit_test_node_list();
             }
-            // Invalidate hit test node list since tree structure changed
-            self.invalidate_hit_test_node_list();
+        })) {
+            error!("append_layer panicked (likely invalid layout node)");
         }
     }
 
@@ -749,29 +763,33 @@ impl Engine {
     /// Prepend the layer to the root of the scene or to a parent node
     /// if the parent is provided
     pub fn prepend_layer(&self, layer: impl Into<Layer>, parent: impl Into<Option<NodeRef>>) {
-        let layer: Layer = layer.into();
-        let layer_id = layer.id;
-        let parent = parent.into();
-        self.layout_detach_layer(&layer);
+        if let Err(_) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let layer: Layer = layer.into();
+            let layer_id = layer.id;
+            let parent = parent.into();
+            self.layout_detach_layer(&layer);
 
-        self.layout_detach_layer(&layer);
+            self.layout_detach_layer(&layer);
 
-        let new_parent = parent.or_else(|| {
-            let scene_root = *self.scene_root.read().unwrap();
-            scene_root
-        });
+            let new_parent = parent.or_else(|| {
+                let scene_root = *self.scene_root.read().unwrap();
+                scene_root
+            });
 
-        if new_parent.is_none() {
-            // if we append to a scene without a root, we set the layer as the root
-            self.scene_set_root(layer);
-        } else {
-            let new_parent = new_parent.unwrap();
+            if new_parent.is_none() {
+                // if we append to a scene without a root, we set the layer as the root
+                self.scene_set_root(layer);
+            } else {
+                let new_parent = new_parent.unwrap();
 
-            self.scene.prepend_node_to(layer_id, new_parent);
-            self.layout_prepend_layer(&layer, new_parent);
+                self.scene.prepend_node_to(layer_id, new_parent);
+                self.layout_prepend_layer(&layer, new_parent);
+            }
+            // Invalidate hit test node list since tree structure changed
+            self.invalidate_hit_test_node_list();
+        })) {
+            error!("prepend_layer panicked (likely invalid layout node)");
         }
-        // Invalidate hit test node list since tree structure changed
-        self.invalidate_hit_test_node_list();
     }
 
     pub fn add_layer_to_positioned(&self, layer: impl Into<Layer>, parent: Option<NodeRef>) {
@@ -928,7 +946,7 @@ impl Engine {
     pub fn render_layer<'a>(&self, node_ref: impl Into<&'a NodeRef>) -> Option<RenderLayer> {
         let node_ref = node_ref.into();
         self.scene.with_arena(|arena| {
-            let node = arena.get(node_ref.into())?;
+            let node = arena.get(node_ref.into()).filter(|n| !n.is_removed())?;
             let node = node.get().render_layer().clone();
             Some(node)
         })
@@ -948,6 +966,7 @@ impl Engine {
         let node_ref = node_ref.into();
         self.scene.with_arena(|a| {
             a.get(node_ref.0)
+                .filter(|n| !n.is_removed())
                 .map(|node| {
                     let node = node.get();
                     (node.render_layer.size.width, node.render_layer.size.height)
@@ -1201,7 +1220,8 @@ impl Engine {
                     .map(|node_id| {
                         let (parent_render_layer, parent_changed) =
                             self.scene.with_arena(|arena| {
-                                let parent_id = arena[*node_id].parent();
+                                let parent_id =
+                                    arena.get(*node_id).and_then(|n| n.parent());
                                 let parent_layer = parent_id
                                     .and_then(|pid| arena.get(pid))
                                     .map(|parent_node| parent_node.get().render_layer().clone());
@@ -1520,23 +1540,35 @@ impl Engine {
     }
     pub fn get_node_layout_style(&self, node: taffy::NodeId) -> Style {
         let layout = self.layout_tree.read().unwrap();
-        layout.style(node).unwrap().clone()
+        match layout.style(node) {
+            Ok(style) => style.clone(),
+            Err(e) => {
+                error!("Failed to get layout style (node may be freed): {}", e);
+                Style::default()
+            }
+        }
     }
     pub fn set_node_layout_style(&self, node: taffy::NodeId, style: Style) {
         let mut layout = self.layout_tree.write().unwrap();
-        layout.set_style(node, style).unwrap();
+        if let Err(e) = layout.set_style(node, style) {
+            error!("Failed to set layout style (node may be freed): {}", e);
+        }
     }
 
     pub fn set_node_layout_size(&self, node: taffy::NodeId, size: crate::types::Size) -> bool {
         let mut layout = self.layout_tree.write().unwrap();
-        let mut style = layout.style(node).unwrap().clone();
+        let Some(existing_style) = layout.style(node).ok().cloned() else {
+            error!("Failed to get node layout size (node may be freed)");
+            return false;
+        };
+        let mut style = existing_style;
         let new_size = taffy::geometry::Size {
             width: size.width,
             height: size.height,
         };
         if style.size != new_size {
             style.size = new_size;
-            layout.set_style(node, style).unwrap();
+            let _ = layout.set_style(node, style);
             return true;
         }
         false

@@ -112,3 +112,37 @@ fn removing_layer_subtree_triggers_layout() {
     // The panic is triggered during cleanup inside this update.
     engine.update(0.016);
 }
+
+#[test]
+pub fn access_removed_node_does_not_panic() {
+    let engine = Engine::create(1000.0, 1000.0);
+
+    let root = engine.new_layer();
+    root.set_size(Size::points(500.0, 500.0), None);
+    engine.add_layer(&root);
+
+    let child = engine.new_layer();
+    child.set_size(Size::points(100.0, 100.0), None);
+    root.add_sublayer(&child);
+
+    engine.update(0.016);
+
+    // Grab the node id while it's still alive
+    let node_ref = child.id();
+    let node_id: indextree::NodeId = node_ref.into();
+
+    // Remove the layer and process the removal
+    child.remove();
+    engine.update(0.016);
+
+    // Access the arena with the stale node id — must not panic
+    let result = engine.scene().with_arena(|arena| {
+        arena.get(node_id).map(|node| node.is_removed())
+    });
+
+    // Node slot still exists but is marked as removed
+    assert_eq!(result, Some(true));
+
+    // render_layer should return None for a removed node
+    assert!(engine.render_layer(&node_ref).is_none());
+}
