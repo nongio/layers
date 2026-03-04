@@ -1554,7 +1554,7 @@ impl Engine {
         });
     }
     pub fn get_node_layout_style(&self, node: taffy::NodeId) -> Style {
-        let layout = self.layout_tree.read().unwrap();
+        let layout = self.layout_tree.read().unwrap_or_else(|e| e.into_inner());
         match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| layout.style(node).cloned()))
         {
             Ok(Ok(style)) => style,
@@ -1595,7 +1595,10 @@ impl Engine {
             };
             if style.size != new_size {
                 style.size = new_size;
-                let _ = layout.set_style(node, style);
+                if layout.set_style(node, style).is_err() {
+                    error!("Failed to set node layout style (node may be freed)");
+                    return false;
+                }
                 return true;
             }
             false
