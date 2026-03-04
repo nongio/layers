@@ -1,6 +1,26 @@
 use layers::{prelude::*, types::Size};
 
 #[test]
+pub fn pending_transactions_count_reflects_scheduled_changes() {
+    let engine = Engine::create(1000.0, 1000.0);
+
+    let layer = engine.new_layer();
+    engine.add_layer(&layer);
+
+    // Before any change is scheduled there should be no pending transactions.
+    engine.update(0.016);
+    assert_eq!(engine.pending_transactions_count(), 0);
+
+    // Scheduling a property change enqueues at least one transaction.
+    layer.set_size(Size::points(200.0, 200.0), None);
+    assert!(engine.pending_transactions_count() > 0);
+
+    // After update processes the queue the count returns to zero.
+    engine.update(0.016);
+    assert_eq!(engine.pending_transactions_count(), 0);
+}
+
+#[test]
 pub fn engine_update() {
     let engine = Engine::create(1000.0, 1000.0);
 
