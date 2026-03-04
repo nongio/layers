@@ -89,6 +89,7 @@ impl Layer {
         if self.hidden() == hidden {
             return;
         }
+
         // when hidden we set display to none so that the layout engine
         // doesn't layout the node
         let mut display = Display::None;
@@ -104,23 +105,18 @@ impl Layer {
 
         self.engine.scene.with_arena_mut(|arena| {
             let id = self.id.into();
-            let node = arena.get_mut(id);
-            if let Some(node) = node {
+            if let Some(node) = arena.get_mut(id).filter(|n| !n.is_removed()) {
                 let node = node.get_mut();
-
                 node.set_hidden(hidden);
                 node.insert_flags(RenderableFlags::NEEDS_LAYOUT | RenderableFlags::NEEDS_PAINT);
             }
             let mut iter = id.ancestors(arena);
             iter.next(); // skip self
             if let Some(parent_id) = iter.next() {
-                if arena.get(parent_id).is_some() {
-                    if let Some(parent_node) = arena.get_mut(parent_id) {
-                        let parent = parent_node.get_mut();
-                        parent.insert_flags(
-                            RenderableFlags::NEEDS_LAYOUT | RenderableFlags::NEEDS_PAINT,
-                        );
-                    }
+                if let Some(parent_node) = arena.get_mut(parent_id).filter(|n| !n.is_removed()) {
+                    let parent = parent_node.get_mut();
+                    parent
+                        .insert_flags(RenderableFlags::NEEDS_LAYOUT | RenderableFlags::NEEDS_PAINT);
                 }
             }
         });
@@ -129,9 +125,10 @@ impl Layer {
     }
     pub fn hidden(&self) -> bool {
         self.engine.scene.with_arena(|a| {
-            let node = a.get(self.id.into()).unwrap();
-            let node = node.get();
-            node.hidden
+            a.get(self.id.into())
+                .filter(|n| !n.is_removed())
+                .map(|node| node.get().hidden)
+                .unwrap_or(false)
         })
     }
     pub fn set_pointer_events(&self, pointer_events: bool) {
@@ -206,10 +203,17 @@ impl Layer {
         }
 
         let layout_size = {
-            let layout_tree = self.engine.layout_tree.read().unwrap();
-            let layout = layout_tree
-                .layout(self.layout_id)
-                .expect("layout is available for every layer");
+            let layout_tree = self
+                .engine
+                .layout_tree
+                .read()
+                .unwrap_or_else(|e| e.into_inner());
+            let layout = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                layout_tree.layout(self.layout_id).cloned()
+            })) {
+                Ok(Ok(l)) => l,
+                _ => return self.position(),
+            };
             layout.size
         };
 
@@ -285,7 +289,7 @@ impl Layer {
         let value_id = self.model.size.id;
 
         let change: Arc<ModelChange<Size>> = Arc::new(ModelChange {
-            value_change: self.model.size.to(value.clone(), transition),
+            value_change: self.model.size.to(value, transition),
             flag: flags,
         });
 
@@ -447,74 +451,87 @@ impl Layer {
     }
     pub fn render_layer(&self) -> RenderLayer {
         self.engine.scene.with_arena(|arena| {
-            let node = arena.get(self.id.0).unwrap();
-            let node = node.get();
-            node.render_layer.clone()
+            arena
+                .get(self.id.0)
+                .filter(|n| !n.is_removed())
+                .map(|node| node.get().render_layer.clone())
+                .unwrap_or_default()
         })
     }
     pub fn render_position(&self) -> Point {
         self.engine.scene.with_arena(|arena| {
-            let node = arena.get(self.id.into()).unwrap();
-            let node = node.get();
-            let render_layer = &node.render_layer;
-            let rl = render_layer;
-            Point {
-                x: rl.global_transformed_bounds.x(),
-                y: rl.global_transformed_bounds.y(),
-            }
+            arena
+                .get(self.id.into())
+                .filter(|n| !n.is_removed())
+                .map(|node| {
+                    let rl = &node.get().render_layer;
+                    Point {
+                        x: rl.global_transformed_bounds.x(),
+                        y: rl.global_transformed_bounds.y(),
+                    }
+                })
+                .unwrap_or(Point { x: 0.0, y: 0.0 })
         })
     }
     pub fn render_size_transformed(&self) -> Point {
         self.engine.scene.with_arena(|arena| {
-            let node = arena.get(self.id.into()).unwrap();
-            let node = node.get();
-            let render_layer = &node.render_layer;
-            let rl = render_layer;
-            Point {
-                x: rl.global_transformed_bounds.width(),
-                y: rl.global_transformed_bounds.height(),
-            }
+            arena
+                .get(self.id.into())
+                .filter(|n| !n.is_removed())
+                .map(|node| {
+                    let rl = &node.get().render_layer;
+                    Point {
+                        x: rl.global_transformed_bounds.width(),
+                        y: rl.global_transformed_bounds.height(),
+                    }
+                })
+                .unwrap_or(Point { x: 0.0, y: 0.0 })
         })
     }
     pub fn render_size(&self) -> Point {
         self.engine.scene.with_arena(|arena| {
-            let Some(node) = arena.get(self.id.into()) else {
-                return Point { x: 0.0, y: 0.0 };
-            };
-            let node = node.get();
-            let render_layer = &node.render_layer;
-            let rl = render_layer;
-            Point {
-                x: rl.bounds.width(),
-                y: rl.bounds.height(),
-            }
+            arena
+                .get(self.id.into())
+                .filter(|n| !n.is_removed())
+                .map(|node| {
+                    let rl = &node.get().render_layer;
+                    Point {
+                        x: rl.bounds.width(),
+                        y: rl.bounds.height(),
+                    }
+                })
+                .unwrap_or(Point { x: 0.0, y: 0.0 })
         })
     }
     pub fn render_bounds_transformed(&self) -> skia_safe::Rect {
         self.engine.scene.with_arena(|arena| {
-            let node = arena.get(self.id.into()).unwrap();
-            let node = node.get();
-            let render_layer = &node.render_layer;
-            let rl = render_layer;
-            rl.global_transformed_bounds
+            arena
+                .get(self.id.into())
+                .filter(|n| !n.is_removed())
+                .map(|node| node.get().render_layer.global_transformed_bounds)
+                .unwrap_or_else(skia_safe::Rect::new_empty)
         })
     }
     pub fn render_bounds_with_children_transformed(&self) -> skia_safe::Rect {
         self.engine.scene.with_arena(|arena| {
-            let node = arena.get(self.id.into()).unwrap();
-            let node = node.get();
-            let render_layer = &node.render_layer;
-            let rl = render_layer;
-            rl.global_transformed_bounds_with_children
+            arena
+                .get(self.id.into())
+                .filter(|n| !n.is_removed())
+                .map(|node| {
+                    node.get()
+                        .render_layer
+                        .global_transformed_bounds_with_children
+                })
+                .unwrap_or_else(skia_safe::Rect::new_empty)
         })
     }
     pub fn render_bounds_with_children(&self) -> skia_safe::Rect {
         self.engine.scene.with_arena(|arena| {
-            let node = arena.get(self.id.into()).unwrap();
-            let node = node.get();
-            let render_layer = &node.render_layer;
-            let rl = render_layer;
-            rl.bounds_with_children
+            arena
+                .get(self.id.into())
+                .filter(|n| !n.is_removed())
+                .map(|node| node.get().render_layer.bounds_with_children)
+                .unwrap_or_else(skia_safe::Rect::new_empty)
         })
     }
     pub fn cointains_point(&self, point: impl Into<skia_safe::Point>) -> bool {
@@ -650,19 +667,17 @@ impl Layer {
     }
     pub fn set_image_cached(&self, image_cached: bool) {
         self.engine.scene.with_arena_mut(|arena| {
-            let id = self.id.0;
-            let node = arena.get_mut(id).unwrap();
-            let node = node.get_mut();
-            node.set_image_cached(image_cached);
+            if let Some(node) = arena.get_mut(self.id.0).filter(|n| !n.is_removed()) {
+                node.get_mut().set_image_cached(image_cached);
+            }
         });
     }
 
     pub fn set_picture_cached(&self, picture_cache: bool) {
         self.engine.scene.with_arena_mut(|arena| {
-            let id = self.id.0;
-            let node = arena.get_mut(id).unwrap();
-            let node = node.get_mut();
-            node.set_picture_cached(picture_cache);
+            if let Some(node) = arena.get_mut(self.id.0).filter(|n| !n.is_removed()) {
+                node.get_mut().set_picture_cached(picture_cache);
+            }
         });
         if !picture_cache {
             self.engine.scene.with_renderable_arena_mut(|arena| {
@@ -676,10 +691,8 @@ impl Layer {
     pub fn add_follower_node(&self, follower: impl Into<NodeRef>) {
         let follower = follower.into();
         self.engine.scene.with_arena_mut(|node_arena| {
-            let node = node_arena.get_mut(self.id.0);
-            if let Some(node) = node {
-                let scene_node = node.get_mut();
-                scene_node.followers.insert(follower);
+            if let Some(node) = node_arena.get_mut(self.id.0).filter(|n| !n.is_removed()) {
+                node.get_mut().followers.insert(follower);
             }
         });
         let attribute_id = self.model.blend_mode.id;
@@ -689,10 +702,8 @@ impl Layer {
     pub fn remove_follower_node(&self, follower: impl Into<NodeRef>) {
         let follower = follower.into();
         self.engine.scene.with_arena_mut(|node_arena| {
-            let node = node_arena.get_mut(self.id.0);
-            if let Some(node) = node {
-                let scene_node = node.get_mut();
-                scene_node.followers.remove(&follower);
+            if let Some(node) = node_arena.get_mut(self.id.0).filter(|n| !n.is_removed()) {
+                node.get_mut().followers.remove(&follower);
             }
         });
     }
@@ -724,8 +735,7 @@ impl Layer {
                         if scene_node.is_removed() {
                             return skia::Rect::from_xywh(0.0, 0.0, w, h);
                         }
-                        let scene_node = scene_node.get();
-                        let render_layer = &scene_node.render_layer;
+                        let render_layer = &scene_node.get().render_layer;
                         let damage = render_layer.bounds_with_children;
                         return damage;
                     }

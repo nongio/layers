@@ -41,8 +41,24 @@ pub(crate) fn update_node_single(
     parent: Option<&RenderLayer>,
     parent_changed: bool,
 ) -> NodeUpdateResult {
-    let layer = engine.get_layer(&NodeRef(node_id)).unwrap();
-    let node_layout = layout_tree.layout(layer.layout_id).unwrap();
+    let Some(layer) = engine.get_layer(&NodeRef(node_id)) else {
+        return NodeUpdateResult {
+            damage: skia::Rect::default(),
+            propagate_to_children: false,
+        };
+    };
+    let node_layout = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        layout_tree.layout(layer.layout_id).cloned()
+    })) {
+        Ok(Ok(layout)) => layout,
+        Ok(Err(_)) | Err(_) => {
+            tracing::debug!("update_node_single: failed to get layout (likely invalid node)");
+            return NodeUpdateResult {
+                damage: skia::Rect::default(),
+                propagate_to_children: false,
+            };
+        }
+    };
 
     // First, read the previous state for comparisons
     let (
@@ -130,7 +146,7 @@ pub(crate) fn update_node_single(
             .map(|node| {
                 let scene_node = node.get_mut();
                 let changed = scene_node.update_render_layer_if_needed(
-                    node_layout,
+                    &node_layout,
                     layer.model.clone(),
                     cumulative_transform,
                     context_opacity,
