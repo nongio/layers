@@ -115,9 +115,8 @@ impl Layer {
             if let Some(parent_id) = iter.next() {
                 if let Some(parent_node) = arena.get_mut(parent_id).filter(|n| !n.is_removed()) {
                     let parent = parent_node.get_mut();
-                    parent.insert_flags(
-                        RenderableFlags::NEEDS_LAYOUT | RenderableFlags::NEEDS_PAINT,
-                    );
+                    parent
+                        .insert_flags(RenderableFlags::NEEDS_LAYOUT | RenderableFlags::NEEDS_PAINT);
                 }
             }
         });
@@ -204,7 +203,11 @@ impl Layer {
         }
 
         let layout_size = {
-            let layout_tree = self.engine.layout_tree.read().unwrap_or_else(|e| e.into_inner());
+            let layout_tree = self
+                .engine
+                .layout_tree
+                .read()
+                .unwrap_or_else(|e| e.into_inner());
             let layout = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                 layout_tree.layout(self.layout_id).cloned()
             })) {
@@ -514,7 +517,11 @@ impl Layer {
             arena
                 .get(self.id.into())
                 .filter(|n| !n.is_removed())
-                .map(|node| node.get().render_layer.global_transformed_bounds_with_children)
+                .map(|node| {
+                    node.get()
+                        .render_layer
+                        .global_transformed_bounds_with_children
+                })
                 .unwrap_or_else(skia_safe::Rect::new_empty)
         })
     }

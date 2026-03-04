@@ -716,8 +716,7 @@ impl Engine {
         let parent_layout = parent_layout.unwrap();
         let mut layout_tree = self.layout_tree.write().unwrap();
         if let Err(_) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            if let Err(e) = layout_tree
-                .insert_child_at_index(parent_layout, 0, layout) {
+            if let Err(e) = layout_tree.insert_child_at_index(parent_layout, 0, layout) {
                 error!("Failed to insert layout child (node may be freed): {}", e);
             }
             let res = layout_tree.mark_dirty(parent_layout);
@@ -1235,8 +1234,7 @@ impl Engine {
                     .map(|node_id| {
                         let (parent_render_layer, parent_changed) =
                             self.scene.with_arena(|arena| {
-                                let parent_id =
-                                    arena.get(*node_id).and_then(|n| n.parent());
+                                let parent_id = arena.get(*node_id).and_then(|n| n.parent());
                                 let parent_layer = parent_id
                                     .and_then(|pid| arena.get(pid))
                                     .map(|parent_node| parent_node.get().render_layer().clone());
@@ -1555,9 +1553,8 @@ impl Engine {
     }
     pub fn get_node_layout_style(&self, node: taffy::NodeId) -> Style {
         let layout = self.layout_tree.read().unwrap();
-        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            layout.style(node).cloned()
-        })) {
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| layout.style(node).cloned()))
+        {
             Ok(Ok(style)) => style,
             Ok(Err(e)) => {
                 error!("Failed to get layout style (node may be freed): {}", e);

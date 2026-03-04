@@ -200,7 +200,10 @@ impl Scene {
         Some(f(&arena))
     }
 
-    pub(crate) fn with_arena_mut<T: Default>(&self, f: impl FnOnce(&mut Arena<SceneNode>) -> T) -> T {
+    pub(crate) fn with_arena_mut<T: Default>(
+        &self,
+        f: impl FnOnce(&mut Arena<SceneNode>) -> T,
+    ) -> T {
         let arena_guard = self.nodes.data();
         let mut arena = arena_guard.write().unwrap_or_else(|e| e.into_inner());
         match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| f(&mut arena))) {

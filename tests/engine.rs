@@ -136,9 +136,9 @@ pub fn access_removed_node_does_not_panic() {
     engine.update(0.016);
 
     // Access the arena with the stale node id — must not panic
-    let result = engine.scene().with_arena(|arena| {
-        arena.get(node_id).map(|node| node.is_removed())
-    });
+    let result = engine
+        .scene()
+        .with_arena(|arena| arena.get(node_id).map(|node| node.is_removed()));
 
     // Node slot still exists but is marked as removed
     assert_eq!(result, Some(true));
