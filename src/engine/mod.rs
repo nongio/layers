@@ -690,7 +690,7 @@ impl Engine {
         }
         let parent_layout = parent_layout.unwrap();
         let mut layout_tree = self.layout_tree.write().unwrap();
-        if let Err(_) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        if std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             if let Err(e) = layout_tree.add_child(parent_layout, layout) {
                 error!("Failed to add layout child (node may be freed): {}", e);
             }
@@ -698,7 +698,9 @@ impl Engine {
             if let Some(err) = res.err() {
                 error!("Failed to mark layout dirty: {}", err);
             }
-        })) {
+        }))
+        .is_err()
+        {
             error!("layout_append_layer panicked (likely invalid layout node)");
         }
     }
@@ -715,7 +717,7 @@ impl Engine {
         }
         let parent_layout = parent_layout.unwrap();
         let mut layout_tree = self.layout_tree.write().unwrap();
-        if let Err(_) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        if std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             if let Err(e) = layout_tree.insert_child_at_index(parent_layout, 0, layout) {
                 error!("Failed to insert layout child (node may be freed): {}", e);
             }
@@ -723,7 +725,9 @@ impl Engine {
             if let Some(err) = res.err() {
                 error!("Failed to mark layout dirty: {}", err);
             }
-        })) {
+        }))
+        .is_err()
+        {
             error!("layout_prepend_layer panicked (likely invalid layout node)");
         }
     }
@@ -1568,11 +1572,13 @@ impl Engine {
     }
     pub fn set_node_layout_style(&self, node: taffy::NodeId, style: Style) {
         let mut layout = self.layout_tree.write().unwrap();
-        if let Err(_) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        if std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             if let Err(e) = layout.set_style(node, style) {
                 error!("Failed to set layout style (node may be freed): {}", e);
             }
-        })) {
+        }))
+        .is_err()
+        {
             error!("set_node_layout_style panicked (likely invalid layout node)");
         }
     }

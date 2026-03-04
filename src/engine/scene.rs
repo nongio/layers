@@ -23,11 +23,13 @@ use super::{
 impl Engine {
     pub fn set_node_flags(&self, node: NodeRef, flags: RenderableFlags) {
         self.scene.with_arena_mut(|arena| {
-            if let Err(_) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            if std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                 if let Some(node) = arena.get_mut(node.0) {
                     node.get_mut().insert_flags(flags);
                 }
-            })) {
+            }))
+            .is_err()
+            {
                 error!("set_node_flags: panicked on freed node");
             }
         });
