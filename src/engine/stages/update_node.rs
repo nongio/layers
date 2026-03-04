@@ -52,7 +52,7 @@ pub(crate) fn update_node_single(
     })) {
         Ok(Ok(layout)) => layout,
         Ok(Err(_)) | Err(_) => {
-            tracing::error!("update_node_single: failed to get layout (likely invalid node)");
+            tracing::debug!("update_node_single: failed to get layout (likely invalid node)");
             return NodeUpdateResult {
                 damage: skia::Rect::default(),
                 propagate_to_children: false,
