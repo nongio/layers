@@ -12,6 +12,7 @@ use crate::{
 use indextree::Arena;
 use serde::Serialize;
 use std::sync::{Arc, RwLock};
+use tracing::error;
 
 use super::{
     node::{RenderableFlags, SceneNode, SceneNodeRenderable},
@@ -22,9 +23,13 @@ use super::{
 impl Engine {
     pub fn set_node_flags(&self, node: NodeRef, flags: RenderableFlags) {
         self.scene.with_arena_mut(|arena| {
-            let node = arena.get_mut(node.0).unwrap();
-            let scene_node = node.get_mut();
-            scene_node.insert_flags(flags);
+            if let Err(_) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                if let Some(node) = arena.get_mut(node.0) {
+                    node.get_mut().insert_flags(flags);
+                }
+            })) {
+                error!("set_node_flags: panicked on freed node");
+            }
         });
     }
 }
@@ -181,8 +186,7 @@ impl Scene {
 
     pub fn with_arena<T: Send + Sync>(&self, f: impl FnOnce(&Arena<SceneNode>) -> T) -> T {
         let arena_guard = self.nodes.data();
-
-        let arena = arena_guard.read().unwrap();
+        let arena = arena_guard.read().unwrap_or_else(|e| e.into_inner());
         f(&arena)
     }
 
@@ -196,10 +200,16 @@ impl Scene {
         Some(f(&arena))
     }
 
-    pub(crate) fn with_arena_mut<T>(&self, f: impl FnOnce(&mut Arena<SceneNode>) -> T) -> T {
+    pub(crate) fn with_arena_mut<T: Default>(&self, f: impl FnOnce(&mut Arena<SceneNode>) -> T) -> T {
         let arena_guard = self.nodes.data();
-        let mut arena = arena_guard.write().unwrap();
-        f(&mut arena)
+        let mut arena = arena_guard.write().unwrap_or_else(|e| e.into_inner());
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| f(&mut arena))) {
+            Ok(result) => result,
+            Err(_) => {
+                tracing::error!("with_arena_mut: closure panicked (likely freed node)");
+                T::default()
+            }
+        }
     }
 
     /// Try to run `f` with a write guard; returns `None` if the lock is contended.

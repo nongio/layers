@@ -204,10 +204,13 @@ impl Layer {
         }
 
         let layout_size = {
-            let layout_tree = self.engine.layout_tree.read().unwrap();
-            let layout = layout_tree
-                .layout(self.layout_id)
-                .expect("layout is available for every layer");
+            let layout_tree = self.engine.layout_tree.read().unwrap_or_else(|e| e.into_inner());
+            let layout = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                layout_tree.layout(self.layout_id).cloned()
+            })) {
+                Ok(Ok(l)) => l,
+                _ => return self.position(),
+            };
             layout.size
         };
 

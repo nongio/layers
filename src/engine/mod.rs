@@ -690,12 +690,16 @@ impl Engine {
         }
         let parent_layout = parent_layout.unwrap();
         let mut layout_tree = self.layout_tree.write().unwrap();
-        if let Err(e) = layout_tree.add_child(parent_layout, layout) {
-            error!("Failed to add layout child (node may be freed): {}", e);
-        }
-        let res = layout_tree.mark_dirty(parent_layout);
-        if let Some(err) = res.err() {
-            error!("Failed to mark layout dirty: {}", err);
+        if let Err(_) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            if let Err(e) = layout_tree.add_child(parent_layout, layout) {
+                error!("Failed to add layout child (node may be freed): {}", e);
+            }
+            let res = layout_tree.mark_dirty(parent_layout);
+            if let Some(err) = res.err() {
+                error!("Failed to mark layout dirty: {}", err);
+            }
+        })) {
+            error!("layout_append_layer panicked (likely invalid layout node)");
         }
     }
 
@@ -711,13 +715,17 @@ impl Engine {
         }
         let parent_layout = parent_layout.unwrap();
         let mut layout_tree = self.layout_tree.write().unwrap();
-        if let Err(e) = layout_tree
-            .insert_child_at_index(parent_layout, 0, layout) {
-            error!("Failed to insert layout child (node may be freed): {}", e);
-        }
-        let res = layout_tree.mark_dirty(parent_layout);
-        if let Some(err) = res.err() {
-            error!("Failed to mark layout dirty: {}", err);
+        if let Err(_) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            if let Err(e) = layout_tree
+                .insert_child_at_index(parent_layout, 0, layout) {
+                error!("Failed to insert layout child (node may be freed): {}", e);
+            }
+            let res = layout_tree.mark_dirty(parent_layout);
+            if let Some(err) = res.err() {
+                error!("Failed to mark layout dirty: {}", err);
+            }
+        })) {
+            error!("layout_prepend_layer panicked (likely invalid layout node)");
         }
     }
 
@@ -1547,38 +1555,56 @@ impl Engine {
     }
     pub fn get_node_layout_style(&self, node: taffy::NodeId) -> Style {
         let layout = self.layout_tree.read().unwrap();
-        match layout.style(node) {
-            Ok(style) => style.clone(),
-            Err(e) => {
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            layout.style(node).cloned()
+        })) {
+            Ok(Ok(style)) => style,
+            Ok(Err(e)) => {
                 error!("Failed to get layout style (node may be freed): {}", e);
+                Style::default()
+            }
+            Err(_) => {
+                error!("get_node_layout_style panicked (likely invalid layout node)");
                 Style::default()
             }
         }
     }
     pub fn set_node_layout_style(&self, node: taffy::NodeId, style: Style) {
         let mut layout = self.layout_tree.write().unwrap();
-        if let Err(e) = layout.set_style(node, style) {
-            error!("Failed to set layout style (node may be freed): {}", e);
+        if let Err(_) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            if let Err(e) = layout.set_style(node, style) {
+                error!("Failed to set layout style (node may be freed): {}", e);
+            }
+        })) {
+            error!("set_node_layout_style panicked (likely invalid layout node)");
         }
     }
 
     pub fn set_node_layout_size(&self, node: taffy::NodeId, size: crate::types::Size) -> bool {
         let mut layout = self.layout_tree.write().unwrap();
-        let Some(existing_style) = layout.style(node).ok().cloned() else {
-            error!("Failed to get node layout size (node may be freed)");
-            return false;
-        };
-        let mut style = existing_style;
-        let new_size = taffy::geometry::Size {
-            width: size.width,
-            height: size.height,
-        };
-        if style.size != new_size {
-            style.size = new_size;
-            let _ = layout.set_style(node, style);
-            return true;
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let Some(existing_style) = layout.style(node).ok().cloned() else {
+                error!("Failed to get node layout size (node may be freed)");
+                return false;
+            };
+            let mut style = existing_style;
+            let new_size = taffy::geometry::Size {
+                width: size.width,
+                height: size.height,
+            };
+            if style.size != new_size {
+                style.size = new_size;
+                let _ = layout.set_style(node, style);
+                return true;
+            }
+            false
+        })) {
+            Ok(result) => result,
+            Err(_) => {
+                error!("set_node_layout_size panicked (likely invalid layout node)");
+                false
+            }
         }
-        false
     }
 
     pub fn scene_layer_at(&self, point: Point) -> Option<NodeRef> {
