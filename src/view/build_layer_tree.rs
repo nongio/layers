@@ -229,17 +229,19 @@ impl BuildLayerTree for Layer {
                 // get or create the child layer
                 let (child_layer_id, child_layer) = child_layer_id
                     .and_then(|child_layer_id| {
-                        // try to use existing layer
+                        // try to use existing layer — also check get_layer in case the layer was
+                        // removed from the HashMap (scene_remove_layer cleans it up) even if
+                        // is_node_removed hasn't caught it yet
                         if !engine.scene.is_node_removed(child_layer_id) {
-                            // we should not need to add the layer back to the parent
-                            let child_layer = engine.get_layer(&child_layer_id).unwrap();
-                            engine.append_layer(&child_layer.id, Some(layer_id));
-                            return Some((child_layer_id, child_layer));
+                            if let Some(child_layer) = engine.get_layer(&child_layer_id) {
+                                engine.append_layer(&child_layer.id, Some(layer_id));
+                                return Some((child_layer_id, child_layer));
+                            }
                         }
                         None
                     })
                     .unwrap_or_else(|| {
-                        // the child layer does not exist, or is removed
+                        // the child layer does not exist, is removed, or is stale — create fresh
                         let layer = engine.new_layer();
                         engine.append_layer(&layer, Some(layer_id));
                         (layer.id, layer)

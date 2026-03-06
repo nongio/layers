@@ -158,7 +158,13 @@ impl Scene {
         let nodes = self.nodes.data();
         let nodes = nodes.read().unwrap();
 
-        let node_removed = nodes
+        // Use NodeId::is_removed which compares the stamp, preventing ABA false-negatives
+        // when a freed slot is reused for a new node at the same index.
+        if id.is_removed(&nodes) {
+            return true;
+        }
+
+        nodes
             .get(id)
             .map(|node| {
                 if node.is_removed() {
@@ -168,9 +174,7 @@ impl Scene {
                     scene_node.is_deleted()
                 }
             })
-            .unwrap_or(true);
-
-        node_removed
+            .unwrap_or(true)
     }
     // pub async fn with_arena_async<T, F>(&self, f: F) -> Result<T, JoinError>
     // where
