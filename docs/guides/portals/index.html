@@ -1,0 +1,35 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Walkthrough of the portal system."><title>layers::guides::portals - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-46132b98.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="layers" data-themes="" data-resource-suffix="" data-rustdoc-version="1.85.0 (4d91de4e4 2025-02-17)" data-channel="1.85.0" data-search-js="search-75f5ac3e.js" data-settings-js="settings-0f613d39.js" ><script src="../../../static.files/storage-59e33391.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../../static.files/main-5f194d8c.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../../../layers/index.html"><img src="https://raw.githubusercontent.com/nongio/layers/refs/heads/main/assets/LayersEngine-dark.png" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../../../layers/index.html"><img src="https://raw.githubusercontent.com/nongio/layers/refs/heads/main/assets/LayersEngine-dark.png" alt="logo"></a><h2><a href="../../../layers/index.html">layers</a><span class="version">1.4.3</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module portals</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#layer-mirroring--portals" title="Layer Mirroring / Portals">Layer Mirroring / Portals</a><ul><li><a href="#use-cases" title="Use Cases">Use Cases</a></li><li><a href="#desktop-specific-use-cases" title="Desktop specific use cases">Desktop specific use cases</a></li><li><a href="#features" title="Features">Features</a></li></ul></li></ul></section><div id="rustdoc-modnav"><h2><a href="../index.html">In layers::<wbr>guides</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><span class="rustdoc-breadcrumbs"><a href="../../index.html">layers</a>::<wbr><a href="../index.html">guides</a></span><h1>Module <span>portals</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../../src/layers/lib.rs.html#93">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Walkthrough of the portal system.</p>
+<h2 id="layer-mirroring--portals"><a class="doc-anchor" href="#layer-mirroring--portals">§</a>Layer Mirroring / Portals</h2>
+<p>Portals are a way to connect two layers together. When a layer has a portal into another layer, it can be rendered both in the context of the layer it is in, and in the context of the layer it is connected to. This allows for a variety of effects, such as rendering a layer in a different location, or rendering a layer with a different scale or rotation.</p>
+<h3 id="use-cases"><a class="doc-anchor" href="#use-cases">§</a>Use Cases</h3>
+<p>Portals are useful for a variety of effects, such as:</p>
+<ul>
+<li>Rendering a layer in multiple different location</li>
+<li>Rendering a layer with at different scales or rotations</li>
+<li>Create a “picture-in-picture” effect</li>
+<li>Mini previews of a complex layer hierarchy</li>
+</ul>
+<h3 id="desktop-specific-use-cases"><a class="doc-anchor" href="#desktop-specific-use-cases">§</a>Desktop specific use cases</h3>
+<p>Portals are particularly useful for creating complex user interfaces for a desktop environment. For example, a window manager might use portals to render windows in different locations, or to create a “picture-in-picture” effect.</p>
+<p>For workspace managers, it would be useful to render a preview of a workspace in a different location, or to render a workspace with a different scale or rotation.</p>
+<p>For Window Managers, it would be useful to render a window in a different location, or to render a window with a different scale or rotation, like render a window in its position as well as in a taskbar or in a window selection screen.</p>
+<h3 id="features"><a class="doc-anchor" href="#features">§</a>Features</h3>
+<ul>
+<li>Link a source layer to a target layer</li>
+<li>Render the source layer in the context of the target layer</li>
+<li>Render the source layer in a different location, scale, or rotation</li>
+<li>Render the source and its children in the context of the target layer</li>
+</ul>
+<h4 id="should-the-linking-be-through-a-texture-or-a-re-rendering-of-the-source-layer"><a class="doc-anchor" href="#should-the-linking-be-through-a-texture-or-a-re-rendering-of-the-source-layer">§</a>Should the linking be through a texture or a re-rendering of the source layer?</h4>
+<p>For an optimized implementation, the linking should be through a texture. This way, the source layer can be rendered once and then reused in multiple locations.</p>
+<p>However, for some use cases, it might be useful to re-render the source layer in the context of the target layer. For example, if the source layer is animated, it might be useful to re-render it in the context of the target layer to ensure that the animation is synchronized.</p>
+<p>What properties of the layer should be inherited by the portal?
+Everything that affects the painting of the layer should be inherited by the portal. This includes:</p>
+<ul>
+<li>content</li>
+<li>background</li>
+<li>border</li>
+<li>border-radius</li>
+<li>shadow</li>
+</ul>
+</div></details></section></div></main></body></html>
