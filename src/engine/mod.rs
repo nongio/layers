@@ -936,7 +936,10 @@ impl Engine {
             }
         });
         // Remove the layer from the layers map so stale handles can no longer be found.
-        self.layers.write().unwrap_or_else(|e| e.into_inner()).remove(&layer_id);
+        self.layers
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&layer_id);
 
         // Invalidate hit test node list since tree structure changed
         self.invalidate_hit_test_node_list();
