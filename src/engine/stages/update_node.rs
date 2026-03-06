@@ -52,7 +52,13 @@ pub(crate) fn update_node_single(
     })) {
         Ok(Ok(layout)) => layout,
         Ok(Err(_)) | Err(_) => {
-            tracing::debug!("update_node_single: failed to get layout (likely invalid node)");
+            tracing::warn!(
+                "update_node_single: invalid layout_id on node {:?}, marking for deletion",
+                node_id
+            );
+            // Mark the node for deletion so cleanup_nodes removes it from the scene tree
+            // instead of leaving it stuck with a broken layout forever.
+            engine.mark_for_delete(NodeRef(node_id));
             return NodeUpdateResult {
                 damage: skia::Rect::default(),
                 propagate_to_children: false,

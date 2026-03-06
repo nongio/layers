@@ -653,6 +653,17 @@ impl Engine {
         self.layers.read().unwrap().get(node_id).cloned()
     }
 
+    /// Returns true if the layer's scene node still exists and has not been removed.
+    /// Use this to detect stale layer handles before performing scene operations.
+    pub fn is_layer_alive(&self, node: &NodeRef) -> bool {
+        self.scene.with_arena(|arena| {
+            arena
+                .get((*node).into())
+                .map(|n| !n.is_removed())
+                .unwrap_or(false)
+        })
+    }
+
     pub fn with_layers(&self, f: impl Fn(&HashMap<NodeRef, Layer>)) {
         f(&self.layers.read().unwrap());
     }
@@ -924,6 +935,9 @@ impl Engine {
                 }
             }
         });
+        // Remove the layer from the layers map so stale handles can no longer be found.
+        self.layers.write().unwrap_or_else(|e| e.into_inner()).remove(&layer_id);
+
         // Invalidate hit test node list since tree structure changed
         self.invalidate_hit_test_node_list();
     }
