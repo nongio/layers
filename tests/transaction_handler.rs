@@ -1,5 +1,24 @@
 use layers::prelude::*;
-use std::sync::{Arc, RwLock};
+use std::{
+    future::Future,
+    pin::Pin,
+    sync::{Arc, RwLock},
+    task::{Context, Poll, RawWaker, RawWakerVTable, Waker},
+};
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/// A no-op waker for manually driving futures in synchronous tests.
+fn noop_waker() -> Waker {
+    fn noop(_: *const ()) {}
+    fn clone(_: *const ()) -> RawWaker {
+        RawWaker::new(std::ptr::null(), &VTABLE)
+    }
+    static VTABLE: RawWakerVTable = RawWakerVTable::new(clone, noop, noop, noop);
+    unsafe { Waker::from_raw(RawWaker::new(std::ptr::null(), &VTABLE)) }
+}
 
 /// it should call the finish handler when the transaction is finished 1 time
 #[test]
@@ -317,4 +336,64 @@ pub fn call_update_value() {
         let c = called.read().unwrap();
         assert_eq!(*c, 4);
     }
+}
+
+/// TransitionFuture must resolve on the first poll when the transaction was
+/// already completed (and cleaned up) before into_future() was called.
+///
+/// Previously the callback was registered lazily in poll(), so a transaction
+/// that finished before poll() ran would leave the future pending forever.
+#[test]
+pub fn transition_future_resolves_when_transaction_already_done() {
+    let engine = Engine::create(1000.0, 1000.0);
+    let layer = engine.new_layer();
+    engine.add_layer(&layer);
+
+    let transaction =
+        layer.set_position(Point { x: 200.0, y: 100.0 }, Some(Transition::linear(0.1)));
+
+    // Advance past the transition duration so it is completed and cleaned up.
+    engine.update(0.2);
+
+    // Create the future *after* the transaction is gone.
+    let mut future = std::future::IntoFuture::into_future(transaction);
+    let waker = noop_waker();
+    let mut cx = Context::from_waker(&waker);
+
+    // Should resolve on the very first poll, not hang as Pending.
+    let result = Pin::new(&mut future).poll(&mut cx);
+    assert!(
+        matches!(result, Poll::Ready(())),
+        "TransitionFuture should return Poll::Ready on first poll when the transaction is already done"
+    );
+}
+
+/// TransitionFuture must also resolve when the transaction finishes between
+/// into_future() and the first poll() (the callback fires with no waker yet,
+/// but the finished flag is set and poll() sees it).
+#[test]
+pub fn transition_future_resolves_when_transaction_completes_before_poll() {
+    let engine = Engine::create(1000.0, 1000.0);
+    let layer = engine.new_layer();
+    engine.add_layer(&layer);
+
+    let transaction =
+        layer.set_position(Point { x: 200.0, y: 100.0 }, Some(Transition::linear(0.1)));
+
+    // Create the future (registers the callback eagerly) …
+    let mut future = std::future::IntoFuture::into_future(transaction);
+
+    // … then complete the transaction before the first poll.
+    engine.update(0.2);
+
+    let waker = noop_waker();
+    let mut cx = Context::from_waker(&waker);
+
+    // The eagerly-registered callback has fired and set finished=true, so the
+    // first poll should return Ready.
+    let result = Pin::new(&mut future).poll(&mut cx);
+    assert!(
+        matches!(result, Poll::Ready(())),
+        "TransitionFuture should return Poll::Ready on first poll when the transaction finished before poll() ran"
+    );
 }

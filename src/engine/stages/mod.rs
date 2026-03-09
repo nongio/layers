@@ -102,7 +102,7 @@ pub(crate) fn execute_transactions(engine: &Engine) -> (Vec<NodeRef>, Vec<FlatSt
                     let animation_state = command
                         .animation_id
                         .as_ref()
-                        .and_then(|id| animations.get(&id.0).cloned())
+                        .and_then(|id| animations.get(&id.id).cloned())
                         .unwrap_or(AnimationState {
                             animation: Default::default(),
                             progress: 1.0,
@@ -276,7 +276,7 @@ pub(crate) fn trigger_callbacks(engine: &Engine, started_animations: &[FlatStora
             let animation_state = command
                 .animation_id
                 .as_ref()
-                .and_then(|animation_id| engine.animations.get(&animation_id.0))
+                .and_then(|animation_id| engine.animations.get(&animation_id.id))
                 .unwrap_or(AnimationState {
                     animation: Default::default(),
                     progress: 1.0,
@@ -291,7 +291,7 @@ pub(crate) fn trigger_callbacks(engine: &Engine, started_animations: &[FlatStora
 
                 let started = command
                     .animation_id
-                    .map(|a| started_animations.contains(&a.0))
+                    .map(|a| started_animations.contains(&a.id))
                     .unwrap_or(false);
                 let vcallbacks = { engine.value_handlers.get(&command.change.value_id()) };
                 let (tcallback_to_remove, vcallback_to_remove) = transaction_callbacks(

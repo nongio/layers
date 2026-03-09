@@ -37,6 +37,7 @@ pub(crate) mod scene;
 pub mod animation;
 pub(crate) mod node;
 pub(crate) mod storage;
+pub mod task;
 
 use core::fmt;
 
@@ -425,49 +426,41 @@ impl TransactionRef {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct AnimationRef(FlatStorageId);
+pub struct AnimationRef {
+    pub(crate) id: FlatStorageId,
+    pub(crate) engine_id: usize,
+}
 
+#[allow(static_mut_refs)]
 impl AnimationRef {
-    fn engine(&self) -> Arc<Engine> {
-        // We need to get the engine from somewhere
-        // Since AnimationRef doesn't store engine_id, we'll need to add it
-        // For now, we'll just implement the methods on Engine and expose them differently
-        unimplemented!("Use engine methods directly")
+    pub(crate) fn engine(&self) -> Arc<Engine> {
+        ENGINE_REGISTRY
+            .get(self.engine_id)
+            .expect("no engine found")
     }
 
     /// Add a callback that is triggered when the animation is started.
-    ///
-    /// # Arguments
-    /// * `handler`: the callback function to be called
-    /// * `once`: if true, the callback is removed after it is triggered
-    pub fn on_start<F: Into<TransactionCallback>>(&self, _handler: F, _once: bool) -> &Self {
-        // Implementation note: Since AnimationRef doesn't have engine reference,
-        // users should call engine.on_animation_start(animation, handler, once) instead
-        unimplemented!("Use Engine::on_animation_start instead")
+    pub fn on_start<F: Into<AnimationCallback>>(&self, handler: F, once: bool) -> &Self {
+        self.engine().on_animation_start(*self, handler, once);
+        self
     }
 
     /// Add a callback that is triggered when the animation is updated.
-    ///
-    /// # Arguments
-    /// * `handler`: the callback function to be called
-    /// * `once`: if true, the callback is removed after it is triggered
-    pub fn on_update<F: Into<TransactionCallback>>(&self, _handler: F, _once: bool) -> &Self {
-        unimplemented!("Use Engine::on_animation_update instead")
+    pub fn on_update<F: Into<AnimationCallback>>(&self, handler: F, once: bool) -> &Self {
+        self.engine().on_animation_update(*self, handler, once);
+        self
     }
 
     /// Add a callback that is triggered when the animation is finished.
-    ///
-    /// # Arguments
-    /// * `handler`: the callback function to be called
-    /// * `once`: if true, the callback is removed after it is triggered
-    pub fn on_finish<F: Into<TransactionCallback>>(&self, _handler: F, _once: bool) -> &Self {
-        unimplemented!("Use Engine::on_animation_finish instead")
+    pub fn on_finish<F: Into<AnimationCallback>>(&self, handler: F, once: bool) -> &Self {
+        self.engine().on_animation_finish(*self, handler, once);
+        self
     }
 }
 
 impl std::fmt::Display for AnimationRef {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "AnimationRef({})", self.0)
+        write!(f, "AnimationRef({})", self.id)
     }
 }
 /// An identifier for a node in the three storage
@@ -1050,11 +1043,14 @@ impl Engine {
             is_finished: false,
             is_started: false,
         });
-        AnimationRef(aid)
+        AnimationRef {
+            id: aid,
+            engine_id: self.id,
+        }
     }
     pub fn start_animation(&self, animation: AnimationRef, delay: f32) {
         self.animations.with_data_mut(|animations| {
-            if let Some(animation_state) = animations.get_mut(&animation.0) {
+            if let Some(animation_state) = animations.get_mut(&animation.id) {
                 animation_state.animation.start = self.timestamp.read().unwrap().0 + delay;
                 animation_state.is_running = true;
                 animation_state.is_finished = false;
@@ -1075,7 +1071,7 @@ impl Engine {
         tid.and_then(|id| self.transactions.with_data(|d| d.get(&id).cloned()))
     }
     pub fn get_animation(&self, animation: AnimationRef) -> Option<AnimationState> {
-        self.animations.with_data(|d| d.get(&animation.0).cloned())
+        self.animations.with_data(|d| d.get(&animation.id).cloned())
     }
     pub fn schedule_change(
         &self,
@@ -1145,7 +1141,7 @@ impl Engine {
     }
     pub fn cancel_animation(&self, animation: AnimationRef) {
         self.animations.with_data_mut(|d| {
-            d.remove(&animation.0);
+            d.remove(&animation.id);
         });
     }
     pub fn cancel_transaction(&self, transaction: TransactionRef) {
@@ -1823,7 +1819,7 @@ impl Engine {
     ) {
         let mut handler = handler.into();
         handler.once = once;
-        self.add_animation_handler(animation.0, TransactionEventType::Start, handler);
+        self.add_animation_handler(animation.id, TransactionEventType::Start, handler);
     }
 
     pub fn on_animation_update<F: Into<AnimationCallback>>(
@@ -1834,7 +1830,7 @@ impl Engine {
     ) {
         let mut handler = handler.into();
         handler.once = once;
-        self.add_animation_handler(animation.0, TransactionEventType::Update, handler);
+        self.add_animation_handler(animation.id, TransactionEventType::Update, handler);
     }
 
     pub fn on_animation_finish<F: Into<AnimationCallback>>(
@@ -1845,7 +1841,7 @@ impl Engine {
     ) {
         let mut handler = handler.into();
         handler.once = once;
-        self.add_animation_handler(animation.0, TransactionEventType::Finish, handler);
+        self.add_animation_handler(animation.id, TransactionEventType::Finish, handler);
     }
     #[allow(clippy::unwrap_or_default)]
     pub(crate) fn add_pointer_handler<F: Into<PointerHandlerFunction>>(
