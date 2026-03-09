@@ -1,7 +1,7 @@
 //! Async support for transition sequencing.
 //!
-//! [`TransactionRef`](crate::engine::TransactionRef) implements [`std::future::IntoFuture`],
-//! so every `set_*` call on a [`Layer`](crate::layers::layer::Layer) is directly `await`-able.
+//! [`TransactionRef`] implements [`std::future::IntoFuture`],
+//! so every `set_*` call on a [`Layer`] is directly `await`-able.
 //! Use any async executor — e.g. `tokio::spawn` — to sequence transitions without nested
 //! [`on_finish`](crate::engine::TransactionRef::on_finish) closures:
 //!
