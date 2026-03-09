@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.5.0] - 2026-03-09
+
+### 🚀 Features
+
+- Add IntoFuture for AnimationRef (#13)
+
+## [1.4.3] - 2026-03-06
+
+### 🐛 Bug Fixes
+
+- Clean up stale layer handles on removal (#12)
+
+## [1.4.2] - 2026-03-04
+
+### 🐛 Bug Fixes
+
+- Safe arena node access and pending transactions count API (#11)
+
+## [1.4.0] - 2026-02-24
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump v
+
 ## [1.3.0] - 2026-01-25
 
 ### ⚙️ Miscellaneous Tasks
