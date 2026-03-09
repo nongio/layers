@@ -40,13 +40,12 @@ struct TransitionFutureState {
 pub struct TransitionFuture {
     state: Arc<TransitionFutureState>,
     transaction_ref: TransactionRef,
-    registered: bool,
 }
 
 impl Future for TransitionFuture {
     type Output = ();
 
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         if self.state.finished.load(Ordering::Acquire) {
             return Poll::Ready(());
         }
@@ -54,19 +53,22 @@ impl Future for TransitionFuture {
         // Keep the waker fresh in case the executor changed.
         *self.state.waker.lock().unwrap() = Some(cx.waker().clone());
 
-        // Register the on_finish callback exactly once.
-        if !self.registered {
-            let state = Arc::clone(&self.state);
-            self.transaction_ref.on_finish(
-                move |_layer: &Layer, _| {
-                    state.finished.store(true, Ordering::Release);
-                    if let Some(waker) = state.waker.lock().unwrap().take() {
-                        waker.wake();
-                    }
-                },
-                true,
-            );
-            self.registered = true;
+        // Re-check after storing the waker: the on_finish callback may have fired
+        // in the window between the first check and now and found no waker to call.
+        if self.state.finished.load(Ordering::Acquire) {
+            return Poll::Ready(());
+        }
+
+        // Defensive check: the transaction may have been cleaned up before
+        // into_future() was called (stale TransactionRef), in which case the
+        // eagerly-registered callback will never fire. Resolve immediately.
+        if self
+            .transaction_ref
+            .engine()
+            .get_transaction(self.transaction_ref)
+            .is_none()
+        {
+            return Poll::Ready(());
         }
 
         Poll::Pending
@@ -78,13 +80,26 @@ impl std::future::IntoFuture for TransactionRef {
     type IntoFuture = TransitionFuture;
 
     fn into_future(self) -> TransitionFuture {
+        let state = Arc::new(TransitionFutureState {
+            finished: AtomicBool::new(false),
+            waker: Mutex::new(None),
+        });
+        // Register the on_finish callback eagerly so that a completion that
+        // occurs between into_future() and the first poll() sets `finished`
+        // before poll() runs, allowing it to return Ready immediately.
+        let state_clone = Arc::clone(&state);
+        self.on_finish(
+            move |_layer: &Layer, _| {
+                state_clone.finished.store(true, Ordering::Release);
+                if let Some(waker) = state_clone.waker.lock().unwrap().take() {
+                    waker.wake();
+                }
+            },
+            true,
+        );
         TransitionFuture {
-            state: Arc::new(TransitionFutureState {
-                finished: AtomicBool::new(false),
-                waker: Mutex::new(None),
-            }),
+            state,
             transaction_ref: self,
-            registered: false,
         }
     }
 }
@@ -100,13 +115,12 @@ impl std::future::IntoFuture for TransactionRef {
 pub struct AnimationFuture {
     state: Arc<TransitionFutureState>,
     animation_ref: AnimationRef,
-    registered: bool,
 }
 
 impl Future for AnimationFuture {
     type Output = ();
 
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         if self.state.finished.load(Ordering::Acquire) {
             return Poll::Ready(());
         }
@@ -114,19 +128,22 @@ impl Future for AnimationFuture {
         // Keep the waker fresh in case the executor changed.
         *self.state.waker.lock().unwrap() = Some(cx.waker().clone());
 
-        // Register the on_finish callback exactly once.
-        if !self.registered {
-            let state = Arc::clone(&self.state);
-            self.animation_ref.on_finish(
-                move |_progress: f32| {
-                    state.finished.store(true, Ordering::Release);
-                    if let Some(waker) = state.waker.lock().unwrap().take() {
-                        waker.wake();
-                    }
-                },
-                true,
-            );
-            self.registered = true;
+        // Re-check after storing the waker: the on_finish callback may have fired
+        // in the window between the first check and now and found no waker to call.
+        if self.state.finished.load(Ordering::Acquire) {
+            return Poll::Ready(());
+        }
+
+        // Defensive check: the animation may have been cleaned up before
+        // into_future() was called (stale AnimationRef), in which case the
+        // eagerly-registered callback will never fire. Resolve immediately.
+        if self
+            .animation_ref
+            .engine()
+            .get_animation(self.animation_ref)
+            .is_none()
+        {
+            return Poll::Ready(());
         }
 
         Poll::Pending
@@ -138,13 +155,26 @@ impl std::future::IntoFuture for AnimationRef {
     type IntoFuture = AnimationFuture;
 
     fn into_future(self) -> AnimationFuture {
+        let state = Arc::new(TransitionFutureState {
+            finished: AtomicBool::new(false),
+            waker: Mutex::new(None),
+        });
+        // Register the on_finish callback eagerly so that a completion that
+        // occurs between into_future() and the first poll() sets `finished`
+        // before poll() runs, allowing it to return Ready immediately.
+        let state_clone = Arc::clone(&state);
+        self.on_finish(
+            move |_progress: f32| {
+                state_clone.finished.store(true, Ordering::Release);
+                if let Some(waker) = state_clone.waker.lock().unwrap().take() {
+                    waker.wake();
+                }
+            },
+            true,
+        );
         AnimationFuture {
-            state: Arc::new(TransitionFutureState {
-                finished: AtomicBool::new(false),
-                waker: Mutex::new(None),
-            }),
+            state,
             animation_ref: self,
-            registered: false,
         }
     }
 }
