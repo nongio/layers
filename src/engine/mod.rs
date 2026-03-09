@@ -441,22 +441,19 @@ impl AnimationRef {
 
     /// Add a callback that is triggered when the animation is started.
     pub fn on_start<F: Into<AnimationCallback>>(&self, handler: F, once: bool) -> &Self {
-        self.engine()
-            .on_animation_start(*self, handler, once);
+        self.engine().on_animation_start(*self, handler, once);
         self
     }
 
     /// Add a callback that is triggered when the animation is updated.
     pub fn on_update<F: Into<AnimationCallback>>(&self, handler: F, once: bool) -> &Self {
-        self.engine()
-            .on_animation_update(*self, handler, once);
+        self.engine().on_animation_update(*self, handler, once);
         self
     }
 
     /// Add a callback that is triggered when the animation is finished.
     pub fn on_finish<F: Into<AnimationCallback>>(&self, handler: F, once: bool) -> &Self {
-        self.engine()
-            .on_animation_finish(*self, handler, once);
+        self.engine().on_animation_finish(*self, handler, once);
         self
     }
 }
@@ -1046,7 +1043,10 @@ impl Engine {
             is_finished: false,
             is_started: false,
         });
-        AnimationRef { id: aid, engine_id: self.id }
+        AnimationRef {
+            id: aid,
+            engine_id: self.id,
+        }
     }
     pub fn start_animation(&self, animation: AnimationRef, delay: f32) {
         self.animations.with_data_mut(|animations| {

@@ -57,16 +57,15 @@ impl Future for TransitionFuture {
         // Register the on_finish callback exactly once.
         if !self.registered {
             let state = Arc::clone(&self.state);
-            self.transaction_ref
-                .on_finish(
-                    move |_layer: &Layer, _| {
-                        state.finished.store(true, Ordering::Release);
-                        if let Some(waker) = state.waker.lock().unwrap().take() {
-                            waker.wake();
-                        }
-                    },
-                    true,
-                );
+            self.transaction_ref.on_finish(
+                move |_layer: &Layer, _| {
+                    state.finished.store(true, Ordering::Release);
+                    if let Some(waker) = state.waker.lock().unwrap().take() {
+                        waker.wake();
+                    }
+                },
+                true,
+            );
             self.registered = true;
         }
 
@@ -149,4 +148,3 @@ impl std::future::IntoFuture for AnimationRef {
         }
     }
 }
-
