@@ -739,77 +739,93 @@ impl Engine {
     /// Append the layer's node to the scene tree and layout tree
     /// the layer is appended to the parent node if it is provided
     /// otherwise it is appended to the root of the scene
+    ///
+    /// Returns `Err(LayerError::StaleNode)` if the layer handle is stale.
     pub fn append_layer<'a>(
         &self,
         layer_id: impl Into<&'a NodeRef>,
         parent: impl Into<Option<NodeRef>>,
-    ) {
-        if std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            let layer_id = layer_id.into();
-            if let Some(layer) = self.get_layer(layer_id) {
-                let parent = parent.into();
-                self.layout_detach_layer(&layer);
-                let new_parent = parent.or_else(|| {
-                    let scene_root = *self.scene_root.read().unwrap();
-                    scene_root
-                });
+    ) -> Result<(), crate::layers::error::LayerError> {
+        let layer_id = layer_id.into();
+        let layer = self
+            .get_layer(layer_id)
+            .ok_or(crate::layers::error::LayerError::StaleNode)?;
 
-                if let Some(new_parent) = new_parent {
-                    self.scene.append_node_to(layer.id, new_parent);
-                    self.layout_append_layer(&layer, new_parent);
-                } else {
-                    // if we append to a scene without a root, we set the layer as the root
-                    self.scene_set_root(layer);
-                }
-                // Invalidate hit test node list since tree structure changed
-                self.invalidate_hit_test_node_list();
+        let parent = parent.into();
+        self.layout_detach_layer(&layer);
+        let new_parent = parent.or_else(|| {
+            let scene_root = *self.scene_root.read().unwrap();
+            scene_root
+        });
+
+        if let Some(new_parent) = new_parent {
+            // Verify the parent node is still alive before appending
+            if !self.is_layer_alive(&new_parent) {
+                return Err(crate::layers::error::LayerError::StaleNode);
             }
-        }))
-        .is_err()
-        {
-            error!("append_layer panicked (likely invalid layout node)");
+            self.scene.append_node_to(layer.id, new_parent);
+            self.layout_append_layer(&layer, new_parent);
+        } else {
+            self.scene_set_root(layer);
         }
+        self.invalidate_hit_test_node_list();
+        Ok(())
     }
 
     /// Append the layer to the root of the scene
     /// alias for append_layer, without a parent
-    pub fn add_layer<'a>(&self, layer: impl Into<&'a NodeRef>) {
+    pub fn add_layer<'a>(
+        &self,
+        layer: impl Into<&'a NodeRef>,
+    ) -> Result<(), crate::layers::error::LayerError> {
         self.append_layer(layer, None)
     }
 
     /// Prepend the layer to the root of the scene or to a parent node
     /// if the parent is provided
-    pub fn prepend_layer(&self, layer: impl Into<Layer>, parent: impl Into<Option<NodeRef>>) {
-        if std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            let layer: Layer = layer.into();
-            let layer_id = layer.id;
-            let parent = parent.into();
-            self.layout_detach_layer(&layer);
-
-            let new_parent = parent.or_else(|| {
-                let scene_root = *self.scene_root.read().unwrap();
-                scene_root
-            });
-
-            if let Some(new_parent) = new_parent {
-                self.scene.prepend_node_to(layer_id, new_parent);
-                self.layout_prepend_layer(&layer, new_parent);
-            } else {
-                // if we append to a scene without a root, we set the layer as the root
-                self.scene_set_root(layer);
-            }
-            // Invalidate hit test node list since tree structure changed
-            self.invalidate_hit_test_node_list();
-        }))
-        .is_err()
-        {
-            error!("prepend_layer panicked (likely invalid layout node)");
+    ///
+    /// Returns `Err(LayerError::StaleNode)` if the layer handle is stale.
+    pub fn prepend_layer(
+        &self,
+        layer: impl Into<Layer>,
+        parent: impl Into<Option<NodeRef>>,
+    ) -> Result<(), crate::layers::error::LayerError> {
+        let layer: Layer = layer.into();
+        if !self.is_layer_alive(&layer.id) {
+            return Err(crate::layers::error::LayerError::StaleNode);
         }
+        let layer_id = layer.id;
+        let parent = parent.into();
+        self.layout_detach_layer(&layer);
+
+        let new_parent = parent.or_else(|| {
+            let scene_root = *self.scene_root.read().unwrap();
+            scene_root
+        });
+
+        if let Some(new_parent) = new_parent {
+            // Verify the parent node is still alive before prepending
+            if !self.is_layer_alive(&new_parent) {
+                return Err(crate::layers::error::LayerError::StaleNode);
+            }
+            self.scene.prepend_node_to(layer_id, new_parent);
+            self.layout_prepend_layer(&layer, new_parent);
+        } else {
+            self.scene_set_root(layer);
+        }
+        self.invalidate_hit_test_node_list();
+        Ok(())
     }
 
-    pub fn add_layer_to_positioned(&self, layer: impl Into<Layer>, parent: Option<NodeRef>) {
-        // FIXME ensure that newly added layers are layouted
-        // update...
+    /// Append the layer to the parent, adjusting its position to preserve its
+    /// current global position relative to the new parent.
+    ///
+    /// Returns `Err(LayerError::StaleNode)` if the layer handle is stale.
+    pub fn add_layer_to_positioned(
+        &self,
+        layer: impl Into<Layer>,
+        parent: Option<NodeRef>,
+    ) -> Result<(), crate::layers::error::LayerError> {
         {
             execute_transactions(self);
             update_layout_tree(self);
@@ -817,6 +833,9 @@ impl Engine {
         }
 
         let layer: Layer = layer.into();
+        if !self.is_layer_alive(&layer.id) {
+            return Err(crate::layers::error::LayerError::StaleNode);
+        }
         let position = layer.render_position();
         let parent_position = parent
             .and_then(|parent| {
@@ -833,7 +852,7 @@ impl Engine {
             y: position.y - parent_position.y,
         };
 
-        self.append_layer(&layer.id, parent);
+        self.append_layer(&layer.id, parent)?;
 
         layer.set_position(new_position, None);
         {
@@ -841,12 +860,7 @@ impl Engine {
             update_layout_tree(self);
             self.update_nodes();
         }
-
-        // println!("current position {:?}", position);
-        // println!("parent position {:?}", parent_position);
-        // println!("new model position {:?}", new_position);
-        // let new_position = layer.render_position();
-        // println!("new render position {:?}", new_position);
+        Ok(())
     }
 
     pub fn mark_for_delete(&self, layer: NodeRef) {

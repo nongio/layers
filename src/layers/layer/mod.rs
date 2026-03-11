@@ -379,11 +379,14 @@ impl Layer {
         self.engine
             .set_node_flags(self.id, RenderableFlags::NEEDS_PAINT);
     }
-    pub fn add_sublayer<'a>(&self, layer: impl Into<&'a NodeRef>) {
+    pub fn add_sublayer<'a>(
+        &self,
+        layer: impl Into<&'a NodeRef>,
+    ) -> Result<(), crate::layers::error::LayerError> {
         self.engine.append_layer(layer, self.id)
     }
 
-    pub fn prepend_sublayer(&self, layer: Layer) {
+    pub fn prepend_sublayer(&self, layer: Layer) -> Result<(), crate::layers::error::LayerError> {
         self.engine.prepend_layer(layer, self.id)
     }
 

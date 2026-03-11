@@ -234,7 +234,13 @@ impl BuildLayerTree for Layer {
                         // is_node_removed hasn't caught it yet
                         if !engine.scene.is_node_removed(child_layer_id) {
                             if let Some(child_layer) = engine.get_layer(&child_layer_id) {
-                                engine.append_layer(&child_layer.id, Some(layer_id));
+                                if let Err(e) = engine.append_layer(&child_layer.id, Some(layer_id))
+                                {
+                                    tracing::warn!(
+                                        "build_layer_tree: failed to reattach child: {e}"
+                                    );
+                                    return None;
+                                }
                                 return Some((child_layer_id, child_layer));
                             }
                         }
@@ -243,7 +249,7 @@ impl BuildLayerTree for Layer {
                     .unwrap_or_else(|| {
                         // the child layer does not exist, is removed, or is stale — create fresh
                         let layer = engine.new_layer();
-                        engine.append_layer(&layer, Some(layer_id));
+                        let _ = engine.append_layer(&layer, Some(layer_id));
                         (layer.id, layer)
                     });
 

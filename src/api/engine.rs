@@ -28,7 +28,7 @@ pub extern "C" fn engine_add_layer_to_scene(engine: *const engine::Engine, layer
     let engine = unsafe { &*engine };
     let layer = unsafe { &*layer };
 
-    engine.append_layer(&layer.id, None);
+    let _ = engine.append_layer(&layer.id, None);
 }
 
 #[no_mangle]
