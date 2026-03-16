@@ -379,7 +379,9 @@ impl LayersEngine {
             let id = layer_ref.id().unwrap();
             let scene = engine_ref.scene();
             scene.with_arena(|arena| {
-                render_node_tree(id, arena, c, 1.0);
+                scene.with_renderable_arena(|renderable_arena| {
+                    render_node_tree(id, arena, renderable_arena, c, 1.0, None, None);
+                });
             });
             skia::Rect::from_xywh(0.0, 0.0, w, h)
         };

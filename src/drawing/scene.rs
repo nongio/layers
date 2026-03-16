@@ -4,6 +4,7 @@ use indextree::{Arena, NodeId};
 use skia::{gpu::ganesh::gl::direct_contexts, FontStyle, Surface};
 use skia_safe::Canvas;
 use skia_safe::Contains;
+use skia_safe::RoundOut;
 
 use crate::{
     engine::{
@@ -19,7 +20,10 @@ use crate::{
 };
 
 use super::layer::{draw_debug, draw_layer};
-use std::{collections::HashMap, iter::IntoIterator};
+use std::{
+    collections::{HashMap, HashSet},
+    iter::IntoIterator,
+};
 
 /// Creates a backdrop filter based on blend mode configuration.
 /// Returns an ImageFilter that can be applied to save layers.
@@ -110,7 +114,7 @@ pub fn draw_scene(canvas: &skia::Canvas, scene: std::sync::Arc<Scene>, root_id: 
                 let node = root.get();
                 let restore_point = canvas.save();
                 set_node_transform(node, canvas);
-                render_node_tree(root_id, scene_arena, renderables_arena, canvas, 1.0);
+                render_node_tree(root_id, scene_arena, renderables_arena, canvas, 1.0, None, None);
                 canvas.restore_to_count(restore_point);
             }
         });
@@ -287,19 +291,24 @@ pub fn paint_node_tree(
     context_opacity: f32,
     offscreen: bool,
     dbg_info: Option<&DrawDebugInfo>,
+    skip_self: bool,
+    occluded: Option<&HashSet<NodeRef>>,
+    damage_region: Option<&skia_safe::Region>,
 ) {
     let node_id: TreeStorageId = node_ref.into();
 
-    paint_node(
-        node_ref,
-        scene_arena,
-        renderables_arena,
-        render_canvas,
-        context_opacity,
-        offscreen,
-    );
-    if let Some(dbg_info) = dbg_info {
-        draw_debug(render_canvas, dbg_info, render_layer);
+    if !skip_self {
+        paint_node(
+            node_ref,
+            scene_arena,
+            renderables_arena,
+            render_canvas,
+            context_opacity,
+            offscreen,
+        );
+        if let Some(dbg_info) = dbg_info {
+            draw_debug(render_canvas, dbg_info, render_layer);
+        }
     }
     let mut context_opacity = render_layer.opacity * context_opacity;
     if (offscreen) {
@@ -314,8 +323,19 @@ pub fn paint_node_tree(
     // canvas.clip_rect(bounds, None, None);
     node_id.children(scene_arena).for_each(|child_id| {
         let child_ref = NodeRef(child_id);
-        let restore_point = render_canvas.save();
         let child = scene_arena.get(child_id).unwrap().get();
+
+        // Damage-based subtree culling: if the child (including all its
+        // descendants) falls entirely outside the damage region, skip it.
+        if let Some(region) = damage_region {
+            let child_bounds = child.render_layer.global_transformed_bounds_with_children;
+            let irect: skia_safe::IRect = child_bounds.round_out();
+            if !region.intersects_rect(irect) {
+                return;
+            }
+        }
+
+        let restore_point = render_canvas.save();
         set_node_transform(child, render_canvas);
         render_node_tree(
             child_ref,
@@ -323,6 +343,8 @@ pub fn paint_node_tree(
             renderables_arena,
             render_canvas,
             context_opacity,
+            occluded,
+            damage_region,
         );
         render_canvas.restore_to_count(restore_point);
     });
@@ -343,6 +365,8 @@ pub fn render_node_tree(
     renderables_arena: &FlatStorageData<SceneNodeRenderable>,
     render_canvas: &skia_safe::Canvas,
     context_opacity: f32,
+    occluded: Option<&HashSet<NodeRef>>,
+    damage_region: Option<&skia_safe::Region>,
 ) {
     let node_id: TreeStorageId = node_ref.into();
     #[cfg(feature = "profile-with-puffin")]
@@ -359,11 +383,15 @@ pub fn render_node_tree(
     if scene_node.hidden() {
         return;
     }
+    // Skip fully occluded nodes' own painting, but still traverse children.
+    // A child might be the occluder of its parent, so we cannot skip the subtree.
+    let is_self_occluded = occluded.map_or(false, |set| set.contains(&node_ref));
+
     let render_layer = &scene_node.render_layer;
     let restore_point = render_canvas.save();
     // render_canvas.concat(&render_layer.local_transform.to_m33());
     let dbg_info = scene_node._debug_info.as_ref();
-    if scene_node.is_image_cached() {
+    if scene_node.is_image_cached() && !is_self_occluded {
         #[cfg(feature = "profile-with-puffin")]
         profiling::puffin::profile_scope!("image_cached");
         // in this case the layer is ping-ponged
@@ -432,6 +460,9 @@ pub fn render_node_tree(
                             context_opacity,
                             true,
                             dbg_info,
+                            false, // not self-occluded (checked above)
+                            occluded,
+                            None, // damage is in screen-space, not offscreen-surface-space
                         );
                         // debug drawing
                         // let mut paint = skia_safe::Paint::default();
@@ -565,6 +596,9 @@ pub fn render_node_tree(
         context_opacity,
         false,
         dbg_info,
+        is_self_occluded,
+        occluded,
+        damage_region,
     );
 
     render_canvas.restore_to_count(restore_point);
