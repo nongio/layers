@@ -5,7 +5,7 @@ pub fn pending_transactions_count_reflects_scheduled_changes() {
     let engine = Engine::create(1000.0, 1000.0);
 
     let layer = engine.new_layer();
-    engine.add_layer(&layer).unwrap();
+    engine.add_layer(&layer).unwrap().unwrap();
 
     // Before any change is scheduled there should be no pending transactions.
     engine.update(0.016);
@@ -33,7 +33,7 @@ pub fn engine_update() {
 
     layer.add_sublayer(&child_layer).unwrap();
 
-    engine.add_layer(&layer).unwrap();
+    engine.add_layer(&layer).unwrap().unwrap();
 
     engine.update(0.016);
     engine.update(0.016);
@@ -64,8 +64,8 @@ pub fn test_independent_engines() {
     layer2.set_size(Size::points(300.0, 250.0), None);
 
     // Add them to their respective engines
-    engine1.add_layer(&layer1);
-    engine2.add_layer(&layer2);
+    engine1.add_layer(&layer1).unwrap();
+    engine2.add_layer(&layer2).unwrap();
 
     // Update both engines
     engine1.update(0.016);
@@ -119,7 +119,7 @@ fn removing_layer_subtree_triggers_layout() {
     child.add_sublayer(&grandchild).unwrap();
     root.add_sublayer(&child).unwrap();
 
-    engine.add_layer(&root).unwrap();
+    engine.add_layer(&root).unwrap().unwrap();
 
     // Allow the engine to process the additions so layout nodes exist.
     engine.update(0.016);
@@ -139,7 +139,7 @@ pub fn access_removed_node_does_not_panic() {
 
     let root = engine.new_layer();
     root.set_size(Size::points(500.0, 500.0), None);
-    engine.add_layer(&root).unwrap();
+    engine.add_layer(&root).unwrap().unwrap();
 
     let child = engine.new_layer();
     child.set_size(Size::points(100.0, 100.0), None);
