@@ -123,10 +123,7 @@ impl DrawScene for SkiaFboRenderer {
                 if let Some(root) = arena.get(root_id.into()) {
                     let root = root.get();
                     set_node_transform(root, canvas);
-                    let occluded = {
-                        let occ_map = scene.occlusion_map().unwrap_or_default();
-                        occ_map.get(&root_id).cloned()
-                    };
+                    let occluded = scene.occluded_set(root_id);
                     render_node_tree(
                         root_id,
                         arena,

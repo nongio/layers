@@ -11,13 +11,13 @@ mod tests {
         let engine = Engine::create(1000.0, 1000.0);
 
         let layer = engine.new_layer();
-        engine.add_layer(&layer);
+        engine.add_layer(&layer).unwrap();
 
         let layer = engine.new_layer();
-        engine.add_layer(&layer);
+        engine.add_layer(&layer).unwrap();
 
         let layer = engine.new_layer();
-        engine.add_layer(&layer);
+        engine.add_layer(&layer).unwrap();
 
         engine.update(0.016);
 
@@ -34,19 +34,19 @@ mod tests {
         layer.set_position((0.0, 0.0), None);
         layer.set_size(Size::points(100.0, 100.0), None);
 
-        engine.add_layer(&layer);
+        engine.add_layer(&layer).unwrap();
 
         let layer = engine.new_layer();
         layer.set_position((0.0, 0.0), None);
         layer.set_size(Size::points(100.0, 100.0), None);
         layer.set_opacity(0.9, None);
-        engine.add_layer(&layer);
+        engine.add_layer(&layer).unwrap();
 
         let layer = engine.new_layer();
         layer.set_position((0.0, 0.0), None);
         layer.set_size(Size::points(150.0, 150.0), None);
         layer.set_blend_mode(layers::prelude::BlendMode::BackgroundBlur);
-        engine.add_layer(&layer);
+        engine.add_layer(&layer).unwrap();
 
         engine.update(0.016);
 
@@ -65,19 +65,19 @@ mod tests {
         layer.set_position((0.0, 0.0), None);
         layer.set_size(Size::points(100.0, 100.0), None);
 
-        engine.add_layer(&layer);
+        engine.add_layer(&layer).unwrap();
 
         let layer = engine.new_layer();
         layer.set_position((0.0, 0.0), None);
         layer.set_size(Size::points(50.0, 50.0), None);
         layer.set_opacity(1.0, None);
-        engine.add_layer(&layer);
+        engine.add_layer(&layer).unwrap();
 
         let layer = engine.new_layer();
         layer.set_position((0.0, 0.0), None);
         layer.set_size(Size::points(150.0, 150.0), None);
         layer.set_opacity(0.9, None);
-        engine.add_layer(&layer);
+        engine.add_layer(&layer).unwrap();
 
         engine.update(0.016);
 
@@ -96,20 +96,20 @@ mod tests {
         layer.set_position((0.0, 0.0), None);
         layer.set_size(Size::points(100.0, 100.0), None);
 
-        engine.add_layer(&layer);
+        engine.add_layer(&layer).unwrap();
 
         let layer = engine.new_layer();
         layer.set_position((0.0, 0.0), None);
         layer.set_size(Size::points(100.0, 100.0), None);
         layer.set_opacity(0.0, None);
-        engine.add_layer(&layer);
+        engine.add_layer(&layer).unwrap();
 
         let layer = engine.new_layer();
         layer.set_position((0.0, 0.0), None);
         layer.set_size(Size::points(150.0, 150.0), None);
         layer.set_blend_mode(layers::prelude::BlendMode::BackgroundBlur);
         layer.set_hidden(true);
-        engine.add_layer(&layer);
+        engine.add_layer(&layer).unwrap();
 
         engine.update(0.016);
 
@@ -129,14 +129,14 @@ mod tests {
         back.set_position((0.0, 0.0), None);
         back.set_size(Size::points(100.0, 100.0), None);
         back.set_background_color(Color::new_rgba(1.0, 0.0, 0.0, 1.0), None);
-        engine.add_layer(&back);
+        engine.add_layer(&back).unwrap();
 
         // Front layer: opaque, fully covers back
         let front = engine.new_layer();
         front.set_position((0.0, 0.0), None);
         front.set_size(Size::points(200.0, 200.0), None);
         front.set_background_color(Color::new_rgba(0.0, 0.0, 1.0, 1.0), None);
-        engine.add_layer(&front);
+        engine.add_layer(&front).unwrap();
 
         engine.update(0.016);
         engine.clear_occlusion();
@@ -159,13 +159,13 @@ mod tests {
         left.set_position((0.0, 0.0), None);
         left.set_size(Size::points(100.0, 100.0), None);
         left.set_background_color(Color::new_rgba(1.0, 0.0, 0.0, 1.0), None);
-        engine.add_layer(&left);
+        engine.add_layer(&left).unwrap();
 
         let right = engine.new_layer();
         right.set_position((200.0, 0.0), None);
         right.set_size(Size::points(100.0, 100.0), None);
         right.set_background_color(Color::new_rgba(0.0, 0.0, 1.0, 1.0), None);
-        engine.add_layer(&right);
+        engine.add_layer(&right).unwrap();
 
         engine.update(0.016);
         engine.clear_occlusion();
@@ -193,7 +193,7 @@ mod tests {
         back.set_position((0.0, 0.0), None);
         back.set_size(Size::points(100.0, 100.0), None);
         back.set_background_color(Color::new_rgba(1.0, 0.0, 0.0, 1.0), None);
-        engine.add_layer(&back);
+        engine.add_layer(&back).unwrap();
 
         // Front layer has opacity < 1, so it cannot occlude
         let front = engine.new_layer();
@@ -201,7 +201,7 @@ mod tests {
         front.set_size(Size::points(200.0, 200.0), None);
         front.set_background_color(Color::new_rgba(0.0, 0.0, 1.0, 1.0), None);
         front.set_opacity(0.5, None);
-        engine.add_layer(&front);
+        engine.add_layer(&front).unwrap();
 
         engine.update(0.016);
         engine.clear_occlusion();
@@ -225,7 +225,7 @@ mod tests {
         back.set_position((0.0, 0.0), None);
         back.set_size(Size::points(100.0, 100.0), None);
         back.set_background_color(Color::new_rgba(1.0, 0.0, 0.0, 1.0), None);
-        engine.add_layer(&back);
+        engine.add_layer(&back).unwrap();
 
         // Front layer is opaque but has rounded corners
         let front = engine.new_layer();
@@ -233,7 +233,7 @@ mod tests {
         front.set_size(Size::points(200.0, 200.0), None);
         front.set_background_color(Color::new_rgba(0.0, 0.0, 1.0, 1.0), None);
         front.set_border_corner_radius(BorderRadius::new_single(10.0), None);
-        engine.add_layer(&front);
+        engine.add_layer(&front).unwrap();
 
         engine.update(0.016);
         engine.clear_occlusion();
@@ -258,7 +258,7 @@ mod tests {
         parent.set_size(Size::points(100.0, 100.0), None);
         parent.set_clip_children(true, None);
         parent.set_background_color(Color::new_rgba(1.0, 1.0, 1.0, 1.0), None);
-        engine.add_layer(&parent);
+        engine.add_layer(&parent).unwrap();
 
         // Child fully outside the parent clip (absolute positioned at 200,200)
         let child = engine.new_layer();
@@ -269,7 +269,7 @@ mod tests {
         child.set_position((200.0, 200.0), None);
         child.set_size(Size::points(50.0, 50.0), None);
         child.set_background_color(Color::new_rgba(1.0, 0.0, 0.0, 1.0), None);
-        parent.add_sublayer(&child);
+        parent.add_sublayer(&child).unwrap();
 
         engine.update(0.016);
         engine.clear_occlusion();
@@ -294,14 +294,14 @@ mod tests {
         behind.set_position((0.0, 0.0), None);
         behind.set_size(Size::points(200.0, 200.0), None);
         behind.set_background_color(Color::new_rgba(1.0, 0.0, 0.0, 1.0), None);
-        engine.add_layer(&behind);
+        engine.add_layer(&behind).unwrap();
 
         // Parent with clip_children, sized 50x50 (smaller than behind)
         let parent = engine.new_layer();
         parent.set_position((0.0, 0.0), None);
         parent.set_size(Size::points(50.0, 50.0), None);
         parent.set_clip_children(true, None);
-        engine.add_layer(&parent);
+        engine.add_layer(&parent).unwrap();
 
         // Opaque child at 100x100 — extends beyond parent clip (50x50)
         // Only the clipped portion (50x50) should count as occluder
@@ -309,7 +309,7 @@ mod tests {
         child.set_position((0.0, 0.0), None);
         child.set_size(Size::points(100.0, 100.0), None);
         child.set_background_color(Color::new_rgba(0.0, 0.0, 1.0, 1.0), None);
-        parent.add_sublayer(&child);
+        parent.add_sublayer(&child).unwrap();
 
         engine.update(0.016);
         engine.clear_occlusion();
@@ -336,14 +336,14 @@ mod tests {
         blur.set_position((0.0, 0.0), None);
         blur.set_size(Size::points(100.0, 100.0), None);
         blur.set_blend_mode(BlendMode::BackgroundBlur);
-        engine.add_layer(&blur);
+        engine.add_layer(&blur).unwrap();
 
         // Opaque front layer
         let front = engine.new_layer();
         front.set_position((0.0, 0.0), None);
         front.set_size(Size::points(200.0, 200.0), None);
         front.set_background_color(Color::new_rgba(0.0, 0.0, 1.0, 1.0), None);
-        engine.add_layer(&front);
+        engine.add_layer(&front).unwrap();
 
         engine.update(0.016);
         engine.clear_occlusion();
@@ -372,14 +372,14 @@ mod tests {
         back.set_position((0.0, 0.0), None);
         back.set_size(Size::points(100.0, 100.0), None);
         back.set_background_color(Color::new_rgba(1.0, 0.0, 0.0, 1.0), None);
-        engine.add_layer(&back);
+        engine.add_layer(&back).unwrap();
 
         // Semi-transparent parent (opacity 0.9) — entire subtree cannot occlude
         let parent = engine.new_layer();
         parent.set_position((0.0, 0.0), None);
         parent.set_size(Size::points(200.0, 200.0), None);
         parent.set_opacity(0.9, None);
-        engine.add_layer(&parent);
+        engine.add_layer(&parent).unwrap();
 
         // Child with opaque background — but parent opacity < 1.0,
         // so this child must NOT act as an occluder
@@ -387,7 +387,7 @@ mod tests {
         child.set_position((0.0, 0.0), None);
         child.set_size(Size::points(200.0, 200.0), None);
         child.set_background_color(Color::new_rgba(0.0, 0.0, 1.0, 1.0), None);
-        parent.add_sublayer(&child);
+        parent.add_sublayer(&child).unwrap();
 
         engine.update(0.016);
         engine.clear_occlusion();
@@ -412,21 +412,21 @@ mod tests {
         back.set_position((0.0, 0.0), None);
         back.set_size(Size::points(100.0, 100.0), None);
         back.set_background_color(Color::new_rgba(1.0, 0.0, 0.0, 1.0), None);
-        engine.add_layer(&back);
+        engine.add_layer(&back).unwrap();
 
         // Hidden parent — entire subtree should be ignored
         let parent = engine.new_layer();
         parent.set_position((0.0, 0.0), None);
         parent.set_size(Size::points(200.0, 200.0), None);
         parent.set_hidden(true);
-        engine.add_layer(&parent);
+        engine.add_layer(&parent).unwrap();
 
         // Opaque child inside hidden parent — must not occlude anything
         let child = engine.new_layer();
         child.set_position((0.0, 0.0), None);
         child.set_size(Size::points(200.0, 200.0), None);
         child.set_background_color(Color::new_rgba(0.0, 0.0, 1.0, 1.0), None);
-        parent.add_sublayer(&child);
+        parent.add_sublayer(&child).unwrap();
 
         engine.update(0.016);
         engine.clear_occlusion();
@@ -453,7 +453,7 @@ mod tests {
         back.set_position((0.0, 0.0), None);
         back.set_size(Size::points(200.0, 200.0), None);
         back.set_background_color(Color::new_rgba(1.0, 0.0, 0.0, 1.0), None);
-        engine.add_layer(&back);
+        engine.add_layer(&back).unwrap();
 
         // Front layer — transparent background but content declared opaque
         let front = engine.new_layer();
@@ -461,7 +461,7 @@ mod tests {
         front.set_size(Size::points(200.0, 200.0), None);
         // background is transparent (default)
         front.set_content_opaque(true);
-        engine.add_layer(&front);
+        engine.add_layer(&front).unwrap();
 
         engine.update(0.016);
         engine.clear_occlusion();
@@ -487,13 +487,13 @@ mod tests {
         back.set_position((0.0, 0.0), None);
         back.set_size(Size::points(200.0, 200.0), None);
         back.set_background_color(Color::new_rgba(1.0, 0.0, 0.0, 1.0), None);
-        engine.add_layer(&back);
+        engine.add_layer(&back).unwrap();
 
         let front = engine.new_layer();
         front.set_position((0.0, 0.0), None);
         front.set_size(Size::points(200.0, 200.0), None);
         // transparent background and content_opaque not set (default false)
-        engine.add_layer(&front);
+        engine.add_layer(&front).unwrap();
 
         engine.update(0.016);
         engine.clear_occlusion();

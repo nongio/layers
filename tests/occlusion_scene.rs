@@ -240,6 +240,7 @@ fn fetch_scene_json() -> String {
 }
 
 #[test]
+#[ignore = "requires ROOT_NODE, TARGET_NODE, and SCENE_URL/SCENE_FILE env vars plus external curl"]
 fn test_occlusion_for_scene() {
     let root_id: u64 = std::env::var("ROOT_NODE")
         .expect("set ROOT_NODE env var")

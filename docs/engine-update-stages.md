@@ -78,7 +78,7 @@ A layer is considered fully opaque when all of these hold:
 
 **Clip-awareness:** When an ancestor has `clip_children = true`, child bounds are intersected with the ancestor's clip region. Children entirely outside the clip are marked occluded (they produce no visible pixels). Opaque layers contribute only the intersection of their bounds with the active clip to the mask, preventing false occlusion of layers that extend beyond the clip boundary.
 
-The occluded set is stored on the `Scene` keyed by root node (`OcclusionMap = HashMap<NodeRef, HashSet<NodeRef>>`), so multiple render passes from different roots each get their own data. During rendering, `render_node_tree` checks the set and skips occluded nodes entirely.
+The occluded set is stored on the `Scene` keyed by root node (`OcclusionMap = HashMap<NodeRef, HashSet<NodeRef>>`), so multiple render passes from different roots each get their own data. During rendering, `render_node_tree` checks the set and skips *painting* occluded nodes (their children are still traversed, because a child may itself be the occluder or have non-occluded descendants). A node qualifies as an occluder when `is_fully_opaque()` returns true, which requires alpha 1.0, no rounded corners, a `RoundRect` shape, **and** `content_opaque` set to true (indicating the node's content fills its bounds without transparency).
 
 ### 5. Rendering
 

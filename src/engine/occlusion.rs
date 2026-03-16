@@ -138,14 +138,8 @@ fn collect_draw_order(
         false
     };
 
-    // The node's own visible region (for occluder contribution and occlusion test)
     let visible_bounds = if let Some(clip) = clip_rect {
-        let intersected = intersect_rects(bounds, clip);
-        if intersected.is_empty() {
-            bounds
-        } else {
-            intersected
-        }
+        intersect_rects(bounds, clip)
     } else {
         bounds
     };

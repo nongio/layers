@@ -74,7 +74,19 @@ impl Scene {
         self.occlusion_map.read().ok().map(|m| m.clone())
     }
 
-    /// Store occlusion data for the given root node (additive).
+    /// Returns a clone of the occluded-node set for the given root, without
+    /// cloning the entire map.
+    pub fn occluded_set(
+        &self,
+        root: super::NodeRef,
+    ) -> Option<std::collections::HashSet<super::NodeRef>> {
+        self.occlusion_map
+            .read()
+            .ok()
+            .and_then(|m| m.get(&root).cloned())
+    }
+
+    /// Store occlusion data for the given root node, replacing any existing entry.
     pub(crate) fn add_occlusion(
         &self,
         root: super::NodeRef,
@@ -450,7 +462,7 @@ mod tests {
         let child = engine.new_layer();
         child.set_key("child");
         let child_id = child.id();
-        root.add_sublayer(&child_id);
+        root.add_sublayer(&child_id).unwrap();
 
         engine.update(0.0);
 
