@@ -114,7 +114,15 @@ pub fn draw_scene(canvas: &skia::Canvas, scene: std::sync::Arc<Scene>, root_id: 
                 let node = root.get();
                 let restore_point = canvas.save();
                 set_node_transform(node, canvas);
-                render_node_tree(root_id, scene_arena, renderables_arena, canvas, 1.0, None, None);
+                render_node_tree(
+                    root_id,
+                    scene_arena,
+                    renderables_arena,
+                    canvas,
+                    1.0,
+                    None,
+                    None,
+                );
                 canvas.restore_to_count(restore_point);
             }
         });

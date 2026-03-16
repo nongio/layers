@@ -305,8 +305,8 @@ impl RenderLayer {
 
         // Either the background is fully opaque, or the user declared the
         // custom draw content fills the bounds with opaque pixels.
-        let has_opaque_fill = self.content_opaque
-            || Self::paint_color_min_alpha(&self.background_color) >= 1.0;
+        let has_opaque_fill =
+            self.content_opaque || Self::paint_color_min_alpha(&self.background_color) >= 1.0;
         if !has_opaque_fill {
             return false;
         }
