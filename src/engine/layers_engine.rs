@@ -148,7 +148,10 @@ impl LayersEngine {
     }
     /// Add a new layer to the scene
     /// The layer will be added to the root of the scene
-    pub fn add_layer(&self, layer: impl Into<Layer>) -> NodeRef {
+    pub fn add_layer(
+        &self,
+        layer: impl Into<Layer>,
+    ) -> Result<(), crate::layers::error::LayerError> {
         self.engine.append_layer(layer, None)
     }
     /// Add a new layer to the scene, attached to the given parent
@@ -158,7 +161,7 @@ impl LayersEngine {
         &self,
         layer: impl Into<Layer>,
         parent: impl Into<Option<NodeRef>>,
-    ) -> NodeRef {
+    ) -> Result<(), crate::layers::error::LayerError> {
         let parent = parent.into();
         self.engine.append_layer(layer, parent)
     }
@@ -169,7 +172,7 @@ impl LayersEngine {
         &self,
         layer: impl Into<Layer>,
         parent: impl Into<Option<NodeRef>>,
-    ) -> NodeRef {
+    ) -> Result<(), crate::layers::error::LayerError> {
         let parent = parent.into();
         self.engine.prepend_layer(layer, parent)
     }
@@ -181,7 +184,7 @@ impl LayersEngine {
         &self,
         layer: impl Into<Layer>,
         parent: impl Into<Option<NodeRef>>,
-    ) -> NodeRef {
+    ) -> Result<(), crate::layers::error::LayerError> {
         let parent = parent.into();
         self.engine.add_layer_to_positioned(layer, parent)
     }
@@ -376,7 +379,9 @@ impl LayersEngine {
             let id = layer_ref.id().unwrap();
             let scene = engine_ref.scene();
             scene.with_arena(|arena| {
-                render_node_tree(id, arena, c, 1.0);
+                scene.with_renderable_arena(|renderable_arena| {
+                    render_node_tree(id, arena, renderable_arena, c, 1.0, None, None);
+                });
             });
             skia::Rect::from_xywh(0.0, 0.0, w, h)
         };

@@ -395,7 +395,7 @@ mod tests {
         layer.set_position((100.0, 100.0), None);
         layer.set_background_color(Color::new_hex("#ff0000ff"), None);
         layer.set_size(Size::points(100.0, 100.0), None);
-        engine.add_layer(&layer);
+        let _ = engine.add_layer(&layer);
 
         // Prime initial state so previous bounds are non-empty
         engine.update(0.016);
@@ -429,7 +429,7 @@ mod tests {
             },
             None,
         );
-        engine.add_layer(&layer);
+        let _ = engine.add_layer(&layer);
 
         // Prime baseline (opacity = 1.0)
         engine.update(0.016);
@@ -477,7 +477,7 @@ mod tests {
         let layer = engine.new_layer();
         layer.set_position((100.0, 100.0), None);
         layer.set_size(Size::points(100.0, 100.0), None);
-        engine.add_layer(&layer);
+        let _ = engine.add_layer(&layer);
 
         // Prime initial state
         engine.update(0.016);
@@ -514,7 +514,7 @@ mod tests {
             },
             None,
         );
-        engine.add_layer(&layer);
+        let _ = engine.add_layer(&layer);
 
         // Prime initial state so previous/new states are identical and stable
         engine.update(0.016);
@@ -542,8 +542,8 @@ mod tests {
         let child = engine.new_layer();
         child.set_position((5.0, 5.0), None);
 
-        engine.add_layer(&parent);
-        engine.append_layer(&child.id, Some(parent.id));
+        let _ = engine.add_layer(&parent);
+        let _ = engine.append_layer(&child.id, Some(parent.id));
 
         // Prime initial layout/state
         engine.update(0.016);

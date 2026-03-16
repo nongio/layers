@@ -28,7 +28,9 @@ pub extern "C" fn engine_add_layer_to_scene(engine: *const engine::Engine, layer
     let engine = unsafe { &*engine };
     let layer = unsafe { &*layer };
 
-    engine.append_layer(&layer.id, None);
+    if let Err(e) = engine.append_layer(&layer.id, None) {
+        tracing::error!("engine_add_layer_to_scene: failed to add layer: {}", e);
+    }
 }
 
 #[no_mangle]

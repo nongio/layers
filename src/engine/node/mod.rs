@@ -188,8 +188,21 @@ impl SceneNode {
     pub fn is_picture_cached(&self) -> bool {
         self.picture_cached
     }
+    /// Hint that the custom draw content fills the entire bounds with opaque
+    /// pixels. When set, the layer can act as an occluder for occlusion culling
+    /// even when its background color is transparent.
+    pub fn set_content_opaque(&mut self, value: bool) {
+        self.render_layer.content_opaque = value;
+    }
+    pub fn is_content_opaque(&self) -> bool {
+        self.render_layer.content_opaque
+    }
     pub fn render_layer(&self) -> &RenderLayer {
         &self.render_layer
+    }
+    /// Mutable access to the render layer for testing and diagnostic tools.
+    pub fn render_layer_mut(&mut self) -> &mut RenderLayer {
+        &mut self.render_layer
     }
     pub(crate) fn increase_frame(&mut self) {
         // if self.is_image_cached() {

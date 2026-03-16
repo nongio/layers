@@ -84,7 +84,7 @@ pub fn simple_build() {
     let engine = Engine::create(1000.0, 1000.0);
     let layer = engine.new_layer();
 
-    engine.add_layer(&layer);
+    engine.add_layer(&layer).unwrap();
 
     let lt = LayerTreeBuilder::default()
         .children(vec![LayerTreeBuilder::default().build().unwrap()])
@@ -100,7 +100,7 @@ pub fn build_a_view() {
     let engine = Engine::create(1000.0, 1000.0);
     let layer = engine.new_layer();
 
-    engine.add_layer(&layer);
+    engine.add_layer(&layer).unwrap();
 
     let initial = false;
     let view = View::new("test_view", initial, render_one_child_view);
@@ -117,7 +117,7 @@ pub fn rebuild_a_view() {
     let engine = Engine::create(1000.0, 1000.0);
     let layer = engine.new_layer();
 
-    engine.add_layer(&layer);
+    engine.add_layer(&layer).unwrap();
 
     let initial = false;
     let view = View::new("test_view", initial, render_one_child_view);
@@ -153,7 +153,7 @@ pub fn nested_views() {
     let engine = Engine::create(1000.0, 1000.0);
     let layer = engine.new_layer();
 
-    engine.add_layer(&layer);
+    engine.add_layer(&layer).unwrap();
 
     let initial = false;
     let view = View::new("parent_view", initial, render_main_view);
@@ -189,7 +189,7 @@ pub fn nested_views() {
 fn layer_tree_builder_children_recover_from_zero_opacity_parent() {
     let engine = Engine::create(1000.0, 1000.0);
     let layer = engine.new_layer();
-    engine.add_layer(&layer);
+    engine.add_layer(&layer).unwrap();
 
     let child_tree = LayerTreeBuilder::default()
         .key("child")
@@ -249,7 +249,7 @@ fn layer_tree_replicate_node() {
     // Create a root layer first so source_layer and replica_holder are siblings
     let root = engine.new_layer();
     root.set_size(Size::points(1000.0, 1000.0), None);
-    engine.add_layer(&root);
+    engine.add_layer(&root).unwrap();
 
     // Create a source layer to replicate
     let source_layer = engine.new_layer();
@@ -260,12 +260,12 @@ fn layer_tree_replicate_node() {
         },
         None,
     );
-    root.add_sublayer(&source_layer);
+    root.add_sublayer(&source_layer).unwrap();
 
     // Create a layer to hold the replicated content
     let replica_holder = engine.new_layer();
     replica_holder.set_size(Size::points(200.0, 200.0), None);
-    root.add_sublayer(&replica_holder);
+    root.add_sublayer(&replica_holder).unwrap();
 
     // Build a layer tree that replicates the source layer
     // This sets the content_draw_func on replica_holder to render source_layer
@@ -301,14 +301,14 @@ fn layer_tree_replicate_node_descendant_follower() {
         },
         None,
     );
-    engine.add_layer(&source_layer);
+    engine.add_layer(&source_layer).unwrap();
 
     // Create a replica layer as a CHILD of source_layer
     // This creates the circular dependency: rendering source_layer renders replica,
     // and replica's content_draw_func tries to render source_layer again
     let replica = engine.new_layer();
     replica.set_size(Size::points(50.0, 50.0), None);
-    source_layer.add_sublayer(&replica);
+    source_layer.add_sublayer(&replica).unwrap();
 
     // Set up the replica to mirror the source
     let replicate_tree = LayerTreeBuilder::default()

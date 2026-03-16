@@ -227,26 +227,43 @@ impl BuildLayerTree for Layer {
                 let child_layer_id = nodes.pop_front();
 
                 // get or create the child layer
-                let (child_layer_id, child_layer) = child_layer_id
+                let maybe_layer = child_layer_id
                     .and_then(|child_layer_id| {
                         // try to use existing layer — also check get_layer in case the layer was
                         // removed from the HashMap (scene_remove_layer cleans it up) even if
                         // is_node_removed hasn't caught it yet
                         if !engine.scene.is_node_removed(child_layer_id) {
                             if let Some(child_layer) = engine.get_layer(&child_layer_id) {
-                                engine.append_layer(&child_layer.id, Some(layer_id));
+                                if let Err(e) = engine.append_layer(&child_layer.id, Some(layer_id))
+                                {
+                                    tracing::warn!(
+                                        "build_layer_tree: failed to reattach child: {e}"
+                                    );
+                                    return None;
+                                }
                                 return Some((child_layer_id, child_layer));
                             }
                         }
                         None
                     })
-                    .unwrap_or_else(|| {
+                    .or_else(|| {
                         // the child layer does not exist, is removed, or is stale — create fresh
                         let layer = engine.new_layer();
-                        engine.append_layer(&layer, Some(layer_id));
-                        (layer.id, layer)
+                        match engine.append_layer(&layer, Some(layer_id)) {
+                            Ok(()) => Some((layer.id, layer)),
+                            Err(e) => {
+                                tracing::error!(
+                                    "build_layer_tree: failed to append fresh child layer: {}",
+                                    e
+                                );
+                                None
+                            }
+                        }
                     });
 
+                let Some((child_layer_id, child_layer)) = maybe_layer else {
+                    continue;
+                };
                 layer_view_map.retain(|n, _| !node_same_index(n.0, child_layer_id.0));
                 cache_remove_id(&child_layer_id, cache_viewlayer);
                 drop(nodes);

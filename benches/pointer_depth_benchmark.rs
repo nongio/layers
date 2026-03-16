@@ -25,7 +25,7 @@ fn create_layer_tree(engine: &Engine, depth: usize) -> (Layer, Vec<Layer>) {
             black_box(&layer_clone);
         });
 
-        engine.append_layer(&child.id, current.id);
+        engine.append_layer(&child.id, current.id).unwrap();
         current = child.clone();
         layers.push(child);
     }
@@ -62,7 +62,7 @@ fn create_wide_layer_tree(engine: &Engine, depth: usize, siblings: usize) -> (La
                     black_box(&layer_clone);
                 });
 
-                engine.append_layer(&child.id, parent.id);
+                engine.append_layer(&child.id, parent.id).unwrap();
                 next_level.push(child.clone());
                 layers.push(child);
             }

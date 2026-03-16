@@ -9,6 +9,7 @@ pub use super::{
         AnimationRef, Engine, NodeRef, TransactionRef,
     },
     layers::{
+        error::LayerError,
         layer::model::{ContentDrawError, ContentDrawFunction, PointerHandlerFunction},
         layer::Effect,
         layer::Layer,

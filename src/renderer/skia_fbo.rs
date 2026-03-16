@@ -16,6 +16,7 @@ use crate::{
     engine::{node::SceneNode, scene::Scene, NodeRef},
 };
 use crate::{drawing::scene::DrawScene, layers::layer::render_layer, prelude::render_node_tree};
+use std::collections::HashSet;
 
 #[derive(Clone)]
 pub struct SkiaFboRenderer {
@@ -122,7 +123,16 @@ impl DrawScene for SkiaFboRenderer {
                 if let Some(root) = arena.get(root_id.into()) {
                     let root = root.get();
                     set_node_transform(root, canvas);
-                    render_node_tree(root_id, arena, renderable_arena, &mut canvas, 1.0);
+                    let occluded = scene.occluded_set(root_id);
+                    render_node_tree(
+                        root_id,
+                        arena,
+                        renderable_arena,
+                        &mut canvas,
+                        1.0,
+                        occluded.as_ref(),
+                        None,
+                    );
                 }
             });
         });

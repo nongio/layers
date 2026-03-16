@@ -5,6 +5,7 @@
 //! The tree is stored in a memory arena using IndexTree, which allow fast read/write and thread safe parallel iterations.
 
 use crate::{
+    engine::occlusion::OcclusionMap,
     engine::storage::{FlatStorage, FlatStorageData},
     layers::layer::render_layer::RenderLayer,
     prelude::Point,
@@ -40,6 +41,10 @@ pub struct Scene {
     pub(crate) renderables: FlatStorage<SceneNodeRenderable>,
 
     pub size: RwLock<Point>,
+
+    /// Per-root occlusion data: maps a root NodeRef to the set of nodes
+    /// that are fully occluded when drawing from that root.
+    occlusion_map: RwLock<OcclusionMap>,
 }
 
 impl Scene {
@@ -53,6 +58,7 @@ impl Scene {
                 x: width,
                 y: height,
             }),
+            occlusion_map: RwLock::new(std::collections::HashMap::new()),
         }
     }
     pub fn set_size(&self, width: f32, height: f32) {
@@ -61,6 +67,41 @@ impl Scene {
             x: width,
             y: height,
         };
+    }
+
+    /// Returns a snapshot of the occlusion map (root -> occluded node set).
+    pub fn occlusion_map(&self) -> Option<OcclusionMap> {
+        self.occlusion_map.read().ok().map(|m| m.clone())
+    }
+
+    /// Returns a clone of the occluded-node set for the given root, without
+    /// cloning the entire map.
+    pub fn occluded_set(
+        &self,
+        root: super::NodeRef,
+    ) -> Option<std::collections::HashSet<super::NodeRef>> {
+        self.occlusion_map
+            .read()
+            .ok()
+            .and_then(|m| m.get(&root).cloned())
+    }
+
+    /// Store occlusion data for the given root node, replacing any existing entry.
+    pub(crate) fn add_occlusion(
+        &self,
+        root: super::NodeRef,
+        occluded: std::collections::HashSet<super::NodeRef>,
+    ) {
+        if let Ok(mut map) = self.occlusion_map.write() {
+            map.insert(root, occluded);
+        }
+    }
+
+    /// Clear all cached occlusion data.
+    pub(crate) fn clear_occlusion(&self) {
+        if let Ok(mut map) = self.occlusion_map.write() {
+            map.clear();
+        }
     }
     pub(crate) fn create(width: f32, height: f32) -> Arc<Scene> {
         Arc::new(Self::new(width, height))
@@ -421,7 +462,7 @@ mod tests {
         let child = engine.new_layer();
         child.set_key("child");
         let child_id = child.id();
-        root.add_sublayer(&child_id);
+        root.add_sublayer(&child_id).unwrap();
 
         engine.update(0.0);
 
