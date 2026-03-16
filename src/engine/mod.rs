@@ -36,6 +36,7 @@ pub(crate) mod scene;
 
 pub mod animation;
 pub(crate) mod node;
+pub mod occlusion;
 pub(crate) mod storage;
 pub mod task;
 
@@ -2051,7 +2052,7 @@ impl Engine {
 
             // Try-lock to avoid blocking while a writer holds (or waits on) the arenas.
             if let (Ok(nodes), Ok(renderables)) = (nodes.try_read(), renderables.try_read()) {
-                render_node_tree(layer_id, &nodes, &renderables, c, 1.0);
+                render_node_tree(layer_id, &nodes, &renderables, c, 1.0, None, None);
             }
             skia::Rect::from_xywh(0.0, 0.0, w, h)
         };
@@ -2063,6 +2064,28 @@ impl Engine {
     pub fn clear_damage(&self) {
         let mut damage = self.damage.write().unwrap();
         *damage = skia_safe::Rect::default();
+    }
+
+    /// Compute occlusion culling for the given root node.
+    ///
+    /// Traverses the subtree front-to-back and marks nodes that are fully
+    /// hidden behind opaque layers. Results are stored on the `Scene` and
+    /// used by `render_node_tree` to skip occluded nodes.
+    ///
+    /// Call this after `update()` for each root node you intend to draw.
+    pub fn compute_occlusion(&self, root: NodeRef) {
+        let occluded = self
+            .scene
+            .with_arena(|arena| occlusion::compute_occlusion(root, arena));
+        self.scene.add_occlusion(root, occluded);
+    }
+
+    /// Clear all cached occlusion data.
+    ///
+    /// Call this before recomputing occlusion for a new frame to avoid
+    /// stale entries from previous roots.
+    pub fn clear_occlusion(&self) {
+        self.scene.clear_occlusion();
     }
     pub fn add_damage(&self, rect: skia_safe::Rect) {
         let mut damage = self.damage.write().unwrap();

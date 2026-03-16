@@ -676,6 +676,17 @@ impl Layer {
         });
     }
 
+    /// Declare that the custom draw content fills the entire layer bounds with
+    /// opaque pixels. This allows occlusion culling to treat the layer as an
+    /// occluder even when its background color is transparent.
+    pub fn set_content_opaque(&self, content_opaque: bool) {
+        self.engine.scene.with_arena_mut(|arena| {
+            if let Some(node) = arena.get_mut(self.id.0).filter(|n| !n.is_removed()) {
+                node.get_mut().set_content_opaque(content_opaque);
+            }
+        });
+    }
+
     pub fn set_picture_cached(&self, picture_cache: bool) {
         self.engine.scene.with_arena_mut(|arena| {
             if let Some(node) = arena.get_mut(self.id.0).filter(|n| !n.is_removed()) {
@@ -731,7 +742,7 @@ impl Layer {
             let damage = scene
                 .try_with_arena(|arena| {
                     scene.with_renderable_arena(|renderable_arena| {
-                        render_node_tree(layer_id, arena, renderable_arena, c, 1.0);
+                        render_node_tree(layer_id, arena, renderable_arena, c, 1.0, None, None);
                     });
                     // the damage of a mirrored layer is the bounds with children
                     if let Some(scene_node) = arena.get(layer_id.0) {

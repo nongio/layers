@@ -5,6 +5,7 @@
 //! The tree is stored in a memory arena using IndexTree, which allow fast read/write and thread safe parallel iterations.
 
 use crate::{
+    engine::occlusion::OcclusionMap,
     engine::storage::{FlatStorage, FlatStorageData},
     layers::layer::render_layer::RenderLayer,
     prelude::Point,
@@ -40,6 +41,10 @@ pub struct Scene {
     pub(crate) renderables: FlatStorage<SceneNodeRenderable>,
 
     pub size: RwLock<Point>,
+
+    /// Per-root occlusion data: maps a root NodeRef to the set of nodes
+    /// that are fully occluded when drawing from that root.
+    occlusion_map: RwLock<OcclusionMap>,
 }
 
 impl Scene {
@@ -53,6 +58,7 @@ impl Scene {
                 x: width,
                 y: height,
             }),
+            occlusion_map: RwLock::new(std::collections::HashMap::new()),
         }
     }
     pub fn set_size(&self, width: f32, height: f32) {
@@ -61,6 +67,29 @@ impl Scene {
             x: width,
             y: height,
         };
+    }
+
+    /// Returns a snapshot of the occlusion map (root -> occluded node set).
+    pub fn occlusion_map(&self) -> Option<OcclusionMap> {
+        self.occlusion_map.read().ok().map(|m| m.clone())
+    }
+
+    /// Store occlusion data for the given root node (additive).
+    pub(crate) fn add_occlusion(
+        &self,
+        root: super::NodeRef,
+        occluded: std::collections::HashSet<super::NodeRef>,
+    ) {
+        if let Ok(mut map) = self.occlusion_map.write() {
+            map.insert(root, occluded);
+        }
+    }
+
+    /// Clear all cached occlusion data.
+    pub(crate) fn clear_occlusion(&self) {
+        if let Ok(mut map) = self.occlusion_map.write() {
+            map.clear();
+        }
     }
     pub(crate) fn create(width: f32, height: f32) -> Arc<Scene> {
         Arc::new(Self::new(width, height))

@@ -84,6 +84,10 @@ pub struct RenderLayer {
     pub backdrop_blur_region: Option<Vec<skia_safe::RRect>>,
     /// The shape definition for this layer
     pub shape: Shape,
+    /// Hint from the user that the custom draw content fills the entire bounds
+    /// with opaque pixels. When true, the layer can act as an occluder even if
+    /// its background color is transparent.
+    pub content_opaque: bool,
 }
 
 impl RenderLayer {
@@ -272,6 +276,56 @@ impl RenderLayer {
                 gradient.colors.iter().fold(0.0, |acc, c| acc.max(c.alpha))
             }
         }
+    }
+
+    fn paint_color_min_alpha(color: &PaintColor) -> f32 {
+        match color {
+            PaintColor::Solid { color } => color.alpha,
+            PaintColor::GradientLinear(gradient) => {
+                gradient.colors.iter().fold(1.0, |acc, c| acc.min(c.alpha))
+            }
+            PaintColor::GradientRadial(gradient) => {
+                gradient.colors.iter().fold(1.0, |acc, c| acc.min(c.alpha))
+            }
+        }
+    }
+
+    /// Returns true if this layer is fully opaque and can act as an occluder,
+    /// meaning it completely hides any content behind its bounds.
+    pub fn is_fully_opaque(&self) -> bool {
+        // Must be fully opaque (including parent opacity chain)
+        if self.premultiplied_opacity < 1.0 {
+            return false;
+        }
+
+        // BackgroundBlur reads from the backdrop, so it can't occlude
+        if self.blend_mode != BlendMode::Normal {
+            return false;
+        }
+
+        // Either the background is fully opaque, or the user declared the
+        // custom draw content fills the bounds with opaque pixels.
+        let has_opaque_fill = self.content_opaque
+            || Self::paint_color_min_alpha(&self.background_color) >= 1.0;
+        if !has_opaque_fill {
+            return false;
+        }
+
+        // Rounded corners leave transparent regions in the bounding rect
+        if self.border_corner_radius.top_left > 0.0
+            || self.border_corner_radius.top_right > 0.0
+            || self.border_corner_radius.bottom_right > 0.0
+            || self.border_corner_radius.bottom_left > 0.0
+        {
+            return false;
+        }
+
+        // Custom path shapes may not cover the full bounding rect
+        if !matches!(self.shape, Shape::RoundRect) {
+            return false;
+        }
+
+        true
     }
 
     /// Generate the shape path in local coordinates on-demand.
@@ -484,6 +538,7 @@ impl RenderLayer {
                 .load(std::sync::atomic::Ordering::Relaxed),
             visible: true,
             backdrop_blur_region: None,
+            content_opaque: false,
         };
 
         render_layer.visible = render_layer.has_visible_drawables();
@@ -547,6 +602,7 @@ impl Default for RenderLayer {
             pointer_events: false,
             visible: false,
             backdrop_blur_region: None,
+            content_opaque: false,
         }
     }
 }

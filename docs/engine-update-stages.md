@@ -12,6 +12,7 @@ Every call to `Engine::update(dt)` executes the same ordered pipeline:
 | 2. Apply transactions  | `execute_transactions`                             | Update `ModelLayer` properties and adjust render/layout flags            |
 | 3. Solve layout        | `update_layout_tree`                               | Run Taffy to recompute node sizes and positions                          |
 | 4. Refresh nodes       | `Engine::update_nodes` (`src/engine/mod.rs`)       | Visit each scene node, update render layers, and calculate damage        |
+| 4b. Occlusion culling  | `Engine::compute_occlusion` (caller-driven)        | Mark nodes fully hidden behind opaque layers so rendering can skip them  |
 | 5. Render              | `render_node_tree` (`src/drawing/scene.rs`)        | Replay cached pictures or draw commands, clipping to accumulated damage  |
 | 6. Cleanup deleted     | `cleanup_nodes` (`src/engine/stages/mod.rs`)       | Drop `SceneNode`s marked for removal and tidy layout bookkeeping safely  |
 
@@ -50,6 +51,34 @@ Returned rectangles are joined into the per-frame damage accumulator. The engine
 - Children rely on the latest parent transform and premultiplied opacity when repainting. Running parents first keeps those values fresh before `update_node_single` executes on the child.
 - Parents still detect child-driven layout changes because they compare their own new layout data (just written by Taffy) against the previous render-layer snapshot. Aggregated child bounds are read from the stored `SceneNode`, so "before" and "after" comparisons remain valid even if the child has not updated yet.
 - When a child runs later in the pass it reports damage in global coordinates. `update_nodes` merges that rectangle into the frame total, so child content changes are preserved even though the parent processed earlier.
+
+### 4b. Occlusion culling (caller-driven)
+
+Occlusion culling is a **separate step** invoked by the caller after `Engine::update`. It is not part of the automatic pipeline because scenes may be rendered from multiple root nodes, and each root needs its own occlusion data.
+
+**API pattern** (per frame):
+
+```rust
+engine.update(dt);
+engine.clear_occlusion();                       // reset all roots
+engine.compute_occlusion(root_a);               // compute for first root
+engine.compute_occlusion(root_b);               // compute for second root
+// ... render ...
+```
+
+`Engine::compute_occlusion(root)` calls `occlusion::compute_occlusion` (`src/engine/occlusion.rs`), which traverses the subtree rooted at `root` in draw order (pre-order, back-to-front) and then iterates in reverse (front-to-back). Fully-opaque rectangular layers contribute their `global_transformed_bounds` (intersected with any active clip) to an occlusion mask. Any node whose visible bounds are fully contained by a mask entry is added to the occluded set.
+
+A layer is considered fully opaque when all of these hold:
+
+- `premultiplied_opacity >= 1.0` (accounts for parent opacity)
+- `blend_mode == Normal` (not `BackgroundBlur`)
+- Background color alpha is 1.0 across all gradient stops
+- No rounded corners (`border_corner_radius` is all zeros)
+- Shape is `RoundRect` (not a custom path)
+
+**Clip-awareness:** When an ancestor has `clip_children = true`, child bounds are intersected with the ancestor's clip region. Children entirely outside the clip are marked occluded (they produce no visible pixels). Opaque layers contribute only the intersection of their bounds with the active clip to the mask, preventing false occlusion of layers that extend beyond the clip boundary.
+
+The occluded set is stored on the `Scene` keyed by root node (`OcclusionMap = HashMap<NodeRef, HashSet<NodeRef>>`), so multiple render passes from different roots each get their own data. During rendering, `render_node_tree` checks the set and skips occluded nodes entirely.
 
 ### 5. Rendering
 
