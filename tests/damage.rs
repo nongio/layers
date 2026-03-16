@@ -172,13 +172,17 @@ mod tests {
         hidden_parent.set_position((100.0, 100.0), None);
         hidden_parent.set_size(Size::points(300.0, 300.0), None);
         hidden_parent.set_hidden(true);
-        engine.append_layer(&hidden_parent.id, Some(root.id)).unwrap();
+        engine
+            .append_layer(&hidden_parent.id, Some(root.id))
+            .unwrap();
 
         let child = engine.new_layer();
         child.set_position((20.0, 20.0), None);
         child.set_size(Size::points(100.0, 100.0), None);
         child.set_blend_mode(layers::types::BlendMode::BackgroundBlur);
-        engine.append_layer(&child.id, Some(hidden_parent.id)).unwrap();
+        engine
+            .append_layer(&child.id, Some(hidden_parent.id))
+            .unwrap();
 
         engine.update(0.016);
 
