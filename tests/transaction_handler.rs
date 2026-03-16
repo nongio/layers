@@ -25,7 +25,7 @@ fn noop_waker() -> Waker {
 pub fn call_finish_transaction() {
     let engine = Engine::create(1000.0, 1000.0);
     let layer = engine.new_layer();
-    engine.add_layer(&layer);
+    engine.add_layer(&layer).unwrap();
 
     let transaction = layer.set_position(
         Point { x: 200.0, y: 100.0 },
@@ -60,7 +60,7 @@ pub fn call_finish_transaction() {
 pub fn call_start_transaction() {
     let engine = Engine::create(1000.0, 1000.0);
     let layer = engine.new_layer();
-    engine.add_layer(&layer);
+    engine.add_layer(&layer).unwrap();
 
     let transaction = layer.set_position(
         Point { x: 200.0, y: 100.0 },
@@ -104,7 +104,7 @@ pub fn call_start_transaction() {
 pub fn call_update_transaction() {
     let engine = Engine::create(1000.0, 1000.0);
     let layer = engine.new_layer();
-    engine.add_layer(&layer);
+    engine.add_layer(&layer).unwrap();
 
     let called = Arc::new(RwLock::new(0.0));
     let c = called.clone();
@@ -135,7 +135,7 @@ pub fn call_update_transaction() {
 pub fn call_finish_transaction_spring() {
     let engine = Engine::create(1000.0, 1000.0);
     let layer = engine.new_layer();
-    engine.add_layer(&layer);
+    engine.add_layer(&layer).unwrap();
 
     // let s = Spring::with_duration_and_bounce(1.0, 0.2);
     // println!("spring {:#?}", s);
@@ -186,7 +186,7 @@ pub fn call_finish_transaction_spring() {
 pub fn call_finish_transaction_spring_predictable() {
     let engine = Engine::create(1000.0, 1000.0);
     let layer = engine.new_layer();
-    engine.add_layer(&layer);
+    engine.add_layer(&layer).unwrap();
 
     let transaction = layer.set_position(
         Point { x: 200.0, y: 100.0 },
@@ -223,7 +223,7 @@ pub fn call_finish_transaction_spring_predictable() {
 pub fn call_start_value() {
     let engine = Engine::create(1000.0, 1000.0);
     let layer = engine.new_layer();
-    engine.add_layer(&layer);
+    engine.add_layer(&layer).unwrap();
 
     layer.set_position(
         Point { x: 200.0, y: 100.0 },
@@ -283,7 +283,7 @@ pub fn call_start_value() {
 pub fn call_update_value() {
     let engine = Engine::create(1000.0, 1000.0);
     let layer = engine.new_layer();
-    engine.add_layer(&layer);
+    engine.add_layer(&layer).unwrap();
 
     layer.set_position(
         Point { x: 200.0, y: 100.0 },
@@ -347,7 +347,7 @@ pub fn call_update_value() {
 pub fn transition_future_resolves_when_transaction_already_done() {
     let engine = Engine::create(1000.0, 1000.0);
     let layer = engine.new_layer();
-    engine.add_layer(&layer);
+    engine.add_layer(&layer).unwrap();
 
     let transaction =
         layer.set_position(Point { x: 200.0, y: 100.0 }, Some(Transition::linear(0.1)));
@@ -375,7 +375,7 @@ pub fn transition_future_resolves_when_transaction_already_done() {
 pub fn transition_future_resolves_when_transaction_completes_before_poll() {
     let engine = Engine::create(1000.0, 1000.0);
     let layer = engine.new_layer();
-    engine.add_layer(&layer);
+    engine.add_layer(&layer).unwrap();
 
     let transaction =
         layer.set_position(Point { x: 200.0, y: 100.0 }, Some(Transition::linear(0.1)));

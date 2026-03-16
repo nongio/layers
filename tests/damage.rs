@@ -14,7 +14,7 @@ mod tests {
         layer.set_position((100.0, 100.0), None);
         layer.set_size(Size::points(100.0, 100.0), None);
 
-        engine.add_layer(&layer);
+        engine.add_layer(&layer).unwrap();
 
         engine.update(0.016);
 
@@ -35,7 +35,7 @@ mod tests {
         let layer = engine.new_layer();
 
         layer.set_size(Size::points(100.0, 100.0), None);
-        engine.append_layer(&layer.id, None);
+        engine.append_layer(&layer.id, None).unwrap();
 
         engine.update(0.016);
 
@@ -63,7 +63,7 @@ mod tests {
         layer.set_position((100.0, 100.0), None);
         layer.set_size(Size::points(100.0, 100.0), None);
 
-        engine.add_layer(&layer);
+        engine.add_layer(&layer).unwrap();
 
         engine.update(0.016);
 
@@ -97,7 +97,7 @@ mod tests {
         layer.set_position((100.0, 100.0), None);
         layer.set_size(Size::points(100.0, 100.0), None);
 
-        engine.add_layer(&layer.id);
+        engine.add_layer(&layer.id).unwrap();
 
         engine.update(0.016);
 
@@ -135,7 +135,7 @@ mod tests {
         layer.set_position((100.0, 100.0), None);
         layer.set_size(Size::points(100.0, 100.0), None);
 
-        engine.add_layer(&layer.id);
+        engine.add_layer(&layer.id).unwrap();
 
         engine.update(0.016);
 
@@ -166,19 +166,19 @@ mod tests {
         let root = engine.new_layer();
         root.set_position((0.0, 0.0), None);
         root.set_size(Size::points(600.0, 600.0), None);
-        engine.add_layer(&root.id);
+        engine.add_layer(&root.id).unwrap();
 
         let hidden_parent = engine.new_layer();
         hidden_parent.set_position((100.0, 100.0), None);
         hidden_parent.set_size(Size::points(300.0, 300.0), None);
         hidden_parent.set_hidden(true);
-        engine.append_layer(&hidden_parent.id, Some(root.id));
+        engine.append_layer(&hidden_parent.id, Some(root.id)).unwrap();
 
         let child = engine.new_layer();
         child.set_position((20.0, 20.0), None);
         child.set_size(Size::points(100.0, 100.0), None);
         child.set_blend_mode(layers::types::BlendMode::BackgroundBlur);
-        engine.append_layer(&child.id, Some(hidden_parent.id));
+        engine.append_layer(&child.id, Some(hidden_parent.id)).unwrap();
 
         engine.update(0.016);
 
@@ -198,7 +198,7 @@ mod tests {
             },
             None,
         );
-        engine.add_layer(&layer.id);
+        engine.add_layer(&layer.id).unwrap();
         engine.update(0.016);
 
         let scene_damage = engine.damage();
@@ -215,7 +215,7 @@ mod tests {
         let layer = engine.new_layer();
         layer.set_position((100.0, 100.0), None);
         layer.set_size(Size::points(100.0, 100.0), None);
-        engine.add_layer(&layer.id);
+        engine.add_layer(&layer.id).unwrap();
         engine.update(0.016);
         let scene_damage = engine.damage();
         // adding an empty layer should not damage the content
@@ -244,12 +244,12 @@ mod tests {
         layer.set_position((100.0, 100.0), None);
         layer.set_size(Size::points(100.0, 100.0), None);
         // layer.set_image_cache(true);
-        engine.add_layer(&layer.id);
+        engine.add_layer(&layer.id).unwrap();
 
         let layer2 = engine.new_layer();
         layer2.set_position((100.0, 100.0), None);
         layer2.set_size(Size::points(100.0, 100.0), None);
-        engine.append_layer(&layer2, layer.id);
+        engine.append_layer(&layer2, layer.id).unwrap();
 
         engine.update(0.016);
         let scene_damage = engine.damage();
@@ -290,22 +290,22 @@ mod tests {
         let layer = engine.new_layer();
         layer.set_position((50.0, 70.0), None);
         layer.set_size(Size::points(120.0, 120.0), None);
-        engine.add_layer(&layer.id);
+        engine.add_layer(&layer.id).unwrap();
 
         let child_a = engine.new_layer();
         child_a.set_position((25.0, 15.0), None);
         child_a.set_size(Size::points(100.0, 100.0), None);
-        engine.append_layer(&child_a, layer.id);
+        engine.append_layer(&child_a, layer.id).unwrap();
 
         let child_b = engine.new_layer();
         child_b.set_position((10.0, 12.0), None);
         child_b.set_size(Size::points(80.0, 80.0), None);
-        engine.append_layer(&child_b, child_a.id);
+        engine.append_layer(&child_b, child_a.id).unwrap();
 
         let child_c = engine.new_layer();
         child_c.set_position((4.0, 3.0), None);
         child_c.set_size(Size::points(60.0, 60.0), None);
-        engine.append_layer(&child_c, child_b.id);
+        engine.append_layer(&child_c, child_b.id).unwrap();
 
         engine.update(0.016);
         let scene_damage = engine.damage();
@@ -337,7 +337,7 @@ mod tests {
         let layer = engine.new_layer();
         layer.set_position((100.0, 100.0), None);
         layer.set_size(Size::points(100.0, 100.0), None);
-        engine.add_layer(&layer.id);
+        engine.add_layer(&layer.id).unwrap();
 
         engine.update(0.016);
         let scene_damage = engine.damage();
@@ -356,7 +356,7 @@ mod tests {
             },
             None,
         );
-        engine.add_layer(&layer.id);
+        engine.add_layer(&layer.id).unwrap();
 
         let draw_func = |_c: &skia_safe::Canvas, _w: f32, _h: f32| -> skia_safe::Rect {
             skia_safe::Rect::from_xywh(0.0, 0.0, 10.0, 10.0)
@@ -383,7 +383,7 @@ mod tests {
             },
             None,
         );
-        engine.add_layer(&layer.id);
+        engine.add_layer(&layer.id).unwrap();
 
         engine.update(0.016);
         let scene_damage = engine.damage();
@@ -422,13 +422,13 @@ mod tests {
         let parent = engine.new_layer();
         parent.set_position((100.0, 100.0), None);
         parent.set_size(Size::points(100.0, 100.0), None);
-        engine.add_layer(&parent.id);
+        engine.add_layer(&parent.id).unwrap();
 
         let child = engine.new_layer();
         child.set_position((0.0, 0.0), None);
         child.set_size(Size::points(100.0, 100.0), None);
         child.set_background_color(Color::new_hex("#ff0000ff"), None);
-        engine.append_layer(&child, parent.id);
+        engine.append_layer(&child, parent.id).unwrap();
 
         engine.update(0.016);
         let scene_damage = engine.damage();
@@ -455,13 +455,13 @@ mod tests {
         let parent = engine.new_layer();
         parent.set_position((100.0, 100.0), None);
         parent.set_size(Size::points(300.0, 300.0), None);
-        engine.add_layer(&parent.id);
+        engine.add_layer(&parent.id).unwrap();
 
         let child = engine.new_layer();
         child.set_position((100.0, 100.0), None);
         child.set_size(Size::points(50.0, 50.0), None);
         child.set_background_color(Color::new_hex("#ff0000ff"), None);
-        engine.append_layer(&child, parent.id);
+        engine.append_layer(&child, parent.id).unwrap();
 
         engine.update(0.016);
         engine.clear_damage();
@@ -482,7 +482,7 @@ mod tests {
     pub fn damage_opacity() {
         let engine = Engine::create(1000.0, 1000.0);
         let layer = engine.new_layer();
-        engine.add_layer(&layer);
+        engine.add_layer(&layer).unwrap();
         layer.set_layout_style(layers::taffy::Style {
             position: layers::taffy::Position::Absolute,
             ..Default::default()
@@ -544,7 +544,7 @@ mod tests {
     pub fn damage_animation_updates_scene() {
         let engine = Engine::create(1000.0, 1000.0);
         let layer = engine.new_layer();
-        engine.add_layer(&layer);
+        engine.add_layer(&layer).unwrap();
         layer.set_layout_style(layers::taffy::Style {
             position: layers::taffy::Position::Absolute,
             ..Default::default()
@@ -584,7 +584,7 @@ mod tests {
     pub fn damage_opacity_animation() {
         let engine = Engine::create(1000.0, 1000.0);
         let layer = engine.new_layer();
-        engine.add_layer(&layer);
+        engine.add_layer(&layer).unwrap();
         layer.set_layout_style(layers::taffy::Style {
             position: layers::taffy::Position::Absolute,
             ..Default::default()
@@ -620,7 +620,7 @@ mod tests {
     pub fn damage_size_animation() {
         let engine = Engine::create(1000.0, 1000.0);
         let layer = engine.new_layer();
-        engine.add_layer(&layer);
+        engine.add_layer(&layer).unwrap();
         layer.set_layout_style(layers::taffy::Style {
             position: layers::taffy::Position::Absolute,
             ..Default::default()
@@ -655,7 +655,7 @@ mod tests {
     pub fn damage_layer_removal() {
         let engine = Engine::create(1000.0, 1000.0);
         let root = engine.new_layer();
-        engine.add_layer(&root);
+        engine.add_layer(&root).unwrap();
         root.set_layout_style(layers::taffy::Style {
             position: layers::taffy::Position::Absolute,
             ..Default::default()
@@ -677,7 +677,7 @@ mod tests {
             None,
         );
 
-        engine.append_layer(&child, root.id);
+        engine.append_layer(&child, root.id).unwrap();
 
         engine.update(0.016);
         engine.clear_damage();
@@ -701,7 +701,7 @@ mod tests {
         wrap.set_position((100.0, 100.0), None);
         wrap.set_size(Size::points(0.0, 0.0), None);
 
-        engine.add_layer(&wrap);
+        engine.add_layer(&wrap).unwrap();
 
         let layer = engine.new_layer();
         layer.set_layout_style(layers::taffy::Style {
@@ -712,7 +712,7 @@ mod tests {
         layer.set_size(Size::points(100.0, 100.0), None);
         layer.set_background_color(Color::new_hex("#ff0000ff"), None);
 
-        engine.append_layer(&layer, wrap.id);
+        engine.append_layer(&layer, wrap.id).unwrap();
 
         engine.update(0.016);
         let scene_damage = engine.damage();
@@ -733,7 +733,7 @@ mod tests {
         layer.set_position((100.0, 100.0), None);
         layer.set_size(Size::points(100.0, 100.0), None);
         layer.set_background_color(Color::new_hex("#ff0000ff"), None);
-        engine.add_layer(&layer.id);
+        engine.add_layer(&layer.id).unwrap();
 
         engine.update(0.016);
 
@@ -838,7 +838,7 @@ mod tests {
         });
         container.set_position((100.0, 100.0), None);
         container.set_size(Size::points(200.0, 200.0), None);
-        engine.add_layer(&container.id);
+        engine.add_layer(&container.id).unwrap();
 
         // Child: has background so subtree is visually non-empty
         let child = engine.new_layer();
@@ -849,7 +849,7 @@ mod tests {
         child.set_position((0.0, 0.0), None);
         child.set_size(Size::points(200.0, 200.0), None);
         child.set_background_color(Color::new_hex("#ff0000ff"), None);
-        engine.append_layer(&child.id, Some(container.id));
+        engine.append_layer(&child.id, Some(container.id)).unwrap();
 
         engine.update(0.016);
         engine.clear_damage();
@@ -926,7 +926,7 @@ mod tests {
         // Create an explicit root to hold both leader and follower as siblings
         let root = engine.new_layer();
         root.set_size(Size::points(1000.0, 1000.0), None);
-        engine.add_layer(&root);
+        engine.add_layer(&root).unwrap();
 
         // Leader layer A: at position (0,0), size 100x100
         let leader = engine.new_layer();
@@ -942,7 +942,7 @@ mod tests {
                 skia_safe::Rect::from_xywh(0.0, 0.0, 100.0, 100.0)
             },
         );
-        engine.append_layer(&leader, root.id);
+        engine.append_layer(&leader, root.id).unwrap();
 
         // Initial update to establish leader's state
         engine.update(0.016);
@@ -967,7 +967,7 @@ mod tests {
         leader.add_follower_node(follower.id());
 
         // Add follower as sibling to leader (not child)
-        engine.append_layer(&follower, root.id);
+        engine.append_layer(&follower, root.id).unwrap();
 
         // This update should NOT cause stack overflow anymore
         engine.update(0.016);

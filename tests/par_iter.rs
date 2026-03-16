@@ -54,7 +54,7 @@ mod tests {
         let mut layers = Vec::<Layer>::new();
         for _ in 0..1000 {
             let layer = engine.new_layer();
-            engine.add_layer(&layer);
+            engine.add_layer(&layer).unwrap();
             layers.push(layer);
         }
 
@@ -105,7 +105,7 @@ mod tests {
             layer.set_background_color(Color::new_rgba(1.0, 0.0, 0.0, 1.0), None);
             let i = i as f32;
             layer.set_position((i * 10.0, i * 10.0), None);
-            engine.add_layer(&layer);
+            engine.add_layer(&layer).unwrap();
             layers.push(layer);
         }
 

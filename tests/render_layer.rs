@@ -9,7 +9,7 @@ mod tests {
     pub fn render_layer_size() {
         let engine = Engine::create(1000.0, 1000.0);
         let layer = engine.new_layer();
-        engine.add_layer(&layer);
+        engine.add_layer(&layer).unwrap();
 
         let _tr = layer.set_size(Size::points(100.0, 100.0), None);
 
@@ -31,7 +31,7 @@ mod tests {
         let engine = Engine::create(1000.0, 1000.0);
         let layer = engine.new_layer();
 
-        engine.append_layer(&layer, None);
+        engine.append_layer(&layer, None).unwrap();
 
         layer.set_position((100.0, 100.0), None);
 
@@ -49,7 +49,7 @@ mod tests {
     pub fn anchor_point_change_preserves_position() {
         let engine = Engine::create(800.0, 600.0);
         let layer = engine.new_layer();
-        engine.add_layer(&layer);
+        engine.add_layer(&layer).unwrap();
 
         layer.set_size(Size::points(200.0, 100.0), None);
         layer.set_position((50.0, 80.0), None);
@@ -73,7 +73,7 @@ mod tests {
     pub fn anchor_point_change_with_scale_preserves_position() {
         let engine = Engine::create(800.0, 600.0);
         let layer = engine.new_layer();
-        engine.add_layer(&layer);
+        engine.add_layer(&layer).unwrap();
 
         layer.set_size(Size::points(200.0, 100.0), None);
         layer.set_position((50.0, 80.0), None);
@@ -99,7 +99,7 @@ mod tests {
         let engine = Engine::create(1000.0, 1000.0);
         let layer = engine.new_layer();
 
-        engine.append_layer(&layer.id, None);
+        engine.append_layer(&layer.id, None).unwrap();
 
         layer.set_background_color(Color::new_hex("#ff0000ff"), None);
 
@@ -119,7 +119,7 @@ mod tests {
     pub fn render_layer_bounds_and_transforms() {
         let engine = Engine::create(1000.0, 1000.0);
         let layer = engine.new_layer();
-        engine.add_layer(&layer);
+        engine.add_layer(&layer).unwrap();
 
         layer.set_size(Size::points(100.0, 50.0), None);
         layer.set_position((10.0, 20.0), None);
@@ -152,7 +152,7 @@ mod tests {
         // Parent
         let parent = engine.new_layer();
         parent.set_size(Size::points(100.0, 100.0), None);
-        engine.add_layer(&parent);
+        engine.add_layer(&parent).unwrap();
 
         // Child extends beyond parent on right/bottom to test union
         let child = engine.new_layer();
@@ -160,7 +160,7 @@ mod tests {
         child.set_size(Size::points(50.0, 50.0), None);
         // Give the child a background so it contributes damage/bounds
         child.set_background_color(Color::new_hex("#ff0000ff"), None);
-        engine.append_layer(&child, parent.id);
+        engine.append_layer(&child, parent.id).unwrap();
 
         engine.update(0.016);
 
@@ -193,14 +193,14 @@ mod tests {
         let parent = engine.new_layer();
         parent.set_position((10.0, 20.0), None);
         parent.set_size(Size::points(100.0, 100.0), None);
-        engine.add_layer(&parent);
+        engine.add_layer(&parent).unwrap();
 
         // Child within parent
         let child = engine.new_layer();
         child.set_position((70.0, 80.0), None);
         child.set_size(Size::points(50.0, 50.0), None);
         child.set_background_color(Color::new_hex("#00ff00ff"), None);
-        engine.append_layer(&child, parent.id);
+        engine.append_layer(&child, parent.id).unwrap();
 
         engine.update(0.016);
 
@@ -231,20 +231,20 @@ mod tests {
         let gp = engine.new_layer();
         gp.set_position((5.0, 6.0), None);
         gp.set_size(Size::points(100.0, 100.0), None);
-        engine.add_layer(&gp);
+        engine.add_layer(&gp).unwrap();
 
         // Parent at an additional offset (relative to grandparent)
         let parent = engine.new_layer();
         parent.set_position((10.0, 20.0), None);
         parent.set_size(Size::points(80.0, 80.0), None);
-        engine.append_layer(&parent, gp.id);
+        engine.append_layer(&parent, gp.id).unwrap();
 
         // Child extends beyond parent (relative to parent)
         let child = engine.new_layer();
         child.set_position((70.0, 80.0), None);
         child.set_size(Size::points(50.0, 50.0), None);
         child.set_background_color(Color::new_hex("#0000ffff"), None);
-        engine.append_layer(&child, parent.id);
+        engine.append_layer(&child, parent.id).unwrap();
 
         engine.update(0.016);
 
@@ -283,7 +283,7 @@ mod tests {
         // Parent at origin with a base size
         let parent = engine.new_layer();
         parent.set_size(Size::points(100.0, 100.0), None);
-        engine.add_layer(&parent);
+        engine.add_layer(&parent).unwrap();
 
         // Child initially fully inside the parent
         let child = engine.new_layer();
@@ -291,7 +291,7 @@ mod tests {
         child.set_size(Size::points(40.0, 40.0), None);
         // Give the child a background so it contributes to bounds
         child.set_background_color(Color::new_hex("#ff00ffff"), None);
-        engine.append_layer(&child, parent.id);
+        engine.append_layer(&child, parent.id).unwrap();
 
         // Initial update
         engine.update(0.016);
@@ -324,14 +324,14 @@ mod tests {
         // Parent at origin 500x500
         let parent = engine.new_layer();
         parent.set_size(Size::points(500.0, 500.0), None);
-        engine.add_layer(&parent);
+        engine.add_layer(&parent).unwrap();
 
         // Child extends beyond parent on left/top and right/bottom
         let child = engine.new_layer();
         child.set_position((-100.0, -100.0), None);
         child.set_size(Size::points(700.0, 700.0), None);
         child.set_background_color(Color::new_hex("#112233ff"), None);
-        engine.append_layer(&child, parent.id);
+        engine.append_layer(&child, parent.id).unwrap();
 
         engine.update(0.016);
 
@@ -356,21 +356,21 @@ mod tests {
         // Parent at origin 100x100
         let parent = engine.new_layer();
         parent.set_size(Size::points(100.0, 100.0), None);
-        engine.add_layer(&parent);
+        engine.add_layer(&parent).unwrap();
 
         // Child A extends to the left/top slightly
         let child_a = engine.new_layer();
         child_a.set_position((-20.0, -30.0), None);
         child_a.set_size(Size::points(40.0, 50.0), None);
         child_a.set_background_color(Color::new_hex("#abcdefFF"), None);
-        engine.append_layer(&child_a, parent.id);
+        engine.append_layer(&child_a, parent.id).unwrap();
 
         // Child B extends to the right/bottom beyond parent
         let child_b = engine.new_layer();
         child_b.set_position((120.0, 140.0), None);
         child_b.set_size(Size::points(80.0, 30.0), None);
         child_b.set_background_color(Color::new_hex("#fedcbaFF"), None);
-        engine.append_layer(&child_b, parent.id);
+        engine.append_layer(&child_b, parent.id).unwrap();
 
         engine.update(0.016);
 
@@ -394,14 +394,14 @@ mod tests {
 
         let parent = engine.new_layer();
         parent.set_size(Size::points(300.0, 300.0), None);
-        engine.add_layer(&parent);
+        engine.add_layer(&parent).unwrap();
 
         let child = engine.new_layer();
         child.set_position((250.0, 250.0), None);
         child.set_size(Size::points(100.0, 100.0), None);
         child.set_background_color(Color::new_hex("#00ff00ff"), None);
         child.set_image_cached(true);
-        engine.append_layer(&child, parent.id);
+        engine.append_layer(&child, parent.id).unwrap();
 
         engine.update(0.016);
 

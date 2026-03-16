@@ -7,7 +7,7 @@ mod tests {
         let engine = Engine::create(1000.0, 1000.0);
 
         let layer = engine.new_layer();
-        engine.add_layer(&layer);
+        engine.add_layer(&layer).unwrap();
 
         layer.set_opacity(0.0, None);
         engine.update(0.016);

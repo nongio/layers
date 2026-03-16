@@ -6,7 +6,7 @@ pub fn change_layer_position() {
 
     let layer = engine.new_layer();
 
-    engine.add_layer(&layer);
+    engine.add_layer(&layer).unwrap();
 
     assert_eq!(layer.position().x, 0.0);
 

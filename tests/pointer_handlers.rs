@@ -10,7 +10,7 @@ pub fn pointer_move() {
     let layer = engine.new_layer();
     layer.set_size(Size::points(200.0, 200.0), None);
     layer.set_position((0.0, 0.0), None);
-    engine.add_layer(&layer);
+    engine.add_layer(&layer).unwrap();
 
     engine.update(0.016);
     let called = Arc::new(RwLock::new(0));
@@ -35,7 +35,7 @@ pub fn pointer_doesnt_move() {
     let layer = engine.new_layer();
     layer.set_size(Size::points(200.0, 200.0), None);
     layer.set_position((200.0, 200.0), None);
-    engine.add_layer(&layer);
+    engine.add_layer(&layer).unwrap();
     engine.update(0.016);
 
     let called = Arc::new(RwLock::new(0));
@@ -60,12 +60,12 @@ pub fn pointer_move_nested() {
     let layer = engine.new_layer();
     layer.set_size(Size::points(200.0, 200.0), None);
     layer.set_position((200.0, 200.0), None);
-    engine.add_layer(&layer);
+    engine.add_layer(&layer).unwrap();
 
     let layer2 = engine.new_layer();
     layer2.set_size(Size::points(200.0, 200.0), None);
     layer2.set_position((200.0, 200.0), None);
-    engine.append_layer(&layer2, layer.id);
+    engine.append_layer(&layer2, layer.id).unwrap();
 
     engine.update(0.016);
 
@@ -92,12 +92,12 @@ pub fn pointer_move_nested_parent() {
     let layer = engine.new_layer();
     layer.set_size(Size::points(200.0, 200.0), None);
     layer.set_position((200.0, 200.0), None);
-    engine.add_layer(&layer);
+    engine.add_layer(&layer).unwrap();
 
     let layer2 = engine.new_layer();
     layer2.set_size(Size::points(200.0, 200.0), None);
     layer2.set_position((200.0, 200.0), None);
-    engine.append_layer(&layer2, layer.id);
+    engine.append_layer(&layer2, layer.id).unwrap();
 
     engine.update(0.016);
 
@@ -123,12 +123,12 @@ pub fn pointer_doesnt_move_nested() {
     let layer = engine.new_layer();
     layer.set_size(Size::points(200.0, 200.0), None);
     layer.set_position((200.0, 200.0), None);
-    engine.add_layer(&layer);
+    engine.add_layer(&layer).unwrap();
 
     let layer2 = engine.new_layer();
     layer2.set_size(Size::points(200.0, 200.0), None);
     layer2.set_position((200.0, 200.0), None);
-    engine.append_layer(&layer2, layer.id);
+    engine.append_layer(&layer2, layer.id).unwrap();
 
     engine.update(0.016);
 
@@ -156,7 +156,7 @@ pub fn pointer_remove() {
     layer.set_size(Size::points(200.0, 200.0), None);
     layer.set_position((0.0, 0.0), None);
 
-    engine.add_layer(&layer);
+    engine.add_layer(&layer).unwrap();
 
     engine.update(0.016);
     let called = Arc::new(RwLock::new(0));
@@ -184,12 +184,12 @@ pub fn pointer_in_out_nested_parent() {
     let layer = engine.new_layer();
     layer.set_size(Size::points(200.0, 200.0), None);
     layer.set_position((200.0, 200.0), None);
-    engine.add_layer(&layer);
+    engine.add_layer(&layer).unwrap();
 
     let layer2 = engine.new_layer();
     layer2.set_size(Size::points(200.0, 200.0), None);
     layer2.set_position((200.0, 200.0), None);
-    engine.append_layer(&layer2, layer.id);
+    engine.append_layer(&layer2, layer.id).unwrap();
 
     engine.update(0.016);
 
@@ -236,13 +236,13 @@ pub fn pointer_hidden_parent_excludes_children() {
     let parent = engine.new_layer();
     parent.set_size(Size::points(400.0, 400.0), None);
     parent.set_position((0.0, 0.0), None);
-    engine.add_layer(&parent);
+    engine.add_layer(&parent).unwrap();
 
     // Create child layer inside the parent
     let child = engine.new_layer();
     child.set_size(Size::points(100.0, 100.0), None);
     child.set_position((50.0, 50.0), None);
-    engine.append_layer(&child, parent.id);
+    engine.append_layer(&child, parent.id).unwrap();
 
     engine.update(0.016);
 
