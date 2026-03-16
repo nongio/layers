@@ -58,7 +58,7 @@ Occlusion culling is a **separate step** invoked by the caller after `Engine::up
 
 **API pattern** (per frame):
 
-```rust
+```rust,ignore
 engine.update(dt);
 engine.clear_occlusion();                       // reset all roots
 engine.compute_occlusion(root_a);               // compute for first root
