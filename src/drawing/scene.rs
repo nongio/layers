@@ -26,9 +26,10 @@ use std::{
 };
 
 /// Downsample factor applied before blurring and inverted after.
-/// Blurring on a smaller image is significantly cheaper — at 0.5× the effective
-/// sigma in scaled space is `BACKGROUND_BLUR_SIGMA * BACKGROUND_BLUR_DOWNSAMPLE`,
-/// operating on an image with `BACKGROUND_BLUR_DOWNSAMPLE²` as many pixels.
+/// Blurring on a smaller image is significantly cheaper — at 0.25× we blur in the
+/// downsampled space with sigma `BACKGROUND_BLUR_SIGMA * BACKGROUND_BLUR_DOWNSAMPLE`,
+/// operating on an image with `BACKGROUND_BLUR_DOWNSAMPLE²` of the original pixels.
+/// After scaling back up, the apparent blur in output space is still ≈`BACKGROUND_BLUR_SIGMA`.
 /// For sigma=25 the downscaling artifacts are imperceptible.
 pub(crate) const BACKGROUND_BLUR_DOWNSAMPLE: f32 = 0.25;
 
