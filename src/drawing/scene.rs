@@ -25,75 +25,105 @@ use std::{
     iter::IntoIterator,
 };
 
-/// Creates a backdrop filter based on blend mode configuration.
-/// Returns an ImageFilter that can be applied to save layers.
+/// Downsample factor applied before blurring and inverted after.
+/// Blurring on a smaller image is significantly cheaper — at 0.5× the effective
+/// sigma in scaled space is `BACKGROUND_BLUR_SIGMA * BACKGROUND_BLUR_DOWNSAMPLE`,
+/// operating on an image with `BACKGROUND_BLUR_DOWNSAMPLE²` as many pixels.
+/// For sigma=25 the downscaling artifacts are imperceptible.
+pub(crate) const BACKGROUND_BLUR_DOWNSAMPLE: f32 = 0.25;
+
+// Thread-local caches so the filter objects are built once per rendering thread
+// and reused every frame. Skia ImageFilters are immutable ref-counted descriptors
+// (no GPU state), so cloning is just an atomic ref-count bump.
+thread_local! {
+    static BACKDROP_FILTER_CACHE: std::cell::RefCell<Option<skia_safe::ImageFilter>> =
+        const { std::cell::RefCell::new(None) };
+    static BACKDROP_FILTER_VIBRANCY_CACHE: std::cell::RefCell<Option<skia_safe::ImageFilter>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// Returns the backdrop filter for `BackgroundBlur`, creating it on first call per thread.
 ///
-/// # Parameters
-/// - `blend_mode`: The blend mode to create a backdrop filter for
-/// - `blur_sigma`: The blur radius (typically BACKGROUND_BLUR_SIGMA)
-/// - `crop_rect`: Optional crop rectangle for the filter
-/// - `apply_vibrancy`: Whether to apply vibrancy/saturation enhancement
-#[profiling::function]
-fn create_backdrop_filter(
-    blend_mode: crate::types::BlendMode,
-    blur_sigma: f32,
-    crop_rect: Option<skia_safe::image_filters::CropRect>,
-    apply_vibrancy: bool,
-) -> Option<skia_safe::ImageFilter> {
-    use crate::types::BlendMode;
-
-    match blend_mode {
-        BlendMode::BackgroundBlur => {
-            // Create the blur filter
-            let blur = skia_safe::image_filters::blur(
-                (blur_sigma, blur_sigma),
-                skia_safe::TileMode::Mirror,
-                None,
-                crop_rect.clone(),
-            )?;
-
-            if apply_vibrancy {
-                // Add a mild tone map to feel more "material".
-                // Slightly increase contrast and saturation.
-                let sat = 1.10_f32;
-                let con = 1.06_f32;
-
-                // A very rough "contrast + saturation-ish" matrix.
-                // You can tune this for different vibrancy models.
-                let matrix = skia_safe::ColorMatrix::new(
-                    con * (0.213 + 0.787 * sat),
-                    con * (0.715 - 0.715 * sat),
-                    con * (0.072 - 0.072 * sat),
-                    0.0,
-                    0.0,
-                    con * (0.213 - 0.213 * sat),
-                    con * (0.715 + 0.285 * sat),
-                    con * (0.072 - 0.072 * sat),
-                    0.0,
-                    0.0,
-                    con * (0.213 - 0.213 * sat),
-                    con * (0.715 - 0.715 * sat),
-                    con * (0.072 + 0.928 * sat),
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    1.0,
-                    0.0,
-                );
-
-                let tone_filter = skia_safe::color_filters::matrix(&matrix, None);
-
-                // Compose blur then tone. Order matters: blur first, then tone-map.
-                skia_safe::image_filters::color_filter(tone_filter, None, crop_rect)
-                    .and_then(|cf| skia_safe::image_filters::compose(cf, blur))
-            } else {
-                Some(blur)
-            }
+/// The filter chain is: scale_down → blur (smaller kernel) → scale_up [→ vibrancy].
+/// Parameters are derived from `BACKGROUND_BLUR_SIGMA` and `BACKGROUND_BLUR_DOWNSAMPLE`.
+fn backdrop_filter(apply_vibrancy: bool) -> Option<skia_safe::ImageFilter> {
+    let cache = if apply_vibrancy {
+        &BACKDROP_FILTER_VIBRANCY_CACHE
+    } else {
+        &BACKDROP_FILTER_CACHE
+    };
+    cache.with(|cell| {
+        let mut opt = cell.borrow_mut();
+        if opt.is_none() {
+            *opt = build_backdrop_filter(BACKGROUND_BLUR_SIGMA, apply_vibrancy);
         }
-        // Add other blend modes here as needed
-        _ => None,
+        opt.clone()
+    })
+}
+
+/// Builds the backdrop `ImageFilter` from scratch.
+///
+/// Prefer `backdrop_filter()` over calling this directly so the result is cached.
+fn build_backdrop_filter(blur_sigma: f32, apply_vibrancy: bool) -> Option<skia_safe::ImageFilter> {
+    let s = BACKGROUND_BLUR_DOWNSAMPLE;
+    let sampling =
+        skia_safe::SamplingOptions::new(skia_safe::FilterMode::Linear, skia_safe::MipmapMode::None);
+
+    // Scale the backdrop down, blur with a proportionally smaller sigma,
+    // then scale back up. The save_layer bounds already constrain the output
+    // region so no explicit crop_rect is needed.
+    let scale_down = skia_safe::image_filters::matrix_transform(
+        &skia_safe::Matrix::scale((s, s)),
+        sampling,
+        None,
+    )?;
+    let blur = skia_safe::image_filters::blur(
+        (blur_sigma * s, blur_sigma * s),
+        skia_safe::TileMode::Mirror,
+        scale_down,
+        None,
+    )?;
+    let blurred = skia_safe::image_filters::matrix_transform(
+        &skia_safe::Matrix::scale((1.0 / s, 1.0 / s)),
+        sampling,
+        blur,
+    )?;
+
+    if apply_vibrancy {
+        // Add a mild tone map to feel more "material".
+        // Slightly increase contrast and saturation.
+        let sat = 1.10_f32;
+        let con = 1.06_f32;
+
+        let matrix = skia_safe::ColorMatrix::new(
+            con * (0.213 + 0.787 * sat),
+            con * (0.715 - 0.715 * sat),
+            con * (0.072 - 0.072 * sat),
+            0.0,
+            0.0,
+            con * (0.213 - 0.213 * sat),
+            con * (0.715 + 0.285 * sat),
+            con * (0.072 - 0.072 * sat),
+            0.0,
+            0.0,
+            con * (0.213 - 0.213 * sat),
+            con * (0.715 - 0.715 * sat),
+            con * (0.072 + 0.928 * sat),
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+        );
+
+        let tone_filter = skia_safe::color_filters::matrix(&matrix, None);
+
+        // Apply vibrancy on top of the upscaled blur.
+        skia_safe::image_filters::color_filter(tone_filter, blurred, None)
+    } else {
+        Some(blurred)
     }
 }
 
@@ -551,28 +581,18 @@ pub fn render_node_tree(
                         // Clip to the backdrop path (supports rounded rects)
                         render_canvas.clip_path(&backdrop_path, skia_safe::ClipOp::Intersect, true);
 
-                        // Get the bounding box of the path for the crop rect
                         let path_bounds = backdrop_path.bounds();
-                        let blur_outset = BACKGROUND_BLUR_SIGMA;
-                        let crop_rect_bounds = path_bounds.with_outset((blur_outset, blur_outset));
-                        let crop_rect =
-                            Some(skia_safe::image_filters::CropRect::from(crop_rect_bounds));
 
-                        // Create the backdrop filter based on blend mode
-                        // For now, all descendants use BackgroundBlur mode with vibrancy
-                        if let Some(backdrop_filter) = create_backdrop_filter(
-                            crate::types::BlendMode::BackgroundBlur,
-                            BACKGROUND_BLUR_SIGMA,
-                            crop_rect,
-                            true, // apply_vibrancy
-                        ) {
+                        // Use cached filter — same vibrancy as direct-rendered layers.
+                        // The save_layer bounds constrains the output, no crop_rect needed.
+                        if let Some(filter) = backdrop_filter(true) {
                             profiling::scope!("apply backdrop descendants");
                             let mut backdrop_paint = skia_safe::Paint::default();
                             backdrop_paint.set_alpha_f(opacity);
                             let mut save_layer_rec = skia_safe::canvas::SaveLayerRec::default();
                             save_layer_rec =
                                 save_layer_rec.bounds(&path_bounds).paint(&backdrop_paint);
-                            save_layer_rec = save_layer_rec.backdrop(&backdrop_filter);
+                            save_layer_rec = save_layer_rec.backdrop(&filter);
                             render_canvas.save_layer(&save_layer_rec);
                         }
 
@@ -655,35 +675,20 @@ pub(crate) fn paint_node(
         profiling::scope!("background_blur");
         render_layer.clip_to_shape(canvas, skia_safe::ClipOp::Intersect, true);
 
-        let crop_rect = Some(skia_safe::image_filters::CropRect::from(
-            bounds_to_origin.with_outset((BACKGROUND_BLUR_SIGMA, BACKGROUND_BLUR_SIGMA)),
-        ));
-
-        let blur = skia_safe::image_filters::blur(
-            (BACKGROUND_BLUR_SIGMA, BACKGROUND_BLUR_SIGMA),
-            skia_safe::TileMode::Mirror,
-            None,
-            crop_rect,
-        );
-
-        // blur can fail
-        if let Some(blur) = blur.as_ref() {
+        if let Some(blur) = backdrop_filter(true) {
             profiling::scope!("apply backdrop");
             let mut save_layer_rec = skia_safe::canvas::SaveLayerRec::default();
             save_layer_rec = save_layer_rec.bounds(&bounds_to_origin).paint(&paint);
-            save_layer_rec = save_layer_rec.backdrop(blur);
+            save_layer_rec = save_layer_rec.backdrop(&blur);
             canvas.save_layer(&save_layer_rec);
             canvas.restore_to_count(before_backdrop);
         }
     }
     if node.is_picture_cached() && draw_cache.is_some() {
         let draw_cache = draw_cache.unwrap();
-        let mut p = None;
-        if opacity != 1.0
-            || (blend_mode == crate::prelude::BlendMode::BackgroundBlur && opacity > 0.0)
-        {
-            p = Some(&paint);
-        }
+        // Only pass paint when opacity is not 1.0: passing Some(paint) forces Skia
+        // to create an intermediate offscreen layer even when alpha is a no-op.
+        let p = (opacity != 1.0).then_some(&paint);
         // passing a None for paint is important to optimise
         // skia creates a new layer when painting a picture with a paint
         draw_cache.draw(canvas, p);
