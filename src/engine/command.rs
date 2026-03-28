@@ -158,10 +158,9 @@ macro_rules! change_model {
 
                 let value_id = self.model.$variable_name.id;
                 let change = Arc::new(ModelChange {
-                    value_change: self.model.$variable_name.to(value.clone(), transition),
+                    value_change: self.model.$variable_name.to(value.clone(), transition.clone()),
                     flag: flags,
                 });
-                // }
 
                 let animation = transition.map(|t| {
                     // if there is a transition

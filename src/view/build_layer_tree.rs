@@ -72,47 +72,47 @@ impl BuildLayerTree for Layer {
             scene_layer.set_key(viewlayer_tree.key.clone());
         }
 
-        if let Some((position, transition)) = viewlayer_tree.position {
-            scene_layer.set_position(position, transition);
+        if let Some((position, ref transition)) = viewlayer_tree.position {
+            scene_layer.set_position(position, transition.clone());
         }
-        if let Some((anchor_point, transition)) = viewlayer_tree.anchor_point {
-            scene_layer.set_anchor_point(anchor_point, transition);
+        if let Some((anchor_point, ref transition)) = viewlayer_tree.anchor_point {
+            scene_layer.set_anchor_point(anchor_point, transition.clone());
         }
-        if let Some((scale, transition)) = viewlayer_tree.scale {
-            scene_layer.set_scale(scale, transition);
+        if let Some((scale, ref transition)) = viewlayer_tree.scale {
+            scene_layer.set_scale(scale, transition.clone());
         }
-        if let Some((background_color, transition)) = viewlayer_tree.background_color.clone() {
-            scene_layer.set_background_color(background_color, transition);
+        if let Some((ref background_color, ref transition)) = viewlayer_tree.background_color {
+            scene_layer.set_background_color(background_color.clone(), transition.clone());
         }
-        if let Some((border_color, transition)) = viewlayer_tree.border_color {
-            scene_layer.set_border_color(border_color, transition);
+        if let Some((border_color, ref transition)) = viewlayer_tree.border_color {
+            scene_layer.set_border_color(border_color, transition.clone());
         }
-        if let Some((border_width, transition)) = viewlayer_tree.border_width {
-            scene_layer.set_border_width(border_width, transition);
+        if let Some((border_width, ref transition)) = viewlayer_tree.border_width {
+            scene_layer.set_border_width(border_width, transition.clone());
         }
-        if let Some((border_corner_radius, transition)) = viewlayer_tree.border_corner_radius {
-            scene_layer.set_border_corner_radius(border_corner_radius, transition);
+        if let Some((border_corner_radius, ref transition)) = viewlayer_tree.border_corner_radius {
+            scene_layer.set_border_corner_radius(border_corner_radius, transition.clone());
         }
-        if let Some((size, transition)) = viewlayer_tree.size {
-            scene_layer.set_size(size, transition);
+        if let Some((size, ref transition)) = viewlayer_tree.size {
+            scene_layer.set_size(size, transition.clone());
         }
-        if let Some((shadow_offset, transition)) = viewlayer_tree.shadow_offset {
-            scene_layer.set_shadow_offset(shadow_offset, transition);
+        if let Some((shadow_offset, ref transition)) = viewlayer_tree.shadow_offset {
+            scene_layer.set_shadow_offset(shadow_offset, transition.clone());
         }
-        if let Some((shadow_radius, transition)) = viewlayer_tree.shadow_radius {
-            scene_layer.set_shadow_radius(shadow_radius, transition);
+        if let Some((shadow_radius, ref transition)) = viewlayer_tree.shadow_radius {
+            scene_layer.set_shadow_radius(shadow_radius, transition.clone());
         }
-        if let Some((shadow_color, transition)) = viewlayer_tree.shadow_color {
-            scene_layer.set_shadow_color(shadow_color, transition);
+        if let Some((shadow_color, ref transition)) = viewlayer_tree.shadow_color {
+            scene_layer.set_shadow_color(shadow_color, transition.clone());
         }
-        if let Some((shadow_spread, transition)) = viewlayer_tree.shadow_spread {
-            scene_layer.set_shadow_spread(shadow_spread, transition);
+        if let Some((shadow_spread, ref transition)) = viewlayer_tree.shadow_spread {
+            scene_layer.set_shadow_spread(shadow_spread, transition.clone());
         }
-        if let Some(layout_style) = viewlayer_tree.layout_style.clone() {
-            scene_layer.set_layout_style(layout_style);
+        if let Some(ref layout_style) = viewlayer_tree.layout_style {
+            scene_layer.set_layout_style(layout_style.clone());
         }
-        if let Some((opacity, transition)) = viewlayer_tree.opacity {
-            scene_layer.set_opacity(opacity, transition);
+        if let Some((opacity, ref transition)) = viewlayer_tree.opacity {
+            scene_layer.set_opacity(opacity, transition.clone());
         }
         if let Some(blend_mode) = viewlayer_tree.blend_mode {
             scene_layer.set_blend_mode(blend_mode);

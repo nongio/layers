@@ -639,6 +639,10 @@ pub fn send_debugger(engine: &super::Engine) {
                             format!("easing ({:.2}s)", duration)
                         }
                         crate::engine::animation::TimingFunction::Spring(_) => "spring".to_string(),
+                        crate::engine::animation::TimingFunction::Keyframes(segments) => {
+                            let total: f32 = segments.iter().map(|s| s.duration).sum();
+                            format!("keyframes ({}seg, {:.2}s)", segments.len(), total)
+                        }
                     };
                     let node_id: usize = change.node_id.0.into();
                     Some(DebugAnimationInfo {

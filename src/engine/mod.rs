@@ -1051,7 +1051,7 @@ impl Engine {
             Animation {
                 start,
                 // duration: transition.duration,
-                timing: transition.timing,
+                timing: transition.timing.clone(),
             },
             autostart,
         )
