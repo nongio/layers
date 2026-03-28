@@ -592,11 +592,16 @@ pub(crate) fn cleanup_nodes(engine: &Engine) -> skia_safe::Rect {
 }
 
 #[cfg(feature = "debugger")]
-pub fn send_debugger(scene: Arc<crate::engine::scene::Scene>, scene_root: NodeRef) {
+pub fn send_debugger(engine: &super::Engine) {
     use indextree::NodeId;
     use serde::Serialize;
 
     use crate::layers::layer::render_layer::RenderLayer;
+
+    let scene_root = match *engine.scene_root.read().unwrap() {
+        Some(r) => r,
+        None => return,
+    };
 
     #[derive(Clone, Serialize)]
     struct DebugRenderLayer {
@@ -607,8 +612,53 @@ pub fn send_debugger(scene: Arc<crate::engine::scene::Scene>, scene_root: NodeRe
         picture_cached: bool,
         image_cached: bool,
     }
-    let s = scene.clone();
-    s.with_arena(|arena| {
+
+    #[derive(Clone, Serialize)]
+    struct DebugAnimationInfo {
+        node_id: usize,
+        progress: f32,
+        time: f32,
+        timing_type: String,
+        is_started: bool,
+        is_running: bool,
+    }
+
+    // Collect animation info by joining transactions with their animations
+    let animations_info: Vec<DebugAnimationInfo> =
+        engine.transactions.with_data(|transactions| {
+            engine.animations.with_data(|animations| {
+                transactions
+                    .iter()
+                    .filter_map(|(_tid, change)| {
+                        let anim_ref = change.animation_id.as_ref()?;
+                        let state = animations.get(&anim_ref.id)?;
+                        if !state.is_running {
+                            return None;
+                        }
+                        let timing_type = match &state.animation.timing {
+                            crate::engine::animation::TimingFunction::Easing(_, duration) => {
+                                format!("easing ({:.2}s)", duration)
+                            }
+                            crate::engine::animation::TimingFunction::Spring(_) => {
+                                "spring".to_string()
+                            }
+                        };
+                        let node_id: usize = change.node_id.0.into();
+                        Some(DebugAnimationInfo {
+                            node_id,
+                            progress: state.progress,
+                            time: state.time,
+                            timing_type,
+                            is_started: state.is_started,
+                            is_running: state.is_running,
+                        })
+                    })
+                    .collect()
+            })
+        });
+
+    let scene = engine.scene.clone();
+    scene.with_arena(|arena| {
         let render_layers: std::collections::HashMap<
             usize,
             (usize, DebugRenderLayer, Vec<usize>, NodeId),
@@ -637,7 +687,7 @@ pub fn send_debugger(scene: Arc<crate::engine::scene::Scene>, scene_root: NodeRe
             .collect();
         let root: usize = scene_root.0.into();
 
-        let data = (root, render_layers);
+        let data = (root, render_layers, animations_info);
         send_debugger_message(serde_json::to_string(&data).unwrap());
     });
 }

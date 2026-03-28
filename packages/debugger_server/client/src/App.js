@@ -138,10 +138,12 @@ function App() {
   let layers = null;
   let root = null;
   let root_id = null;
+  let animations = [];
   if (message !== '') {
-    layers = JSON.parse(message);
-    root_id = layers[0];
-    layers = layers[1];
+    const parsed = JSON.parse(message);
+    root_id = parsed[0];
+    layers = parsed[1];
+    animations = parsed[2] || [];
     root = layers[root_id];
   }
   const selectedLayer = selectedLayerId !== null ? layers?.[selectedLayerId] : null;
@@ -456,14 +458,14 @@ function App() {
           }}
         />
 
-        <section className="panel details-panel">
+        <section className="panel details-panel" style={{ display: 'flex', flexDirection: 'column' }}>
           <div className="panel-header">
             <div>
               <div className="panel-title">Details</div>
             </div>
             {selectedLayer && <div className="pill muted">#{selectedLayer[0]}</div>}
           </div>
-          <div className="panel-body scroll-body">
+          <div className="panel-body scroll-body" style={{ flex: 1, minHeight: 0 }}>
             {selectedLayer ? (
               <LayerDetails
                 layer={selectedLayer}
@@ -475,6 +477,44 @@ function App() {
             ) : (
               <div className="empty-state">Select a layer from the tree.</div>
             )}
+          </div>
+          <div className="animations-panel">
+            <div className="panel-header">
+              <div>
+                <div className="panel-title">Animations</div>
+              </div>
+              {animations.length > 0 && (
+                <div className="pill">{animations.length} running</div>
+              )}
+            </div>
+            <div className="animations-list">
+              {animations.length === 0 ? (
+                <div className="empty-state" style={{ padding: '12px 16px', fontSize: '12px' }}>No running animations.</div>
+              ) : (
+                animations.map((anim, i) => {
+                  const layerEntry = layers?.[anim.node_id];
+                  const layerName = layerEntry?.[1]?.key || `#${anim.node_id}`;
+                  return (
+                    <div
+                      key={i}
+                      className={`animation-row${selectedLayerId === anim.node_id ? ' active' : ''}`}
+                      onClick={() => setSelectedLayerId(anim.node_id)}
+                    >
+                      <div className="animation-info">
+                        <span className="animation-target">{layerName}</span>
+                        <span className="animation-timing">{anim.timing_type}</span>
+                      </div>
+                      <div className="animation-progress-track">
+                        <div
+                          className="animation-progress-fill"
+                          style={{ width: `${(anim.progress * 100).toFixed(1)}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
           </div>
         </section>
 

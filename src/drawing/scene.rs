@@ -645,7 +645,6 @@ pub(crate) fn paint_node(
     offscreen: bool,
 ) -> usize {
     let node_id: TreeStorageId = node_ref.into();
-    profiling::scope!("paint_node", format!("{}", node_id));
     let node = scene_arena.get(node_id).unwrap().get();
     let node_u: usize = node_id.into();
     let node_renderable = renderables_arena.get(&node_u).unwrap();

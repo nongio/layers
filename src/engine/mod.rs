@@ -1212,8 +1212,7 @@ impl Engine {
 
         #[cfg(feature = "debugger")]
         {
-            let scene_root = self.scene_root.read().unwrap().unwrap();
-            send_debugger(self.scene.clone(), scene_root);
+            send_debugger(self);
         }
 
         needs_draw || !damage.is_empty()

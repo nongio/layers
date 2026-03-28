@@ -686,6 +686,92 @@ body[data-theme='light'] .search-input {
   background: rgba(255, 255, 255, 0.02);
 }
 
+/* Animations panel */
+.animations-panel {
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+  max-height: 240px;
+  display: flex;
+  flex-direction: column;
+}
+
+.animations-panel .panel-header {
+  padding: 8px 16px;
+  min-height: 36px;
+}
+
+.animations-list {
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.animation-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 16px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.1s;
+}
+
+.animation-row:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.animation-row.active {
+  background: rgba(79, 196, 255, 0.08);
+}
+
+body[data-theme='light'] .animation-row:hover {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+body[data-theme='light'] .animation-row.active {
+  background: rgba(10, 132, 255, 0.08);
+}
+
+.animation-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.animation-target {
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.animation-timing {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.animation-progress-track {
+  height: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+body[data-theme='light'] .animation-progress-track {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.animation-progress-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width 0.05s linear;
+}
+
 @media (max-width: 1100px) {
   .pane-layout {
     grid-template-columns: 1fr;
