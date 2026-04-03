@@ -574,10 +574,11 @@ pub fn render_node_tree(
                         let before_backdrop = render_canvas.save();
 
                         // Build a path from all the rounded rects
-                        let mut backdrop_path = skia_safe::Path::new();
+                        let mut backdrop_builder = skia_safe::PathBuilder::new();
                         for rrect in backdrop_rrects {
-                            backdrop_path.add_rrect(*rrect, None);
+                            backdrop_builder.add_rrect(*rrect, None, 0);
                         }
+                        let backdrop_path = backdrop_builder.snapshot();
 
                         // Clip to the backdrop path (supports rounded rects)
                         render_canvas.clip_path(&backdrop_path, skia_safe::ClipOp::Intersect, true);
