@@ -278,7 +278,7 @@ fn keyframe_transition_constructor() {
     }]);
     assert_eq!(t.delay, 0.0);
     match t.timing {
-        TimingFunction::Keyframes(ref segments) => {
+        TimingFunction::Keyframes(ref segments, _) => {
             assert_eq!(segments.len(), 1);
             assert_eq!(segments[0].duration, 0.5);
         }

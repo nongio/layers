@@ -24,7 +24,8 @@ pub enum TimingFunction {
     Spring(Spring),
     /// Piecewise timing: a sequence of segments, each with its own
     /// duration, easing, and progress range.
-    Keyframes(Vec<KeyframeSegment>),
+    /// The second field caches the total duration to avoid recomputing per frame.
+    Keyframes(Vec<KeyframeSegment>, f32),
 }
 
 impl TimingFunction {
@@ -81,7 +82,8 @@ impl TimingFunction {
 
     /// Build a keyframes timing function from a list of segments.
     pub fn keyframes(segments: Vec<KeyframeSegment>) -> Self {
-        TimingFunction::Keyframes(segments)
+        let total_duration: f32 = segments.iter().map(|s| s.duration).sum();
+        TimingFunction::Keyframes(segments, total_duration)
     }
 
     pub fn update_at(&mut self, elapsed: f32) -> (f32, f32) {
@@ -93,8 +95,8 @@ impl TimingFunction {
                 (ease(t), t)
             }
             TimingFunction::Spring(solver) => (solver.update_at(elapsed), elapsed),
-            TimingFunction::Keyframes(segments) => {
-                let total_duration: f32 = segments.iter().map(|s| s.duration).sum();
+            TimingFunction::Keyframes(segments, total_duration) => {
+                let total_duration = *total_duration;
                 if total_duration <= 0.0 || segments.is_empty() {
                     return (1.0, 1.0);
                 }
@@ -138,10 +140,7 @@ impl TimingFunction {
         match self {
             TimingFunction::Easing(_, duration) => current - start >= *duration,
             TimingFunction::Spring(solver) => solver.done(current - start),
-            TimingFunction::Keyframes(segments) => {
-                let total_duration: f32 = segments.iter().map(|s| s.duration).sum();
-                current - start >= total_duration
-            }
+            TimingFunction::Keyframes(_, total_duration) => current - start >= *total_duration,
         }
     }
 }
