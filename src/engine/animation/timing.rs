@@ -122,8 +122,8 @@ impl TimingFunction {
                         )
                         .unwrap()(seg_t);
                         // Map eased value to the segment's progress range
-                        let progress = seg.start_progress
-                            + (seg.end_progress - seg.start_progress) * eased;
+                        let progress =
+                            seg.start_progress + (seg.end_progress - seg.start_progress) * eased;
                         return (progress, t_clamped);
                     }
                     accumulated = seg_end;

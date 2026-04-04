@@ -25,13 +25,22 @@ fn keyframe_timing_update_at_hold_segment() {
 
     // During the hold segment (0–0.5s), progress should stay at 0.0
     let (progress, _) = tf.update_at(0.0);
-    assert!((progress - 0.0).abs() < 0.001, "progress at t=0 should be 0.0, got {progress}");
+    assert!(
+        (progress - 0.0).abs() < 0.001,
+        "progress at t=0 should be 0.0, got {progress}"
+    );
 
     let (progress, _) = tf.update_at(0.25);
-    assert!((progress - 0.0).abs() < 0.001, "progress at t=0.25 should be 0.0 (hold), got {progress}");
+    assert!(
+        (progress - 0.0).abs() < 0.001,
+        "progress at t=0.25 should be 0.0 (hold), got {progress}"
+    );
 
     let (progress, _) = tf.update_at(0.49);
-    assert!((progress - 0.0).abs() < 0.001, "progress at t=0.49 should be ~0.0 (hold), got {progress}");
+    assert!(
+        (progress - 0.0).abs() < 0.001,
+        "progress at t=0.49 should be ~0.0 (hold), got {progress}"
+    );
 }
 
 #[test]
@@ -40,13 +49,22 @@ fn keyframe_timing_update_at_animate_segment() {
 
     // During the animate segment (0.5–1.0s), progress should go 0.0→1.0
     let (progress, _) = tf.update_at(0.5);
-    assert!((progress - 0.0).abs() < 0.01, "progress at t=0.5 should be ~0.0, got {progress}");
+    assert!(
+        (progress - 0.0).abs() < 0.01,
+        "progress at t=0.5 should be ~0.0, got {progress}"
+    );
 
     let (progress, _) = tf.update_at(0.75);
-    assert!((progress - 0.5).abs() < 0.01, "progress at t=0.75 should be ~0.5, got {progress}");
+    assert!(
+        (progress - 0.5).abs() < 0.01,
+        "progress at t=0.75 should be ~0.5, got {progress}"
+    );
 
     let (progress, _) = tf.update_at(1.0);
-    assert!((progress - 1.0).abs() < 0.01, "progress at t=1.0 should be ~1.0, got {progress}");
+    assert!(
+        (progress - 1.0).abs() < 0.01,
+        "progress at t=1.0 should be ~1.0, got {progress}"
+    );
 }
 
 #[test]
@@ -66,7 +84,10 @@ fn keyframe_timing_done_with_start_offset() {
 
     // Animation starts at t=2.0, total duration is 1.0s
     assert!(!tf.done(2.0, 2.5), "should not be done 0.5s in");
-    assert!(tf.done(2.0, 3.0), "should be done at start + total_duration");
+    assert!(
+        tf.done(2.0, 3.0),
+        "should be done at start + total_duration"
+    );
 }
 
 #[test]
@@ -95,24 +116,39 @@ fn keyframe_three_segments() {
 
     // End of first segment
     let (progress, _) = tf.update_at(0.3);
-    assert!((progress - 0.3).abs() < 0.01, "end of seg 0: expected ~0.3, got {progress}");
+    assert!(
+        (progress - 0.3).abs() < 0.01,
+        "end of seg 0: expected ~0.3, got {progress}"
+    );
 
     // Middle of hold segment
     let (progress, _) = tf.update_at(0.4);
-    assert!((progress - 0.3).abs() < 0.01, "mid hold: expected ~0.3, got {progress}");
+    assert!(
+        (progress - 0.3).abs() < 0.01,
+        "mid hold: expected ~0.3, got {progress}"
+    );
 
     // End of hold segment
     let (progress, _) = tf.update_at(0.5);
-    assert!((progress - 0.3).abs() < 0.01, "end of hold: expected ~0.3, got {progress}");
+    assert!(
+        (progress - 0.3).abs() < 0.01,
+        "end of hold: expected ~0.3, got {progress}"
+    );
 
     // Middle of final segment (0.75s = 0.5 into a 0.5s segment = 50%)
     let (progress, _) = tf.update_at(0.75);
     let expected = 0.3 + (1.0 - 0.3) * 0.5; // 0.65
-    assert!((progress - expected).abs() < 0.01, "mid final: expected ~{expected}, got {progress}");
+    assert!(
+        (progress - expected).abs() < 0.01,
+        "mid final: expected ~{expected}, got {progress}"
+    );
 
     // End
     let (progress, _) = tf.update_at(1.0);
-    assert!((progress - 1.0).abs() < 0.01, "end: expected ~1.0, got {progress}");
+    assert!(
+        (progress - 1.0).abs() < 0.01,
+        "end: expected ~1.0, got {progress}"
+    );
 }
 
 #[test]
@@ -136,10 +172,16 @@ fn keyframe_empty_segments() {
 
     // Empty keyframes should immediately resolve
     let (progress, _) = tf.update_at(0.0);
-    assert!((progress - 1.0).abs() < 0.001, "empty keyframes should return 1.0");
+    assert!(
+        (progress - 1.0).abs() < 0.001,
+        "empty keyframes should return 1.0"
+    );
 
     let tf = TimingFunction::keyframes(vec![]);
-    assert!(tf.done(0.0, 0.0), "empty keyframes should be immediately done");
+    assert!(
+        tf.done(0.0, 0.0),
+        "empty keyframes should be immediately done"
+    );
 }
 
 #[test]
@@ -165,19 +207,23 @@ fn keyframe_single_segment() {
 #[test]
 fn keyframe_with_easing_curves() {
     // Use ease_in for first segment — progress should lag behind linear
-    let mut tf = TimingFunction::keyframes(vec![
-        KeyframeSegment {
-            duration: 1.0,
-            easing: Easing::ease_in(),
-            start_progress: 0.0,
-            end_progress: 1.0,
-        },
-    ]);
+    let mut tf = TimingFunction::keyframes(vec![KeyframeSegment {
+        duration: 1.0,
+        easing: Easing::ease_in(),
+        start_progress: 0.0,
+        end_progress: 1.0,
+    }]);
 
     let (progress, _) = tf.update_at(0.5);
     // ease_in at t=0.5 should be less than 0.5 (starts slow)
-    assert!(progress < 0.5, "ease_in at t=0.5 should be < 0.5, got {progress}");
-    assert!(progress > 0.0, "ease_in at t=0.5 should be > 0.0, got {progress}");
+    assert!(
+        progress < 0.5,
+        "ease_in at t=0.5 should be < 0.5, got {progress}"
+    );
+    assert!(
+        progress > 0.0,
+        "ease_in at t=0.5 should be > 0.0, got {progress}"
+    );
 }
 
 #[test]
@@ -190,10 +236,7 @@ fn keyframe_layer_integration() {
     let initial_pos = layer.position();
 
     // Hold for 0.5s, then animate to (100, 100) over 0.5s
-    layer.set_position(
-        (100.0, 100.0),
-        Transition::keyframes(hold_then_linear()),
-    );
+    layer.set_position((100.0, 100.0), Transition::keyframes(hold_then_linear()));
 
     // Advance 0.4s — still in hold segment, position should not change
     engine.update(0.2);
