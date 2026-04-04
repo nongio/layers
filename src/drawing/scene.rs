@@ -344,6 +344,7 @@ pub fn paint_node_tree(
             render_canvas,
             context_opacity,
             offscreen,
+            damage_region,
         );
         if let Some(dbg_info) = dbg_info {
             draw_debug(render_canvas, dbg_info, render_layer);
@@ -644,6 +645,7 @@ pub(crate) fn paint_node(
     canvas: &skia_safe::Canvas,
     context_opacity: f32,
     offscreen: bool,
+    damage_region: Option<&skia_safe::Region>,
 ) -> usize {
     let node_id: TreeStorageId = node_ref.into();
     let node = scene_arena.get(node_id).unwrap().get();
@@ -660,6 +662,15 @@ pub(crate) fn paint_node(
     let restore_transform = canvas.save();
     if render_layer.size.width <= 0.0 || render_layer.size.height <= 0.0 {
         return restore_transform;
+    }
+
+    // Skip painting if the node's global bounds don't intersect the damage region
+    if let Some(region) = damage_region {
+        let global_bounds = render_layer.global_transformed_bounds;
+        let irect: skia_safe::IRect = global_bounds.round_out();
+        if !region.intersects_rect(irect) {
+            return restore_transform;
+        }
     }
 
     let draw_cache = node_renderable.draw_cache.as_ref();
