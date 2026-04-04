@@ -32,7 +32,7 @@ mod stages;
 
 pub(crate) mod command;
 pub(crate) mod draw_to_picture;
-pub(crate) mod scene;
+pub mod scene;
 
 pub mod animation;
 pub(crate) mod node;
@@ -660,6 +660,13 @@ impl Engine {
 
     pub fn with_layers(&self, f: impl Fn(&HashMap<NodeRef, Layer>)) {
         f(&self.layers.read().unwrap());
+    }
+
+    /// Find a layer by its key string. Returns the first matching layer,
+    /// or `None` if no layer with that key exists.
+    pub fn find_layer_by_key(&self, key: &str) -> Option<Layer> {
+        let layers = self.layers.read().unwrap();
+        layers.values().find(|l| l.key() == key).cloned()
     }
     /// Detach the layer's layout node from the layout tree
     fn layout_detach_layer(&self, layer: &Layer) {
