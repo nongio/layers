@@ -289,7 +289,7 @@ impl Layer {
         let value_id = self.model.size.id;
 
         let change: Arc<ModelChange<Size>> = Arc::new(ModelChange {
-            value_change: self.model.size.to(value, transition),
+            value_change: self.model.size.to(value, transition.clone()),
             flag: flags,
         });
 

@@ -62,19 +62,16 @@ mod easing;
 mod spring;
 mod timing;
 
-pub use self::timing::TimingFunction;
+pub use self::timing::{KeyframeSegment, TimingFunction};
 
 pub use easing::Easing;
 pub use spring::Spring;
 
 /// Transition is a data structure that contains the information needed to
 /// create an animation that can start at a later time.
-#[repr(C)]
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct Transition {
-    // pub duration: f32,
     pub delay: f32,
-    // easing
     pub timing: TimingFunction,
 }
 /// Default Transition, 0.3 seconds, no delay, ease out
@@ -140,6 +137,12 @@ impl Transition {
         Transition {
             delay: 0.0,
             timing: TimingFunction::spring_with_initial_velocity(duration, bounce, velocity),
+        }
+    }
+    pub fn keyframes(segments: Vec<KeyframeSegment>) -> Self {
+        Transition {
+            delay: 0.0,
+            timing: TimingFunction::keyframes(segments),
         }
     }
 }
