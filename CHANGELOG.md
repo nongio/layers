@@ -2,11 +2,41 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.8.0] - 2026-04-04
+
+### 🚀 Features
+
+- Add live animation inspector to debugger
+- Skip painting nodes outside the damage region
+- Expose scene module and add find_layer_by_key API
+- Keyframe animation timing (#16)
+
+### ⚙️ Miscellaneous Tasks
+
+- Upgrade skia-safe from 0.88 to 0.93
+- Cargo fmt
+- Bump version to 1.8.0
+- Update changelog for 1.8.0
+
+## [1.7.0] - 2026-03-19
+
+### 🚀 Features
+
+- Blur pipeline to work on scaled backdrop (#15)
+
+### ⚙️ Miscellaneous Tasks
+
+- Version bump
+
 ## [1.5.0] - 2026-03-09
 
 ### 🚀 Features
 
 - Add IntoFuture for AnimationRef (#13)
+
+### ⚙️ Miscellaneous Tasks
+
+- *(version)* 1.5.0
 
 ## [1.4.3] - 2026-03-06
 
