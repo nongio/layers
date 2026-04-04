@@ -624,38 +624,35 @@ pub fn send_debugger(engine: &super::Engine) {
     }
 
     // Collect animation info by joining transactions with their animations
-    let animations_info: Vec<DebugAnimationInfo> =
-        engine.transactions.with_data(|transactions| {
-            engine.animations.with_data(|animations| {
-                transactions
-                    .iter()
-                    .filter_map(|(_tid, change)| {
-                        let anim_ref = change.animation_id.as_ref()?;
-                        let state = animations.get(&anim_ref.id)?;
-                        if !state.is_running {
-                            return None;
+    let animations_info: Vec<DebugAnimationInfo> = engine.transactions.with_data(|transactions| {
+        engine.animations.with_data(|animations| {
+            transactions
+                .iter()
+                .filter_map(|(_tid, change)| {
+                    let anim_ref = change.animation_id.as_ref()?;
+                    let state = animations.get(&anim_ref.id)?;
+                    if !state.is_running {
+                        return None;
+                    }
+                    let timing_type = match &state.animation.timing {
+                        crate::engine::animation::TimingFunction::Easing(_, duration) => {
+                            format!("easing ({:.2}s)", duration)
                         }
-                        let timing_type = match &state.animation.timing {
-                            crate::engine::animation::TimingFunction::Easing(_, duration) => {
-                                format!("easing ({:.2}s)", duration)
-                            }
-                            crate::engine::animation::TimingFunction::Spring(_) => {
-                                "spring".to_string()
-                            }
-                        };
-                        let node_id: usize = change.node_id.0.into();
-                        Some(DebugAnimationInfo {
-                            node_id,
-                            progress: state.progress,
-                            time: state.time,
-                            timing_type,
-                            is_started: state.is_started,
-                            is_running: state.is_running,
-                        })
+                        crate::engine::animation::TimingFunction::Spring(_) => "spring".to_string(),
+                    };
+                    let node_id: usize = change.node_id.0.into();
+                    Some(DebugAnimationInfo {
+                        node_id,
+                        progress: state.progress,
+                        time: state.time,
+                        timing_type,
+                        is_started: state.is_started,
+                        is_running: state.is_running,
                     })
-                    .collect()
-            })
-        });
+                })
+                .collect()
+        })
+    });
 
     let scene = engine.scene.clone();
     scene.with_arena(|arena| {
