@@ -13,7 +13,7 @@ use super::{
 use crate::easing::Interpolate;
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
-    Arc, RwLock,
+    Arc,
 };
 
 static ATTRIBUTE_COUNTER: AtomicUsize = AtomicUsize::new(0);
@@ -21,12 +21,12 @@ static ATTRIBUTE_COUNTER: AtomicUsize = AtomicUsize::new(0);
 #[derive(Debug, Clone)]
 pub struct Attribute<V: Sync + std::fmt::Debug> {
     pub id: usize,
-    value: Arc<RwLock<V>>,
+    value: Arc<parking_lot::RwLock<V>>,
 }
 
 impl<V: Sync + Clone + std::fmt::Debug> Attribute<V> {
     pub fn new(value: V) -> Attribute<V> {
-        let value = Arc::new(RwLock::new(value));
+        let value = Arc::new(parking_lot::RwLock::new(value));
         Self {
             id: ATTRIBUTE_COUNTER.fetch_add(1, Ordering::SeqCst),
             value,
@@ -34,11 +34,11 @@ impl<V: Sync + Clone + std::fmt::Debug> Attribute<V> {
     }
 
     pub fn value(&self) -> V {
-        self.value.read().unwrap().clone()
+        self.value.read().clone()
     }
 
     pub fn set(&self, value: V) {
-        *self.value.write().unwrap() = value;
+        *self.value.write() = value;
     }
 
     pub fn to(&self, to: V, transition: Option<Transition>) -> AttributeChange<V> {
@@ -105,7 +105,7 @@ impl NoopChange {
 }
 impl Command for NoopChange {
     fn execute(&self, _progress: f32) -> RenderableFlags {
-        RenderableFlags::NEEDS_PAINT | RenderableFlags::NEEDS_LAYOUT
+        RenderableFlags::NEEDS_PAINT
     }
     fn value_id(&self) -> usize {
         self.0

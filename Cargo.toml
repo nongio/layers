@@ -14,6 +14,7 @@ features = ["default"]
 rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
+parking_lot = "0.12"
 taffy = { version = "0.5", features = ["serde"] }
 gl-rs = { package = "gl", version = "0.14.0" }
 indexmap = { version = "1.9.1", features = ["rayon"] }

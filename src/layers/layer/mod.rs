@@ -285,6 +285,7 @@ impl Layer {
     ) -> TransactionRef {
         let transition = transition.into();
         let value: Size = value.into();
+
         let flags = RenderableFlags::NEEDS_LAYOUT;
         let value_id = self.model.size.id;
 
