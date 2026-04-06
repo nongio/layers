@@ -97,15 +97,21 @@ impl Transaction {
 }
 
 #[derive(Debug)]
-pub struct NoopChange(usize);
+pub struct NoopChange(usize, RenderableFlags);
 impl NoopChange {
-    pub fn new(value_id: usize) -> Self {
-        Self(value_id)
+    pub fn paint(value_id: usize) -> Self {
+        Self(value_id, RenderableFlags::NEEDS_PAINT)
+    }
+    pub fn layout(value_id: usize) -> Self {
+        Self(
+            value_id,
+            RenderableFlags::NEEDS_LAYOUT | RenderableFlags::NEEDS_PAINT,
+        )
     }
 }
 impl Command for NoopChange {
     fn execute(&self, _progress: f32) -> RenderableFlags {
-        RenderableFlags::NEEDS_PAINT
+        self.1
     }
     fn value_id(&self) -> usize {
         self.0

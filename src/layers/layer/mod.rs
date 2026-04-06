@@ -361,7 +361,7 @@ impl Layer {
 
         let attribute_id = self.model.blend_mode.id;
         self.engine
-            .schedule_change(self.id, Arc::new(NoopChange::new(attribute_id)), None);
+            .schedule_change(self.id, Arc::new(NoopChange::paint(attribute_id)), None);
     }
     #[allow(unused)]
     pub(crate) fn set_draw_content_internal<F: Into<ContentDrawFunctionInternal>>(
@@ -395,7 +395,7 @@ impl Layer {
         self.model.blend_mode.set(blend_mode);
         let attribute_id = self.model.blend_mode.id;
         self.engine
-            .schedule_change(self.id, Arc::new(NoopChange::new(attribute_id)), None);
+            .schedule_change(self.id, Arc::new(NoopChange::paint(attribute_id)), None);
     }
     pub fn set_display(&self, display: Display) {
         self.model.display.set(display);
@@ -583,7 +583,7 @@ impl Layer {
         self.model.image_filter.set(filter.into());
         let attribute_id = self.model.image_filter.id;
         self.engine
-            .schedule_change(self.id, Arc::new(NoopChange::new(attribute_id)), None);
+            .schedule_change(self.id, Arc::new(NoopChange::paint(attribute_id)), None);
     }
 
     /// Returns the current image filter.
@@ -601,7 +601,7 @@ impl Layer {
         self.model.color_filter.set(filter.into());
         let attribute_id = self.model.color_filter.id;
         self.engine
-            .schedule_change(self.id, Arc::new(NoopChange::new(attribute_id)), None);
+            .schedule_change(self.id, Arc::new(NoopChange::paint(attribute_id)), None);
     }
 
     /// Returns the current color filter.
@@ -712,7 +712,7 @@ impl Layer {
         });
         let attribute_id = self.model.blend_mode.id;
         self.engine
-            .schedule_change(self.id, Arc::new(NoopChange::new(attribute_id)), None);
+            .schedule_change(self.id, Arc::new(NoopChange::layout(attribute_id)), None);
     }
     pub fn remove_follower_node(&self, follower: impl Into<NodeRef>) {
         let follower = follower.into();
@@ -772,7 +772,7 @@ impl Layer {
             .set_node_flags(self.id, RenderableFlags::NEEDS_PAINT);
         let attribute_id = self.model.blend_mode.id;
         self.engine
-            .schedule_change(self.id, Arc::new(NoopChange::new(attribute_id)), None);
+            .schedule_change(self.id, Arc::new(NoopChange::paint(attribute_id)), None);
     }
 }
 
