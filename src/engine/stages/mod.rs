@@ -201,39 +201,49 @@ pub(crate) fn update_layout_tree(engine: &Engine) {
     let scene_size = engine.scene.size.read().unwrap();
     let mut has_changed_nodes = false;
 
-    // Collect layout-dirty nodes and sync sizes in a single pass.
-    // Take the layers map lock once for the entire loop instead of
-    // calling get_layer() (HashMap lookup + RwLock) per node.
-    let size_updates: Vec<(taffy::NodeId, crate::types::Size)> = {
-        profiling::scope!("collect_nodes_needing_update");
-        let layers = engine.layers.read().unwrap();
+    // Collect node refs under the scene arena lock, then drop it before
+    // taking the layers lock. This avoids holding both locks simultaneously
+    // which could deadlock with code paths that acquire them in reverse order.
+    let node_refs: Vec<NodeRef> = {
+        profiling::scope!("collect_node_refs");
         let root = engine.scene_root();
         if let Some(root) = root {
             engine.scene.with_arena(|arena| {
-                let mut updates = Vec::new();
+                let mut refs = Vec::new();
                 for node_id in root.0.descendants(arena) {
                     let node = arena.get(node_id).unwrap();
                     if node.is_removed() {
-                        return updates;
+                        return refs;
                     }
                     let scene_node = node.get();
                     if scene_node.needs_layout() {
                         has_changed_nodes = true;
                     }
-
-                    let node_ref = NodeRef(node_id);
-                    if let Some(layer) = layers.get(&node_ref) {
-                        let size = layer.size();
-                        if size.width != Dimension::Auto || size.height != Dimension::Auto {
-                            updates.push((layer.layout_id, size));
-                        }
-                    }
+                    refs.push(NodeRef(node_id));
                 }
-                updates
+                refs
             })
         } else {
             Vec::new()
         }
+    };
+
+    // Now collect size updates under the layers lock only (no arena lock held).
+    let size_updates: Vec<(taffy::NodeId, crate::types::Size)> = {
+        profiling::scope!("collect_size_updates");
+        let layers = engine.layers.read().unwrap();
+        node_refs
+            .iter()
+            .filter_map(|node_ref| {
+                let layer = layers.get(node_ref)?;
+                let size = layer.size();
+                if size.width != Dimension::Auto || size.height != Dimension::Auto {
+                    Some((layer.layout_id, size))
+                } else {
+                    None
+                }
+            })
+            .collect()
     };
 
     // Apply size updates outside the scene/layers locks
