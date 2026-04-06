@@ -122,6 +122,9 @@ impl Layer {
         });
         // Invalidate hit test node list since visibility affects hit-testing
         self.engine.invalidate_hit_test_node_list();
+        // Visibility changes affect rendering traversal — ensure update_nodes
+        // runs so render layers and caches are refreshed.
+        self.engine.invalidate_traversal_cache();
     }
     pub fn hidden(&self) -> bool {
         self.engine.scene.with_arena(|a| {

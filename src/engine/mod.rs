@@ -1210,7 +1210,14 @@ impl Engine {
 
         // Early exit: if no animations started/finished and no nodes were
         // updated, skip the expensive layout + render-node traversal.
-        if !needs_draw && started_animations.is_empty() && finished_animations.is_empty() {
+        // Also skip the early exit when the tree structure changed (new nodes
+        // added/removed) — those nodes need their render layers initialised.
+        let tree_changed = self.traversal_cache_dirty.load(Ordering::Relaxed);
+        if !needs_draw
+            && !tree_changed
+            && started_animations.is_empty()
+            && finished_animations.is_empty()
+        {
             let removed_damage = cleanup_nodes(self);
             if !removed_damage.is_empty() {
                 let mut current_damage = self.damage.write().unwrap();
