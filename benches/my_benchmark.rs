@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 
 use ::taffy::Style;
 use layers::{engine::Engine, prelude::*, types::*};
@@ -13,6 +13,7 @@ fn criterion_benchmark_update(c: &mut Criterion) {
     let child_counts = [1, 10, 100, 1000];
 
     for &count in &child_counts {
+        group.throughput(Throughput::Elements(count as u64));
         group.bench_with_input(BenchmarkId::from_parameter(count), &count, |b, &count| {
             let engine = Engine::create(2048.0, 2048.0);
             let root = engine.new_layer();
@@ -43,6 +44,7 @@ fn criterion_benchmark_append(c: &mut Criterion) {
     let child_counts = [1, 10, 100, 1000];
 
     for &count in &child_counts {
+        group.throughput(Throughput::Elements(count as u64));
         group.bench_with_input(BenchmarkId::from_parameter(count), &count, |b, &_count| {
             let engine = Engine::create(2048.0, 2048.0);
             let root = engine.new_layer();
@@ -67,6 +69,7 @@ fn criterion_benchmark_remove(c: &mut Criterion) {
     let child_counts = [1, 10, 100, 1000];
 
     for &count in &child_counts {
+        group.throughput(Throughput::Elements(count as u64));
         group.bench_with_input(BenchmarkId::from_parameter(count), &count, |b, &count| {
             let engine = Engine::create(2048.0, 2048.0);
             let root = engine.new_layer();
