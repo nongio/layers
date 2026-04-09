@@ -1,9 +1,45 @@
+use std::cell::RefCell;
+
 use skia_safe::*;
 
 use crate::{engine::draw_to_picture::DrawDebugInfo, layers::layer::render_layer::RenderLayer};
 use crate::{engine::node::SceneNodeRenderable, types::PaintColor};
 
 use super::scene::BACKGROUND_BLUR_SIGMA;
+
+// Cached noise tile: (image, width, height).
+// Re-rendered only when a larger tile is needed.
+thread_local! {
+    static NOISE_IMAGE: RefCell<Option<(Image, i32, i32)>> = const { RefCell::new(None) };
+}
+
+// Get or create a noise tile image at least as large as (w, h).
+fn get_noise_image(canvas: &Canvas, w: i32, h: i32) -> Option<Image> {
+    NOISE_IMAGE.with(|cell| {
+        let mut cached = cell.borrow_mut();
+
+        // Reuse if the cached tile is large enough
+        if let Some((ref img, cw, ch)) = *cached {
+            if cw >= w && ch >= h {
+                return Some(img.clone());
+            }
+        }
+
+        // Render a new noise tile
+        let info = ImageInfo::new_n32_premul((w, h), None);
+        let mut surface = canvas.new_surface(&info, None)?;
+        let tile_canvas = surface.canvas();
+
+        let noise = skia_safe::shaders::fractal_noise((0.7, 0.7), 3, 0.0, None)?;
+        let mut paint = Paint::default();
+        paint.set_shader(noise);
+        tile_canvas.draw_paint(&paint);
+
+        let image = surface.image_snapshot();
+        *cached = Some((image.clone(), w, h));
+        Some(image)
+    })
+}
 
 /// Draw a layer into a skia::Canvas.
 /// Returns the damage rect in the layer's coordinate space.
@@ -45,15 +81,14 @@ pub fn draw_layer(
             }
 
             if layer.blend_mode == crate::types::BlendMode::BackgroundBlur {
-                let mut paint = skia_safe::Paint::default();
-                let noise = skia_safe::shaders::fractal_noise((0.7, 0.7), 3, 0.0, None)
-                    .expect("noise shader");
-
-                paint.set_shader(noise);
-                paint.set_blend_mode(skia_safe::BlendMode::SoftLight);
-                paint.set_alpha(50);
-
-                canvas.draw_paint(&paint);
+                let w = layer.size.width.ceil() as i32;
+                let h = layer.size.height.ceil() as i32;
+                if let Some(noise_img) = get_noise_image(canvas, w, h) {
+                    let mut paint = Paint::default();
+                    paint.set_blend_mode(skia_safe::BlendMode::SoftLight);
+                    paint.set_alpha(50);
+                    canvas.draw_image(&noise_img, (0.0, 0.0), Some(&paint));
+                }
             }
 
             canvas.restore_to_count(save_count);

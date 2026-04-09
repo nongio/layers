@@ -41,6 +41,27 @@ pub(crate) fn update_node_single(
     parent: Option<&RenderLayer>,
     parent_changed: bool,
 ) -> NodeUpdateResult {
+    // Fast path: if this node has no dirty flags and the parent didn't change,
+    // nothing can have changed — skip all expensive work (get_layer, arena reads,
+    // subtree walks, render layer update).
+    if !parent_changed {
+        let is_clean = engine.scene.with_arena(|arena| {
+            arena
+                .get(node_id)
+                .map(|n| {
+                    let sn = n.get();
+                    !sn.needs_repaint() && !sn.needs_layout()
+                })
+                .unwrap_or(true)
+        });
+        if is_clean {
+            return NodeUpdateResult {
+                damage: skia::Rect::default(),
+                propagate_to_children: false,
+            };
+        }
+    }
+
     let Some(layer) = engine.get_layer(&NodeRef(node_id)) else {
         return NodeUpdateResult {
             damage: skia::Rect::default(),

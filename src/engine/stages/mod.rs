@@ -199,45 +199,56 @@ pub(crate) fn nodes_for_layout(engine: &Engine) -> Vec<NodeRef> {
 pub(crate) fn update_layout_tree(engine: &Engine) {
     // Get scene size early to avoid multiple lock acquisitions
     let scene_size = engine.scene.size.read().unwrap();
-    let mut changed_nodes = HashSet::new();
-    let mut all_nodes = Vec::new();
+    let mut has_changed_nodes = false;
 
-    // First, collect nodes that need layout updates and relationships without touching layout locks
-    {
-        profiling::scope!("collect_nodes_needing_update");
-        if let Some(root) = engine.scene_root() {
+    // Collect node refs under the scene arena lock, then drop it before
+    // taking the layers lock. This avoids holding both locks simultaneously
+    // which could deadlock with code paths that acquire them in reverse order.
+    let node_refs: Vec<NodeRef> = {
+        profiling::scope!("collect_node_refs");
+        let root = engine.scene_root();
+        if let Some(root) = root {
             engine.scene.with_arena(|arena| {
-                // Traverse all descendants from the root node to identify nodes that need layout updates
+                let mut refs = Vec::new();
                 for node_id in root.0.descendants(arena) {
                     let node = arena.get(node_id).unwrap();
                     if node.is_removed() {
-                        return;
+                        return refs;
                     }
-                    let node_ref = NodeRef(node_id);
-                    all_nodes.push(node_ref);
-
-                    // Collect follower relationships and layout flags
                     let scene_node = node.get();
-                    let needs_layout = scene_node.needs_layout();
-                    if needs_layout {
-                        changed_nodes.insert(node_ref);
-                        for follower in &scene_node.followers {
-                            changed_nodes.insert(*follower);
-                        }
+                    if scene_node.needs_layout() {
+                        has_changed_nodes = true;
                     }
+                    refs.push(NodeRef(node_id));
                 }
-            });
+                refs
+            })
+        } else {
+            Vec::new()
         }
-    }
+    };
 
-    // Update layout node sizes outside of the scene lock to avoid lock inversion
-    for node_ref in &all_nodes {
-        if let Some(layer) = engine.get_layer(node_ref) {
-            let size = layer.size();
-            if size.width != Dimension::Auto || size.height != Dimension::Auto {
-                engine.set_node_layout_size(layer.layout_id, size);
-            }
-        }
+    // Now collect size updates under the layers lock only (no arena lock held).
+    let size_updates: Vec<(taffy::NodeId, crate::types::Size)> = {
+        profiling::scope!("collect_size_updates");
+        let layers = engine.layers.read().unwrap();
+        node_refs
+            .iter()
+            .filter_map(|node_ref| {
+                let layer = layers.get(node_ref)?;
+                let size = layer.size();
+                if size.width != Dimension::Auto || size.height != Dimension::Auto {
+                    Some((layer.layout_id, size))
+                } else {
+                    None
+                }
+            })
+            .collect()
+    };
+
+    // Apply size updates outside the scene/layers locks
+    for (layout_id, size) in &size_updates {
+        engine.set_node_layout_size(*layout_id, *size);
     }
 
     // Now check if we need to compute layout
@@ -245,7 +256,7 @@ pub(crate) fn update_layout_tree(engine: &Engine) {
     let layout_root = *engine.layout_root.read().unwrap();
 
     // Only compute layout if nodes have changed or if the root is dirty
-    let needs_layout = !changed_nodes.is_empty() || layout.dirty(layout_root).unwrap_or(false);
+    let needs_layout = has_changed_nodes || layout.dirty(layout_root).unwrap_or(false);
 
     if needs_layout {
         profiling::scope!("compute_layout");

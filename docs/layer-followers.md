@@ -5,12 +5,12 @@ Layer followers let one layer get repainted and have damage tracking following a
 ## Relationship Setup
 - The declarative entry-point is the optional `replicate_node` field on `LayerTree` (src/view/layer_tree.rs:105). When a view tree includes this field, the build step tries to resolve the referenced layer.
 - During tree construction, `build_layer_tree` sets the follower’s draw callback with `Layer::set_draw_content` and registers the follower with the source layer via `Layer::add_follower_node` (src/view/build_layer_tree.rs:162-166).
-- `Layer::add_follower_node` stores the follower id inside the source `SceneNode.followers` set and schedules a `NoopChange` so the engine treats the source as dirty (src/layers/layer/mod.rs:512-523; src/engine/command.rs:99-114).
+- `Layer::add_follower_node` stores the follower id inside the source `SceneNode.followers` set and schedules a `NoopChange::layout` so the engine treats the source as needing both layout and paint (src/layers/layer/mod.rs; src/engine/command.rs).
 
 ## Engine Tracking and Layout
 - `SceneNode` maintains a `HashSet<NodeRef>` named `followers`, ensuring each follower is tracked exactly once even if the view layer replays the same relationship (src/engine/node/mod.rs:77-104).
 - In the layout stage, whenever a node has `RenderableFlags::NEEDS_LAYOUT`, the engine also marks each follower as changed. This guarantees a layout pass after updates to the source layer so both leader and follower remain geometrically consistent (src/engine/stages/mod.rs:193-201).
-- Followers rely on the scheduled `NoopChange` to flag the leader as needing both layout and paint, which in turn triggers the follower bookkeeping above.
+- Followers rely on the scheduled `NoopChange::layout` to flag the leader as needing both layout and paint, which in turn triggers the follower bookkeeping above. Other `NoopChange::paint` uses (e.g. `set_draw_content`, `set_blend_mode`) only flag NEEDS_PAINT to avoid unnecessary layout recomputation.
 
 ## Rendering Pipeline
 - A follower renders by calling the leader’s `Layer::as_content` closure, which runs `render_node_tree` against the source node inside the follower’s own canvas clip (src/layers/layer/mod.rs:535-548; src/drawing/scene.rs:34-45).

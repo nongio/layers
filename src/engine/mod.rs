@@ -370,6 +370,14 @@ pub struct Engine {
     /// Flag indicating the hit_test_node_list cache needs rebuild.
     /// Set when visibility or tree structure changes.
     hit_test_node_list_dirty: AtomicBool,
+
+    /// Cached traversal orders, rebuilt only when the tree structure changes.
+    /// `nodes_post_order` stores all nodes in post-order (children before parents).
+    cached_nodes_post_order: RwLock<Vec<indextree::NodeId>>,
+    /// `depth_groups` stores nodes grouped by depth (root-first), used by `update_nodes`.
+    cached_depth_groups: RwLock<Vec<(usize, Vec<indextree::NodeId>)>>,
+    /// Flag indicating the traversal caches need rebuild (set on tree structure changes).
+    traversal_cache_dirty: AtomicBool,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -582,6 +590,9 @@ impl Engine {
             current_hover_node: RwLock::new(None),
             hit_test_node_list: RwLock::new(Vec::new()),
             hit_test_node_list_dirty: AtomicBool::new(true), // Start dirty so first update populates cache
+            cached_nodes_post_order: RwLock::new(Vec::new()),
+            cached_depth_groups: RwLock::new(Vec::new()),
+            traversal_cache_dirty: AtomicBool::new(true),
         }
     }
 
@@ -777,6 +788,7 @@ impl Engine {
             self.scene_set_root(layer);
         }
         self.invalidate_hit_test_node_list();
+        self.invalidate_traversal_cache();
         Ok(())
     }
 
@@ -822,6 +834,7 @@ impl Engine {
             self.scene_set_root(layer);
         }
         self.invalidate_hit_test_node_list();
+        self.invalidate_traversal_cache();
         Ok(())
     }
 
@@ -882,6 +895,7 @@ impl Engine {
                 node.mark_for_deletion();
             }
         });
+        self.invalidate_traversal_cache();
     }
 
     /// Remove the layer and its subtree from the scene and layout tree
@@ -940,14 +954,25 @@ impl Engine {
 
         // Now mutate the scene (no layout lock held)
         self.scene.with_arena_mut(|arena| {
+            // Mark the parent as needing layout if it still exists
             if let Some(pid) = parent_id {
                 if !pid.is_removed(arena) {
                     if let Some(parent_node) = arena.get_mut(pid) {
                         parent_node.get_mut().set_needs_layout(true);
                     }
-                    // remove layers subtree
-                    layer_id.remove_subtree(arena);
                 }
+            }
+            // Always remove the subtree from the scene, even if the parent
+            // was already removed (e.g. detached nodes or orphaned children).
+            // Without this, the taffy layout_id is removed but the scene node
+            // stays alive, causing stale-node mismatches.
+            // Use arena.get() to safely check — is_removed() panics on freed nodes.
+            let node_alive = arena
+                .get(layer_id.0)
+                .map(|n| !n.is_removed())
+                .unwrap_or(false);
+            if node_alive {
+                layer_id.remove_subtree(arena);
             }
         });
         // Remove the layer from the layers map so stale handles can no longer be found.
@@ -1194,25 +1219,44 @@ impl Engine {
 
         let needs_draw = !updated_nodes.is_empty();
 
-        // 2.0 update the layout tree using taffy
-        update_layout_tree(self);
+        // Early exit: if no animations started/finished and no nodes were
+        // updated, skip the expensive layout + render-node traversal.
+        // Also skip the early exit when the tree structure changed (new nodes
+        // added/removed) — those nodes need their render layers initialised.
+        let tree_changed = self.traversal_cache_dirty.load(Ordering::Relaxed);
+        if !needs_draw
+            && !tree_changed
+            && started_animations.is_empty()
+            && finished_animations.is_empty()
+        {
+            let removed_damage = cleanup_nodes(self);
+            if !removed_damage.is_empty() {
+                let mut current_damage = self.damage.write().unwrap();
+                current_damage.join(removed_damage);
+                return true;
+            }
+            return false;
+        }
 
-        // 3.0 update render nodes and trigger repaint
-
-        let mut damage = self.update_nodes();
-
-        // 4.0 trigger the callbacks for the listeners on the transitions
-        trigger_callbacks(self, &started_animations);
-
-        // 5.0 cleanup the animations marked as done and
-        // transactions already exectured
-        cleanup_animations(self, finished_animations);
-        cleanup_transactions(self, finished_transitions);
-
-        // 6.0 cleanup the nodes that are marked as removed
+        // 2.0 cleanup nodes marked for removal before layout/render
+        // so traversal caches and arena access don't hit freed nodes.
         let removed_damage = cleanup_nodes(self);
 
+        // 3.0 update the layout tree using taffy
+        update_layout_tree(self);
+
+        // 4.0 update render nodes and trigger repaint
+
+        let mut damage = self.update_nodes();
         damage.join(removed_damage);
+
+        // 5.0 trigger the callbacks for the listeners on the transitions
+        trigger_callbacks(self, &started_animations);
+
+        // 6.0 cleanup the animations marked as done and
+        // transactions already executed
+        cleanup_animations(self, finished_animations);
+        cleanup_transactions(self, finished_transitions);
 
         let mut current_damage = self.damage.write().unwrap();
         current_damage.join(damage);
@@ -1229,124 +1273,99 @@ impl Engine {
         let layout = self.layout_tree.read().unwrap();
         let mut total_damage = skia_safe::Rect::default();
         let node = self.scene_root.read().unwrap();
-        if let Some(root_id) = *node {
-            // Phase 1: Collect nodes in post-order (children before parents)
-            let nodes_post_order: Vec<_> = self.scene.with_arena(|arena| {
-                let mut result = Vec::new();
-                for edge in root_id.traverse(arena) {
-                    if let indextree::NodeEdge::End(id) = edge {
-                        result.push(id);
+        let Some(root_id) = *node else {
+            return total_damage;
+        };
+
+        // Rebuild traversal caches only when tree structure changed
+        if self.traversal_cache_dirty.load(Ordering::Relaxed) {
+            drop(node); // release scene_root read lock before rebuild
+            self.rebuild_traversal_cache();
+        }
+
+        let nodes_post_order = self.cached_nodes_post_order.read().unwrap();
+        let depth_groups = self.cached_depth_groups.read().unwrap();
+
+        // Phase 3: Process each depth level from root to leaves
+        // Parents are processed before children so cumulative transforms are correct.
+        let mut parents_changed: std::collections::HashSet<indextree::NodeId> =
+            std::collections::HashSet::new();
+        for (_depth, nodes_at_depth) in depth_groups.iter() {
+            let results: Vec<_> = nodes_at_depth
+                .iter()
+                .map(|node_id| {
+                    let (parent_render_layer, parent_changed) = self.scene.with_arena(|arena| {
+                        let parent_id = arena.get(*node_id).and_then(|n| n.parent());
+                        let parent_layer = parent_id
+                            .and_then(|pid| arena.get(pid))
+                            .map(|parent_node| parent_node.get().render_layer().clone());
+                        let parent_changed = parent_id
+                            .map(|pid| parents_changed.contains(&pid))
+                            .unwrap_or(false);
+                        (parent_layer, parent_changed)
+                    });
+
+                    let result = update_node_single(
+                        self,
+                        &layout,
+                        *node_id,
+                        parent_render_layer.as_ref(),
+                        parent_changed,
+                    );
+                    if !result.damage.is_empty() {
+                        self.mark_image_cached_ancestors_for_repaint(*node_id);
                     }
+
+                    (*node_id, result)
+                })
+                .collect();
+
+            // Phase 4: Accumulate child damages to parents (sequential for each depth)
+            for (node_id, result) in results.iter() {
+                if result.propagate_to_children {
+                    parents_changed.insert(*node_id);
                 }
-                result
-            });
-
-            // Phase 2: Group nodes by depth to ensure parent dependencies
-            let depth_groups = self.scene.with_arena(|arena| {
-                let mut depth_map: std::collections::HashMap<usize, Vec<indextree::NodeId>> =
-                    std::collections::HashMap::new();
-
-                for &node_id in &nodes_post_order {
-                    let depth = node_id.ancestors(arena).skip(1).count();
-                    depth_map.entry(depth).or_default().push(node_id);
-                }
-
-                let mut groups: Vec<_> = depth_map.into_iter().collect();
-                // Sort by depth ascending so parents (depth 0) are processed first.
-                // This ensures parent transforms are computed before children need them.
-                groups.sort_by_key(|(depth, _)| *depth);
-                groups
-            });
-
-            // Phase 3: Process each depth level from root to leaves
-            // Parents are processed before children so cumulative transforms are correct.
-            let mut parents_changed: std::collections::HashSet<indextree::NodeId> =
-                std::collections::HashSet::new();
-            for (_depth, nodes_at_depth) in depth_groups.into_iter() {
-                // Update nodes at this depth in parallel
-                let nad: &Vec<_> = nodes_at_depth.as_ref();
-                let results: Vec<_> = nad
-                    .iter()
-                    .map(|node_id| {
-                        let (parent_render_layer, parent_changed) =
-                            self.scene.with_arena(|arena| {
-                                let parent_id = arena.get(*node_id).and_then(|n| n.parent());
-                                let parent_layer = parent_id
-                                    .and_then(|pid| arena.get(pid))
-                                    .map(|parent_node| parent_node.get().render_layer().clone());
-                                let parent_changed = parent_id
-                                    .map(|pid| parents_changed.contains(&pid))
-                                    .unwrap_or(false);
-                                (parent_layer, parent_changed)
-                            });
-
-                        let result = update_node_single(
-                            self,
-                            &layout,
-                            *node_id,
-                            parent_render_layer.as_ref(),
-                            parent_changed,
-                        );
-                        if !result.damage.is_empty() {
-                            self.mark_image_cached_ancestors_for_repaint(*node_id);
-                        }
-
-                        (*node_id, result)
-                    })
-                    .collect();
-
-                // Phase 4: Accumulate child damages to parents (sequential for each depth)
-                for (node_id, result) in results.iter() {
-                    if result.propagate_to_children {
-                        parents_changed.insert(*node_id);
-                    }
-                    total_damage.join(result.damage);
-                }
+                total_damage.join(result.damage);
             }
+        }
 
-            // Phase 5: Bubble up bounds from children to parents
-            // Done in post-order so children's bounds are finalized before bubbling to parents
+        // Phase 5: Bubble up bounds from children to parents
+        for node_id in nodes_post_order.iter() {
+            self.bubble_up_bounds_to_parent(*node_id);
+        }
+
+        // Phase 6: Clear all backdrop blur regions before rebuilding
+        self.scene.with_arena_mut(|arena| {
             for node_id in nodes_post_order.iter() {
-                self.bubble_up_bounds_to_parent(*node_id);
-            }
-
-            // Phase 6: Clear all backdrop blur regions before rebuilding
-            // This prevents accumulation across frames
-            self.scene.with_arena_mut(|arena| {
-                for node_id in nodes_post_order.iter() {
-                    if let Some(node) = arena.get_mut(*node_id) {
-                        node.get_mut().render_layer.backdrop_blur_region = None;
-                    }
+                if let Some(node) = arena.get_mut(*node_id) {
+                    node.get_mut().render_layer.backdrop_blur_region = None;
                 }
-            });
-
-            // Phase 7: Bubble up backdrop blur regions from children to parents
-            // Done in post-order so children's regions are finalized before bubbling to parents
-            // Only process nodes that have BackgroundBlur or have children with backdrop regions
-            for node_id in nodes_post_order.iter() {
-                self.bubble_up_backdrop_blur_regions(*node_id);
             }
+        });
 
-            // Phase 8: Include backdrop blur regions in damage if damage is not empty
-            // After bubbling up, the root node contains all backdrop blur regions
-            if !total_damage.is_empty() {
-                self.scene.with_arena(|arena| {
-                    if let Some(root_node) = arena.get(*root_id) {
-                        if let Some(backdrop_rrects) =
-                            &root_node.get().render_layer.backdrop_blur_region
-                        {
-                            for rrect in backdrop_rrects {
-                                total_damage.join(rrect.rect());
-                            }
+        // Phase 7: Bubble up backdrop blur regions from children to parents
+        for node_id in nodes_post_order.iter() {
+            self.bubble_up_backdrop_blur_regions(*node_id);
+        }
+
+        // Phase 8: Include backdrop blur regions in damage if damage is not empty
+        if !total_damage.is_empty() {
+            self.scene.with_arena(|arena| {
+                if let Some(root_node) = arena.get(*root_id) {
+                    if let Some(backdrop_rrects) =
+                        &root_node.get().render_layer.backdrop_blur_region
+                    {
+                        for rrect in backdrop_rrects {
+                            total_damage.join(rrect.rect());
                         }
                     }
-                });
-            }
+                }
+            });
+        }
 
-            // Phase 9: Rebuild hit test node list if dirty
-            if self.hit_test_node_list_dirty.load(Ordering::Relaxed) {
-                self.rebuild_hit_test_node_list(*root_id);
-            }
+        // Phase 9: Rebuild hit test node list if dirty
+        if self.hit_test_node_list_dirty.load(Ordering::Relaxed) {
+            self.rebuild_hit_test_node_list(root_id.0);
         }
 
         total_damage
@@ -1605,6 +1624,13 @@ impl Engine {
     pub fn set_node_layout_style(&self, node: taffy::NodeId, style: Style) {
         let mut layout = self.layout_tree.write().unwrap();
         if std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            // Skip if style unchanged — avoids marking the taffy node dirty
+            // which would trigger a full layout recomputation.
+            if let Ok(existing) = layout.style(node) {
+                if *existing == style {
+                    return;
+                }
+            }
             if let Err(e) = layout.set_style(node, style) {
                 error!("Failed to set layout style (node may be freed): {}", e);
             }
@@ -2102,6 +2128,49 @@ impl Engine {
     /// Called when visibility or tree structure changes.
     pub fn invalidate_hit_test_node_list(&self) {
         self.hit_test_node_list_dirty.store(true, Ordering::Relaxed);
+    }
+
+    /// Mark the traversal order caches as dirty, requiring rebuild on next
+    /// `update_nodes()`.  Called when the tree structure changes (add/remove/reparent).
+    pub fn invalidate_traversal_cache(&self) {
+        self.traversal_cache_dirty.store(true, Ordering::Relaxed);
+    }
+
+    /// Rebuild the cached post-order and depth-grouped traversal lists from the
+    /// current scene tree.  Only called when `traversal_cache_dirty` is set.
+    fn rebuild_traversal_cache(&self) {
+        let node = self.scene_root.read().unwrap();
+        let Some(root_id) = *node else {
+            *self.cached_nodes_post_order.write().unwrap() = Vec::new();
+            *self.cached_depth_groups.write().unwrap() = Vec::new();
+            self.traversal_cache_dirty.store(false, Ordering::Relaxed);
+            return;
+        };
+
+        let (post_order, depth_groups) = self.scene.with_arena(|arena| {
+            let mut post_order = Vec::new();
+            let mut depth_map: std::collections::HashMap<usize, Vec<indextree::NodeId>> =
+                std::collections::HashMap::new();
+
+            for edge in root_id.traverse(arena) {
+                if let indextree::NodeEdge::End(id) = edge {
+                    post_order.push(id);
+                }
+            }
+
+            for &node_id in &post_order {
+                let depth = node_id.ancestors(arena).skip(1).count();
+                depth_map.entry(depth).or_default().push(node_id);
+            }
+
+            let mut groups: Vec<_> = depth_map.into_iter().collect();
+            groups.sort_by_key(|(depth, _)| *depth);
+            (post_order, groups)
+        });
+
+        *self.cached_nodes_post_order.write().unwrap() = post_order;
+        *self.cached_depth_groups.write().unwrap() = depth_groups;
+        self.traversal_cache_dirty.store(false, Ordering::Relaxed);
     }
 }
 
