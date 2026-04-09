@@ -954,14 +954,25 @@ impl Engine {
 
         // Now mutate the scene (no layout lock held)
         self.scene.with_arena_mut(|arena| {
+            // Mark the parent as needing layout if it still exists
             if let Some(pid) = parent_id {
                 if !pid.is_removed(arena) {
                     if let Some(parent_node) = arena.get_mut(pid) {
                         parent_node.get_mut().set_needs_layout(true);
                     }
-                    // remove layers subtree
-                    layer_id.remove_subtree(arena);
                 }
+            }
+            // Always remove the subtree from the scene, even if the parent
+            // was already removed (e.g. detached nodes or orphaned children).
+            // Without this, the taffy layout_id is removed but the scene node
+            // stays alive, causing stale-node mismatches.
+            // Use arena.get() to safely check — is_removed() panics on freed nodes.
+            let node_alive = arena
+                .get(layer_id.0)
+                .map(|n| !n.is_removed())
+                .unwrap_or(false);
+            if node_alive {
+                layer_id.remove_subtree(arena);
             }
         });
         // Remove the layer from the layers map so stale handles can no longer be found.
