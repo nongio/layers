@@ -1,0 +1,78 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Detailed walkthrough of `Engine::update` pipeline stages."><title>layers::guides::engine_update_stages - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-46132b98.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="layers" data-themes="" data-resource-suffix="" data-rustdoc-version="1.85.0 (4d91de4e4 2025-02-17)" data-channel="1.85.0" data-search-js="search-75f5ac3e.js" data-settings-js="settings-0f613d39.js" ><script src="../../../static.files/storage-59e33391.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../../static.files/main-5f194d8c.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button><a class="logo-container" href="../../../layers/index.html"><img src="https://raw.githubusercontent.com/nongio/layers/refs/heads/main/assets/LayersEngine-dark.png" alt=""></a></nav><nav class="sidebar"><div class="sidebar-crate"><a class="logo-container" href="../../../layers/index.html"><img src="https://raw.githubusercontent.com/nongio/layers/refs/heads/main/assets/LayersEngine-dark.png" alt="logo"></a><h2><a href="../../../layers/index.html">layers</a><span class="version">1.11.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module engine_<wbr>update_<wbr>stages</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#engine-update-pipeline" title="Engine Update Pipeline">Engine Update Pipeline</a><ul><li><a href="#high-level-flow" title="High-level flow">High-level flow</a></li><li><a href="#stage-details" title="Stage details">Stage details</a></li><li><a href="#damage-tracking" title="Damage tracking">Damage tracking</a></li></ul></li></ul></section><div id="rustdoc-modnav"><h2><a href="../index.html">In layers::<wbr>guides</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><span class="rustdoc-breadcrumbs"><a href="../../index.html">layers</a>::<wbr><a href="../index.html">guides</a></span><h1>Module <span>engine_update_stages</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../../src/layers/lib.rs.html#73">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Detailed walkthrough of <code>Engine::update</code> pipeline stages.</p>
+<h2 id="engine-update-pipeline"><a class="doc-anchor" href="#engine-update-pipeline">§</a>Engine Update Pipeline</h2>
+<p>This guide explains how the Layers engine advances a frame from scheduled model changes to final draw calls. It focuses on the responsibilities of each stage inside <code>Engine::update</code> and dedicates a section to the damage tracking rules that determine which pixels must be redrawn.</p>
+<h3 id="high-level-flow"><a class="doc-anchor" href="#high-level-flow">§</a>High-level flow</h3>
+<p>Every call to <code>Engine::update(dt)</code> executes the same ordered pipeline:</p>
+<div><table><thead><tr><th>Stage</th><th>Entry point</th><th>Purpose</th></tr></thead><tbody>
+<tr><td>1. Advance animations</td><td><code>update_animations</code> (<code>src/engine/stages/mod.rs</code>)</td><td>Step active timelines, queueing property changes for affected nodes</td></tr>
+<tr><td>2. Apply transactions</td><td><code>execute_transactions</code></td><td>Update <code>ModelLayer</code> properties and adjust render/layout flags</td></tr>
+<tr><td>3. Solve layout</td><td><code>update_layout_tree</code></td><td>Run Taffy to recompute node sizes and positions</td></tr>
+<tr><td>4. Refresh nodes</td><td><code>Engine::update_nodes</code> (<code>src/engine/mod.rs</code>)</td><td>Visit each scene node, update render layers, and calculate damage</td></tr>
+<tr><td>4b. Occlusion culling</td><td><code>Engine::compute_occlusion</code> (caller-driven)</td><td>Mark nodes fully hidden behind opaque layers so rendering can skip them</td></tr>
+<tr><td>5. Render</td><td><code>render_node_tree</code> (<code>src/drawing/scene.rs</code>)</td><td>Replay cached pictures or draw commands, clipping to accumulated damage</td></tr>
+<tr><td>6. Cleanup deleted</td><td><code>cleanup_nodes</code> (<code>src/engine/stages/mod.rs</code>)</td><td>Drop <code>SceneNode</code>s marked for removal and tidy layout bookkeeping safely</td></tr>
+</tbody></table>
+</div>
+<p>The engine exposes the merged damage rectangle through <code>Engine::damage()</code>. Clients should consume it after rendering and call <code>Engine::clear_damage()</code> to prepare for the next frame.</p>
+<h3 id="stage-details"><a class="doc-anchor" href="#stage-details">§</a>Stage details</h3><h4 id="1-animations"><a class="doc-anchor" href="#1-animations">§</a>1. Animations</h4>
+<p>Animations are stored as <code>AnimationState</code> entries. <code>update_animations</code> increments their time, evaluates easing curves, and schedules node changes by pushing <code>AnimatedNodeChange</code> items into the transaction queue. Commands expose hooks for <code>on_start</code>, <code>on_update</code>, and <code>on_finish</code> callbacks.</p>
+<h4 id="2-transactions"><a class="doc-anchor" href="#2-transactions">§</a>2. Transactions</h4>
+<p><code>execute_transactions</code> drains scheduled changes. Each command mutates its target <code>ModelLayer</code> and returns <code>RenderableFlags</code> that tell the engine whether the node needs layout and/or paint. Flags are applied to the owning <code>SceneNode</code>, making the subsequent stages aware of what needs recomputation.</p>
+<h4 id="3-layout"><a class="doc-anchor" href="#3-layout">§</a>3. Layout</h4>
+<p><code>update_layout_tree</code> translates flagged nodes into Taffy style updates and runs flex/grid layout. Updated nodes receive the <code>NEEDS_LAYOUT</code> flag, and their computed geometry is written back to the layout arena. Layout results feed directly into render layer updates during the node refresh pass.</p>
+<h4 id="4-node-refresh"><a class="doc-anchor" href="#4-node-refresh">§</a>4. Node refresh</h4>
+<p><code>Engine::update_nodes</code> walks the scene graph depth-first from parents to children (grouped by depth, parents processed before descendants). For each node it calls <code>update_node_single</code>, which:</p>
+<ol>
+<li>Reads the previous render-layer state (bounds, opacity, visibility, repaint flag).</li>
+<li>Aggregates child bounds in local space so parents can detect subtree geometry changes.</li>
+<li>Updates the node’s <code>RenderLayer</code> with fresh model and layout information.</li>
+<li>Repaints cached content when flagged by <code>NEEDS_PAINT</code>, parent changes, geometry adjustments, opacity transitions, or visibility toggles.</li>
+<li>Clears <code>NEEDS_PAINT</code> and <code>NEEDS_LAYOUT</code> flags.</li>
+<li>Produces a global-space damage rectangle that covers content repaint, geometry unions, opacity changes, and subtree adjustments.</li>
+<li>Increments the node frame counter when any damage occurred (useful for debug overlays).</li>
+</ol>
+<p>Returned rectangles are joined into the per-frame damage accumulator. The engine may also call <code>propagate_damage_to_ancestors</code> so higher-level render targets know to redraw when descendants change.</p>
+<h5 id="why-parents-run-before-children"><a class="doc-anchor" href="#why-parents-run-before-children">§</a>Why parents run before children</h5>
+<ul>
+<li>Children rely on the latest parent transform and premultiplied opacity when repainting. Running parents first keeps those values fresh before <code>update_node_single</code> executes on the child.</li>
+<li>Parents still detect child-driven layout changes because they compare their own new layout data (just written by Taffy) against the previous render-layer snapshot. Aggregated child bounds are read from the stored <code>SceneNode</code>, so “before” and “after” comparisons remain valid even if the child has not updated yet.</li>
+<li>When a child runs later in the pass it reports damage in global coordinates. <code>update_nodes</code> merges that rectangle into the frame total, so child content changes are preserved even though the parent processed earlier.</li>
+</ul>
+<h4 id="4b-occlusion-culling-caller-driven"><a class="doc-anchor" href="#4b-occlusion-culling-caller-driven">§</a>4b. Occlusion culling (caller-driven)</h4>
+<p>Occlusion culling is a <strong>separate step</strong> invoked by the caller after <code>Engine::update</code>. It is not part of the automatic pipeline because scenes may be rendered from multiple root nodes, and each root needs its own occlusion data.</p>
+<p><strong>API pattern</strong> (per frame):</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code>engine.update(dt);
+engine.clear_occlusion();                       <span class="comment">// reset all roots
+</span>engine.compute_occlusion(root_a);               <span class="comment">// compute for first root
+</span>engine.compute_occlusion(root_b);               <span class="comment">// compute for second root
+// ... render ...</span></code></pre></div>
+<p><code>Engine::compute_occlusion(root)</code> calls <code>occlusion::compute_occlusion</code> (<code>src/engine/occlusion.rs</code>), which traverses the subtree rooted at <code>root</code> in draw order (pre-order, back-to-front) and then iterates in reverse (front-to-back). Fully-opaque rectangular layers contribute their <code>global_transformed_bounds</code> (intersected with any active clip) to an occlusion mask. Any node whose visible bounds are fully contained by a mask entry is added to the occluded set.</p>
+<p>A layer is considered fully opaque when all of these hold:</p>
+<ul>
+<li><code>premultiplied_opacity &gt;= 1.0</code> (accounts for parent opacity)</li>
+<li><code>blend_mode == Normal</code> (not <code>BackgroundBlur</code>)</li>
+<li>Background color alpha is 1.0 across all gradient stops</li>
+<li>No rounded corners (<code>border_corner_radius</code> is all zeros)</li>
+<li>Shape is <code>RoundRect</code> (not a custom path)</li>
+</ul>
+<p><strong>Clip-awareness:</strong> When an ancestor has <code>clip_children = true</code>, child bounds are intersected with the ancestor’s clip region. Children entirely outside the clip are marked occluded (they produce no visible pixels). Opaque layers contribute only the intersection of their bounds with the active clip to the mask, preventing false occlusion of layers that extend beyond the clip boundary.</p>
+<p>The occluded set is stored on the <code>Scene</code> keyed by root node (<code>OcclusionMap = HashMap&lt;NodeRef, HashSet&lt;NodeRef&gt;&gt;</code>), so multiple render passes from different roots each get their own data. During rendering, <code>render_node_tree</code> checks the set and skips <em>painting</em> occluded nodes (their children are still traversed, because a child may itself be the occluder or have non-occluded descendants). A node qualifies as an occluder when <code>is_fully_opaque()</code> returns true, which requires alpha 1.0, no rounded corners, a <code>RoundRect</code> shape, <strong>and</strong> <code>content_opaque</code> set to true (indicating the node’s content fills its bounds without transparency).</p>
+<h4 id="5-rendering"><a class="doc-anchor" href="#5-rendering">§</a>5. Rendering</h4>
+<p>Renderers such as <code>SkiaFboRenderer</code> and <code>SkiaImageRenderer</code> consume the merged damage. They set up clip regions, apply root transforms, and call <code>render_node_tree</code>, which:</p>
+<ul>
+<li>Optionally renders subtrees into off-screen surfaces when image caching is enabled.</li>
+<li>Replays cached Skia <code>Picture</code>s or triggers <code>draw_layer</code> to paint backgrounds, shadows, borders, and dynamic content.</li>
+<li>Honors clip flags, blend modes, and filters from the <code>RenderLayer</code>.</li>
+</ul>
+<p>The client typically swaps buffers or composites the result, then clears the engine damage before the next frame.</p>
+<h4 id="6-cleanup"><a class="doc-anchor" href="#6-cleanup">§</a>6. Cleanup</h4>
+<p><code>cleanup_nodes</code> runs after rendering to dispose of any scene subtrees whose root layer called <code>Layer::remove</code> (or was implicitly deleted by its parent). Each candidate node is still present in the scene arena but flagged with <code>is_deleted()</code>. For every such node the cleanup stage:</p>
+<ol>
+<li>Records the node’s transformed bounds to extend frame damage (ensuring stale visuals are repainted).</li>
+<li>Calls <code>Engine::scene_remove_layer</code> to unlink the subtree from both the scene graph and the Taffy layout tree.</li>
+</ol>
+<p><code>scene_remove_layer</code> guards its Taffy bookkeeping so that it only marks a parent layout node dirty when that parent still exists and has not been scheduled for deletion. This prevents panics from attempting to dirty or traverse already-removed layout nodes while the tree is being dismantled.</p>
+<h3 id="damage-tracking"><a class="doc-anchor" href="#damage-tracking">§</a>Damage tracking</h3>
+<p>The full set of damage rules, caching interactions, and test guidance now lives in <a href="damage-tracking.md">damage-tracking.md</a>. Refer to that companion guide for a deep dive into how <code>update_node_single</code> compares render-layer snapshots, reports per-node rectangles, and how the engine aggregates them into <code>Engine::damage()</code>.</p>
+</div></details></section></div></main></body></html>

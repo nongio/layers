@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["LayerError","Shape"],"fn":["draw_scene","render_node_tree"],"mod":["taffy"],"struct":["ContentDrawError","ContentDrawFunction","Layer","Matrix","PointerHandlerFunction"],"trait":["DrawScene","Effect","Interpolate"],"type":["Image"]};
