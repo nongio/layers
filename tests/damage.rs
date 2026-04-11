@@ -1178,4 +1178,70 @@ mod tests {
             scene_damage
         );
     }
+
+    // -------------------------------------------------------------------
+    // Occlusion-aware damage — `Engine::compute_output_state`
+    //
+    // Single-pass walker that folds occlusion + per-output scene damage.
+    // When a layer is fully occluded by an opaque layer above, its damage
+    // must not appear in the returned scene damage region.
+    //
+    // v1 opaque criteria (hint-driven):
+    //   content_opaque == true
+    //   && premultiplied_opacity == 1.0
+    //   && blend_mode == Normal
+    //   && !hidden
+    // Occluder shape = the layer's global_transformed_bounds.
+    //
+    // See `project_occlusion_damage_plan.md` for full design.
+    // -------------------------------------------------------------------
+
+    /// A layer fully occluded by an opaque sibling above it must contribute
+    /// zero damage to the scene, even when its draw closure reports damage.
+    /// This is the starting TDD test — `engine.damage()` is expected to
+    /// fold occlusion into its result, so the consumer-visible API stays
+    /// the same and the effect is transparent.
+    #[test]
+    pub fn occluded_layer_damage_is_dropped_from_scene() {
+        let engine = Engine::create(1000.0, 1000.0);
+
+        // Back layer — will be fully occluded by `front`.
+        let back = engine.new_layer();
+        back.set_position((100.0, 100.0), None);
+        back.set_size(Size::points(200.0, 200.0), None);
+        back.set_background_color(
+            PaintColor::Solid {
+                color: Color::new_hex("#ff0000ff"),
+            },
+            None,
+        );
+        engine.add_layer(&back).unwrap();
+
+        // Front layer — same bounds as `back`, marked content_opaque so it
+        // acts as an occluder even with a transparent background.
+        let front = engine.new_layer();
+        front.set_position((100.0, 100.0), None);
+        front.set_size(Size::points(200.0, 200.0), None);
+        front.set_content_opaque(true);
+        engine.add_layer(&front).unwrap();
+
+        // First update to establish initial state; clear any startup damage.
+        engine.update(0.016);
+        engine.clear_damage();
+
+        // Report damage on `back` via its draw closure. `front` is unchanged.
+        let draw_func = |_c: &skia_safe::Canvas, _w: f32, _h: f32| -> skia_safe::Rect {
+            skia_safe::Rect::from_xywh(0.0, 0.0, 50.0, 50.0)
+        };
+        back.set_draw_content(draw_func);
+        engine.update(0.016);
+
+        let scene_damage = engine.damage();
+        assert!(
+            scene_damage.is_empty(),
+            "scene damage must be empty — back's damage is fully occluded by front, \
+             but got {:?}",
+            scene_damage
+        );
+    }
 }
