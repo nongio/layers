@@ -83,6 +83,141 @@ pub fn compute_occlusion(root: NodeRef, arena: &Arena<SceneNode>) -> HashSet<Nod
     occluded
 }
 
+/// Fold occlusion into per-node damage to produce an occlusion-aware
+/// scene damage rect.
+///
+/// Walks the subtree rooted at `root` front-to-back with a running
+/// `skia::Region` that accumulates the bounds of every valid opaque
+/// occluder seen so far. For each node with damage, the running region
+/// is subtracted from the damage rect before it is unioned into the
+/// scene total. Nodes whose entire damage rect is covered by the
+/// running region contribute nothing.
+///
+/// `per_node_damage` maps a node id to its global-coordinates damage
+/// rect as already computed by `update_node_single`. Nodes not present
+/// in the map are assumed to have no damage this frame.
+///
+/// Returns the bounding `Rect` of the resulting damage region, matching
+/// the legacy `Engine::damage()` return type so callers don't have to
+/// change. The full pixel set is visible to the caller only via this
+/// bounding box — sufficient for the use case where downstream
+/// consumers clip/redraw a rectangular area.
+#[profiling::function]
+pub fn compute_occlusion_aware_damage(
+    root: NodeRef,
+    arena: &Arena<SceneNode>,
+    per_node_damage: &HashMap<NodeRef, skia_safe::Rect>,
+) -> skia_safe::Rect {
+    let root_id: TreeStorageId = root.into();
+
+    // Collect nodes in draw order (pre-order = back-to-front).
+    let mut draw_order: Vec<NodeOcclusionInfo> = Vec::new();
+    collect_draw_order(root_id, arena, 1.0, None, &mut draw_order);
+
+    // Opaque shapes accumulated in front-to-back order, tagged with the
+    // node that contributed each one. The tag lets us filter descendants
+    // out when subtracting occlusion from an ancestor's damage — a
+    // descendant cannot legitimately occlude its ancestor, because the
+    // ancestor's damage represents re-rendering its own subtree (through
+    // any filter / effect the ancestor applies).
+    let mut occluder_shapes: Vec<(NodeRef, skia_safe::IRect)> = Vec::new();
+    let mut damage = skia_safe::Region::new();
+    let mut visited: HashSet<NodeRef> = HashSet::new();
+
+    // Front-to-back: the node at the end of draw_order is closest to the
+    // viewer, so iterate in reverse.
+    for info in draw_order.iter().rev() {
+        visited.insert(info.node_ref);
+
+        if info.clipped_out {
+            continue;
+        }
+
+        // Add the node's damage (if any), minus the effective occluder
+        // region for this specific node — which excludes any occluder
+        // shape contributed by one of this node's descendants.
+        if let Some(rect) = per_node_damage.get(&info.node_ref) {
+            if !rect.is_empty() {
+                let mut effective = skia_safe::Region::new();
+                for (shape_node, shape_irect) in &occluder_shapes {
+                    if is_descendant(*shape_node, info.node_ref, arena) {
+                        continue;
+                    }
+                    effective.op_rect(*shape_irect, skia_safe::region::RegionOp::Union);
+                }
+                let mut d = skia_safe::Region::from_rect(rect_to_irect(*rect));
+                d.op_region(&effective, skia_safe::region::RegionOp::Difference);
+                damage.op_region(&d, skia_safe::region::RegionOp::Union);
+            }
+        }
+
+        // After considering this node's damage, if the node itself is a
+        // valid opaque occluder, record its visible bounds.
+        if info.is_opaque {
+            let vb = info.visible_bounds;
+            if vb.width() > 0.0 && vb.height() > 0.0 {
+                occluder_shapes.push((info.node_ref, rect_to_irect(vb)));
+            }
+        }
+    }
+
+    // `collect_draw_order` skips hidden / fully-transparent subtrees, so
+    // nodes that just became hidden or faded to opacity 0 are not in
+    // `draw_order`. Their previous bounds still need to be damaged so the
+    // compositor clears the pixels they used to occupy. Union any such
+    // unvisited dirty node's damage unconditionally (it has no valid
+    // front-most ancestor to be clipped against).
+    for (node_ref, rect) in per_node_damage.iter() {
+        if visited.contains(node_ref) || rect.is_empty() {
+            continue;
+        }
+        damage.op_rect(rect_to_irect(*rect), skia_safe::region::RegionOp::Union);
+    }
+
+    let bounds = damage.bounds();
+    if bounds.is_empty() {
+        skia_safe::Rect::default()
+    } else {
+        skia_safe::Rect::from_irect(bounds)
+    }
+}
+
+/// Convert a floating-point rect to the integer rect that `skia::Region`
+/// requires. Rounds outward so the integer rect covers every pixel the
+/// float rect touches — never under-reports damage.
+fn rect_to_irect(r: skia_safe::Rect) -> skia_safe::IRect {
+    skia_safe::IRect::from_ltrb(
+        r.left.floor() as i32,
+        r.top.floor() as i32,
+        r.right.ceil() as i32,
+        r.bottom.ceil() as i32,
+    )
+}
+
+/// Returns `true` if `maybe_descendant` is a strict descendant of
+/// `ancestor` in the scene tree (i.e. lives in the subtree rooted at
+/// `ancestor` but is not `ancestor` itself). Walks `maybe_descendant`'s
+/// parent chain; bounded by tree depth, which is shallow in practice.
+fn is_descendant(maybe_descendant: NodeRef, ancestor: NodeRef, arena: &Arena<SceneNode>) -> bool {
+    if maybe_descendant == ancestor {
+        return false;
+    }
+    let ancestor_id: TreeStorageId = ancestor.into();
+    let mut current: TreeStorageId = maybe_descendant.into();
+    while let Some(node) = arena.get(current) {
+        match node.parent() {
+            Some(pid) => {
+                if pid == ancestor_id {
+                    return true;
+                }
+                current = pid;
+            }
+            None => return false,
+        }
+    }
+    false
+}
+
 struct NodeOcclusionInfo {
     node_ref: NodeRef,
     /// The node bounds intersected with the active clip (what is actually visible).

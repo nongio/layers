@@ -1286,6 +1286,12 @@ impl Engine {
         let nodes_post_order = self.cached_nodes_post_order.read().unwrap();
         let depth_groups = self.cached_depth_groups.read().unwrap();
 
+        // Per-node damage map, used below by the occlusion-aware damage
+        // folder. Each entry is the node's global-coordinate damage rect
+        // as produced by `update_node_single`.
+        let mut per_node_damage: std::collections::HashMap<NodeRef, skia_safe::Rect> =
+            std::collections::HashMap::new();
+
         // Phase 3: Process each depth level from root to leaves
         // Parents are processed before children so cumulative transforms are correct.
         let mut parents_changed: std::collections::HashSet<indextree::NodeId> =
@@ -1325,8 +1331,23 @@ impl Engine {
                 if result.propagate_to_children {
                     parents_changed.insert(*node_id);
                 }
+                if !result.damage.is_empty() {
+                    per_node_damage.insert(NodeRef(*node_id), result.damage);
+                }
                 total_damage.join(result.damage);
             }
+        }
+
+        // Phase 4.5: Fold occlusion into the accumulated damage. For the
+        // scene root, walk front-to-back and subtract the global bounds
+        // of any opaque layer from damage contributions of layers behind
+        // it. Replaces `total_damage` with the clipped region's bounding
+        // rect — same type/shape, smaller value when occlusion applies.
+        if !per_node_damage.is_empty() {
+            let occluded_damage = self.scene.with_arena(|arena| {
+                occlusion::compute_occlusion_aware_damage(root_id, arena, &per_node_damage)
+            });
+            total_damage = occluded_damage;
         }
 
         // Phase 5: Bubble up bounds from children to parents
