@@ -1205,8 +1205,17 @@ mod tests {
     pub fn occluded_layer_damage_is_dropped_from_scene() {
         let engine = Engine::create(1000.0, 1000.0);
 
+        // Explicit root so `back` and `front` are siblings, not parent/child.
+        let root = engine.new_layer();
+        root.set_size(Size::points(1000.0, 1000.0), None);
+        engine.add_layer(&root).unwrap();
+
         // Back layer — will be fully occluded by `front`.
         let back = engine.new_layer();
+        back.set_layout_style(layers::taffy::Style {
+            position: layers::taffy::Position::Absolute,
+            ..Default::default()
+        });
         back.set_position((100.0, 100.0), None);
         back.set_size(Size::points(200.0, 200.0), None);
         back.set_background_color(
@@ -1215,15 +1224,19 @@ mod tests {
             },
             None,
         );
-        engine.add_layer(&back).unwrap();
+        engine.append_layer(&back, root.id).unwrap();
 
         // Front layer — same bounds as `back`, marked content_opaque so it
         // acts as an occluder even with a transparent background.
         let front = engine.new_layer();
+        front.set_layout_style(layers::taffy::Style {
+            position: layers::taffy::Position::Absolute,
+            ..Default::default()
+        });
         front.set_position((100.0, 100.0), None);
         front.set_size(Size::points(200.0, 200.0), None);
         front.set_content_opaque(true);
-        engine.add_layer(&front).unwrap();
+        engine.append_layer(&front, root.id).unwrap();
 
         // First update to establish initial state; clear any startup damage.
         engine.update(0.016);
