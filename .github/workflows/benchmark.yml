@@ -1,4 +1,6 @@
-on: [pull_request]
+on:
+  # Disabled — job is currently broken. Re-enable by restoring `pull_request`.
+  workflow_dispatch:
 name: Benchmark
 permissions:
   pull-requests: write
