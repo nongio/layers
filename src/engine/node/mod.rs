@@ -341,7 +341,11 @@ pub fn do_repaint(
         return new_renderable;
     }
 
-    // Re-run the draw closure to get content damage and update the recorded content.
+    // Re-run the draw closure to get content damage and record the content
+    // picture. The recorded picture is stored in `content_cache` and later
+    // replayed by `draw_layer` instead of re-invoking the closure — otherwise
+    // the closure would be called twice per repaint (once here, once from
+    // `draw_layer_to_picture` → `draw_layer` at drawing/layer.rs:139).
     let mut content_only = false;
     if render_layer.content_draw_func.is_some() {
         let content_draw_func = render_layer.content_draw_func.clone();
@@ -353,6 +357,7 @@ pub fn do_repaint(
             let caller = draw_func.0.as_ref();
             let content_damage = caller(canvas, size.width, size.height);
             damage.join(content_damage);
+            new_renderable.content_cache = recorder.finish_recording_as_picture(None);
             // If the draw cache already exists (layer was previously painted)
             // and the draw closure returned a damage rect, only that content
             // region changed — no need to report the full layer bounds.
