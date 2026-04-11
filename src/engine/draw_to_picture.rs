@@ -25,7 +25,11 @@ pub(crate) fn draw_layer_to_picture(
 
     let bounds_safe = render_layer.bounds.with_outset((SAFE_MARGIN, SAFE_MARGIN));
 
-    let canvas = recorder.begin_recording(bounds_safe, false);
+    // Enable the default bounding-box hierarchy (SkRTreeFactory) so playback
+    // with a clip rect can skip draw ops that don't intersect it. Compounds
+    // the partial-damage win: when the canvas is clipped to a small damage
+    // rect, Skia culls ops outside it during replay instead of walking all.
+    let canvas = recorder.begin_recording(bounds_safe, true);
     let damage = draw_layer(canvas, render_layer, 1.0, renderable);
 
     (recorder.finish_recording_as_picture(None), damage)
