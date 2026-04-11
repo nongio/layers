@@ -88,6 +88,12 @@ pub struct SceneNode {
     pub(crate) following: Option<NodeRef>,
     pub(crate) _debug_info: Option<DrawDebugInfo>,
     pub(crate) frame_number: usize,
+    /// Externally reported content damage, in layer-local coordinates.
+    /// Populated by `Layer::add_damage` / `Layer::set_damage` for content
+    /// whose damage source is outside the draw closure (e.g. Wayland
+    /// surface buffer damage). Consumed and cleared by `do_repaint`,
+    /// where it is unioned with the closure's returned rect.
+    pub(crate) pending_damage: Option<skia_safe::Rect>,
 }
 
 impl Default for SceneNode {
@@ -103,6 +109,7 @@ impl Default for SceneNode {
             frame_number: 0,
             followers: HashSet::new(),
             following: None,
+            pending_damage: None,
         }
     }
 }
@@ -321,7 +328,11 @@ impl SceneNodeRenderable {
 /// if the layer has opacity
 /// returns the damaged Rect of from drawing the layer, in layers coordinates
 #[profiling::function]
-pub fn do_repaint(renderable: &SceneNodeRenderable, scene_node: &SceneNode) -> SceneNodeRenderable {
+pub fn do_repaint(
+    renderable: &SceneNodeRenderable,
+    scene_node: &SceneNode,
+    pending_damage: Option<skia_safe::Rect>,
+) -> SceneNodeRenderable {
     let mut damage = skia_safe::Rect::default();
     let render_layer = &scene_node.render_layer;
     let mut new_renderable = renderable.clone();
@@ -330,31 +341,46 @@ pub fn do_repaint(renderable: &SceneNodeRenderable, scene_node: &SceneNode) -> S
         return new_renderable;
     }
 
-    // if scene_node.is_picture_cached() {
-    // disable content cache as there is a bug with rendering images
+    // Re-run the draw closure to get content damage and update the recorded content.
+    let mut content_only = false;
     if render_layer.content_draw_func.is_some() {
         let content_draw_func = render_layer.content_draw_func.clone();
         let size = render_layer.size;
         if let Some(draw_func) = content_draw_func {
-            //         // only redraw if the content changed or the size changed
-            //         // if renderable.content_cache.is_none()
-            //         // || ((scene_node.size != size)
-            //         //     || (self.content_draw_func.as_ref() != content_draw_func))
-            //         // {
             let mut recorder = skia_safe::PictureRecorder::new();
             let canvas =
                 recorder.begin_recording(skia_safe::Rect::from_wh(size.width, size.height), false);
-            // let draw_func = content_draw_func;
             let caller = draw_func.0.as_ref();
             let content_damage = caller(canvas, size.width, size.height);
             damage.join(content_damage);
-            //         new_renderable.content_cache = recorder.finish_recording_as_picture(None);
+            // If the draw cache already exists (layer was previously painted)
+            // and the draw closure returned a damage rect, only that content
+            // region changed — no need to report the full layer bounds.
+            content_only = renderable.draw_cache.is_some() && !content_damage.is_empty();
         }
     }
-    // }
+
+    // Union externally reported damage (case 3: content whose damage source
+    // is outside the draw closure, e.g. Wayland surface buffer damage).
+    // Same contract as the closure return rect: layer-local coordinates,
+    // unioned into `damage`, and enables `content_only` so the repaint
+    // doesn't degrade to full layer bounds when a cache already exists.
+    if let Some(pending) = pending_damage {
+        if !pending.is_empty() {
+            damage.join(pending);
+            if renderable.draw_cache.is_some() {
+                content_only = true;
+            }
+        }
+    }
+
     let (picture, layer_damage) = draw_layer_to_picture(render_layer, &new_renderable);
-    // Don't transform here - let the caller handle coordinate transformation
-    damage.join(layer_damage);
+    // Only join full layer damage when the layer itself changed (first paint,
+    // background/border/shadow change).  When only content was updated, the
+    // draw closure's damage rect is sufficient.
+    if !content_only {
+        damage.join(layer_damage);
+    }
 
     if let Some(picture) = picture {
         // update or create the draw cache

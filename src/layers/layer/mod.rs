@@ -706,6 +706,71 @@ impl Layer {
         }
     }
 
+    /// Report externally sourced content damage in layer-local coordinates.
+    /// Unioned with any existing pending damage. Used when the caller knows
+    /// a content region changed but the draw closure itself has no way to
+    /// detect it (e.g. Wayland surface buffer damage).
+    ///
+    /// Sets `NEEDS_PAINT` on this layer and on every follower so mirrors
+    /// repaint. Followers fall back to full-bounds repaint (no pending
+    /// rect is copied across); partial-damage mirroring is a future
+    /// optimisation.
+    pub fn add_damage(&self, rect: skia::Rect) {
+        let follower_ids: Vec<NodeRef> = self.engine.scene.with_arena_mut(|arena| {
+            let Some(node) = arena.get_mut(self.id.0).filter(|n| !n.is_removed()) else {
+                return Vec::new();
+            };
+            let scene_node = node.get_mut();
+            scene_node.pending_damage = Some(match scene_node.pending_damage {
+                Some(existing) => {
+                    let mut u = existing;
+                    u.join(rect);
+                    u
+                }
+                None => rect,
+            });
+            scene_node.insert_flags(RenderableFlags::NEEDS_PAINT);
+            scene_node.followers.iter().copied().collect()
+        });
+        self.mark_followers_needs_paint(&follower_ids);
+        let attribute_id = self.model.blend_mode.id;
+        self.engine
+            .schedule_change(self.id, Arc::new(NoopChange::paint(attribute_id)), None);
+    }
+
+    /// Replace externally sourced content damage in layer-local coordinates.
+    /// Unlike [`Layer::add_damage`], any previously pending rect is discarded.
+    /// Useful when the caller has already unioned its damage rects and
+    /// wants to hand over the authoritative region for this frame.
+    pub fn set_damage(&self, rect: skia::Rect) {
+        let follower_ids: Vec<NodeRef> = self.engine.scene.with_arena_mut(|arena| {
+            let Some(node) = arena.get_mut(self.id.0).filter(|n| !n.is_removed()) else {
+                return Vec::new();
+            };
+            let scene_node = node.get_mut();
+            scene_node.pending_damage = Some(rect);
+            scene_node.insert_flags(RenderableFlags::NEEDS_PAINT);
+            scene_node.followers.iter().copied().collect()
+        });
+        self.mark_followers_needs_paint(&follower_ids);
+        let attribute_id = self.model.blend_mode.id;
+        self.engine
+            .schedule_change(self.id, Arc::new(NoopChange::paint(attribute_id)), None);
+    }
+
+    fn mark_followers_needs_paint(&self, follower_ids: &[NodeRef]) {
+        if follower_ids.is_empty() {
+            return;
+        }
+        self.engine.scene.with_arena_mut(|arena| {
+            for follower_id in follower_ids {
+                if let Some(node) = arena.get_mut(follower_id.0).filter(|n| !n.is_removed()) {
+                    node.get_mut().insert_flags(RenderableFlags::NEEDS_PAINT);
+                }
+            }
+        });
+    }
+
     pub fn add_follower_node(&self, follower: impl Into<NodeRef>) {
         let follower = follower.into();
         self.engine.scene.with_arena_mut(|node_arena| {

@@ -6,6 +6,7 @@ mod tests {
         renderer::skia_image::SkiaImageRenderer,
         types::{Color, PaintColor, Size},
     };
+    use skia_safe::Contains;
 
     #[test]
     pub fn damage_render_layer_transparent() {
@@ -994,6 +995,187 @@ mod tests {
             scene_damage,
             skia_safe::Rect::from_xywh(0.0, 0.0, 250.0, 250.0),
             "Expected combined damage from leader (0,0)-(100,100) and follower (200,200)-(250,250)"
+        );
+    }
+
+    // -------------------------------------------------------------------
+    // External damage channel (add_damage / set_damage)
+    //
+    // These tests pin the contract for the "case 3" path: content that is
+    // produced externally (e.g. a Wayland surface texture) and whose damage
+    // cannot be expressed by the draw closure return value alone.
+    //
+    // Shape: closure stays installed; callers report damage via
+    //   layer.add_damage(rect)  -- unions into pending
+    //   layer.set_damage(rect)  -- replaces pending
+    // Both take layer-local coordinates, same space as the closure return.
+    // In do_repaint, pending is unioned with the closure return into
+    // repaint_damage, then cleared.
+    // -------------------------------------------------------------------
+
+    /// Priming a layer's cache with a closure, then reporting external
+    /// damage via add_damage, must produce scene damage equal to the union
+    /// of the closure return and the pending rect, mapped to global coords.
+    #[test]
+    pub fn damage_add_damage_union_with_closure() {
+        let engine = Engine::create(1000.0, 1000.0);
+        let layer = engine.new_layer();
+        layer.set_position((100.0, 100.0), None);
+        layer.set_size(Size::points(100.0, 100.0), None);
+        engine.add_layer(&layer).unwrap();
+
+        let draw_func = |_c: &skia_safe::Canvas, _w: f32, _h: f32| -> skia_safe::Rect {
+            skia_safe::Rect::from_xywh(0.0, 0.0, 1.0, 1.0)
+        };
+        layer.set_draw_content(draw_func);
+        engine.update(0.016);
+        engine.clear_damage();
+
+        // External damage in layer-local coords.
+        layer.add_damage(skia_safe::Rect::from_xywh(5.0, 5.0, 20.0, 20.0));
+        engine.update(0.016);
+
+        let scene_damage = engine.damage();
+        // closure (0,0,1,1) ∪ pending (5,5,20,20) = (0,0,25,25) local
+        // → global offset by (100,100) = (100,100,25,25)
+        assert_eq!(
+            scene_damage,
+            skia_safe::Rect::from_xywh(100.0, 100.0, 25.0, 25.0)
+        );
+    }
+
+    /// Multiple add_damage calls before a single paint must accumulate
+    /// (union), and must be fully cleared after the paint consumes them.
+    #[test]
+    pub fn damage_add_damage_accumulates_and_clears() {
+        let engine = Engine::create(1000.0, 1000.0);
+        let layer = engine.new_layer();
+        layer.set_position((100.0, 100.0), None);
+        layer.set_size(Size::points(100.0, 100.0), None);
+        engine.add_layer(&layer).unwrap();
+
+        // Closure returns empty so only the pending rect contributes to damage.
+        let draw_func = |_c: &skia_safe::Canvas, _w: f32, _h: f32| -> skia_safe::Rect {
+            skia_safe::Rect::default()
+        };
+        layer.set_draw_content(draw_func);
+        engine.update(0.016);
+        engine.clear_damage();
+
+        // Two rects: (5,5,10,10) and (30,30,5,5). Union = (5,5,30,30) → (5,5 w25 h25)
+        layer.add_damage(skia_safe::Rect::from_xywh(5.0, 5.0, 10.0, 10.0));
+        layer.add_damage(skia_safe::Rect::from_xywh(30.0, 30.0, 5.0, 5.0));
+        engine.update(0.016);
+
+        let scene_damage = engine.damage();
+        // union in local = (5,5) to (35,35) = (5,5,30,30)
+        // global offset (100,100) = (105,105,30,30)
+        assert_eq!(
+            scene_damage,
+            skia_safe::Rect::from_xywh(105.0, 105.0, 30.0, 30.0)
+        );
+
+        // After paint, pending must be cleared: no further add_damage → no damage.
+        engine.clear_damage();
+        engine.update(0.016);
+        let scene_damage = engine.damage();
+        assert_eq!(scene_damage, skia_safe::Rect::from_xywh(0.0, 0.0, 0.0, 0.0));
+    }
+
+    /// set_damage replaces pending rather than unioning. add_damage(A)
+    /// followed by set_damage(B) must yield B alone (plus the closure
+    /// return, which is empty in this test).
+    #[test]
+    pub fn damage_set_damage_replaces_pending() {
+        let engine = Engine::create(1000.0, 1000.0);
+        let layer = engine.new_layer();
+        layer.set_position((100.0, 100.0), None);
+        layer.set_size(Size::points(100.0, 100.0), None);
+        engine.add_layer(&layer).unwrap();
+
+        let draw_func = |_c: &skia_safe::Canvas, _w: f32, _h: f32| -> skia_safe::Rect {
+            skia_safe::Rect::default()
+        };
+        layer.set_draw_content(draw_func);
+        engine.update(0.016);
+        engine.clear_damage();
+
+        layer.add_damage(skia_safe::Rect::from_xywh(5.0, 5.0, 50.0, 50.0));
+        // set_damage replaces whatever was pending.
+        layer.set_damage(skia_safe::Rect::from_xywh(10.0, 10.0, 20.0, 20.0));
+        engine.update(0.016);
+
+        let scene_damage = engine.damage();
+        // Only (10,10,20,20) in local → (110,110,20,20) global.
+        assert_eq!(
+            scene_damage,
+            skia_safe::Rect::from_xywh(110.0, 110.0, 20.0, 20.0)
+        );
+    }
+
+    /// External damage on a leader must propagate to its followers so
+    /// mirror regions are redrawn. Mirrors may over-damage (full bounds) —
+    /// that is acceptable; the requirement is that the follower's region
+    /// ends up in scene damage.
+    #[test]
+    pub fn damage_add_damage_propagates_to_follower() {
+        let engine = Engine::create(1000.0, 1000.0);
+
+        let root = engine.new_layer();
+        root.set_size(Size::points(1000.0, 1000.0), None);
+        engine.add_layer(&root).unwrap();
+
+        // Leader at (0,0) 100x100 with a draw closure (returns empty).
+        let leader = engine.new_layer();
+        leader.set_layout_style(layers::taffy::Style {
+            position: layers::taffy::Position::Absolute,
+            ..Default::default()
+        });
+        leader.set_position((0.0, 0.0), None);
+        leader.set_size(Size::points(100.0, 100.0), None);
+        leader.set_draw_content(
+            |_c: &skia_safe::Canvas, _w: f32, _h: f32| -> skia_safe::Rect {
+                skia_safe::Rect::default()
+            },
+        );
+        engine.append_layer(&leader, root.id).unwrap();
+        engine.update(0.016);
+
+        // Follower at (200,200), same size, mirrors the leader.
+        let follower = engine.new_layer();
+        follower.set_layout_style(layers::taffy::Style {
+            position: layers::taffy::Position::Absolute,
+            ..Default::default()
+        });
+        follower.set_position((200.0, 200.0), None);
+        follower.set_size(Size::points(100.0, 100.0), None);
+        follower.set_draw_content(leader.as_content());
+        leader.add_follower_node(follower.id());
+        engine.append_layer(&follower, root.id).unwrap();
+
+        engine.update(0.016);
+        engine.clear_damage();
+
+        // Report partial damage on the leader.
+        leader.add_damage(skia_safe::Rect::from_xywh(10.0, 10.0, 20.0, 20.0));
+        engine.update(0.016);
+
+        let scene_damage = engine.damage();
+
+        // Leader's partial rect in global = (10,10,20,20).
+        // Follower must contribute damage covering its own region at (200,200).
+        // The minimum acceptable result is that scene_damage contains both
+        // the leader rect and at least the follower's (200,200) corner.
+        assert!(
+            scene_damage.contains(skia_safe::Point::new(15.0, 15.0)),
+            "leader partial damage missing from scene: {:?}",
+            scene_damage
+        );
+        assert!(
+            scene_damage.contains(skia_safe::Point::new(200.0, 200.0))
+                && scene_damage.contains(skia_safe::Point::new(299.0, 299.0)),
+            "follower mirror region missing from scene: {:?}",
+            scene_damage
         );
     }
 }

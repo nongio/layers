@@ -266,6 +266,14 @@ pub(crate) fn update_node_single(
     // the children's damage matters.
     let passthrough_only = prev_is_layout_only_passthrough && new_is_layout_only_passthrough;
 
+    // Take externally reported damage from the node under a write lock so
+    // it is consumed exactly once per paint, then pass it into do_repaint.
+    let pending_damage = engine.scene.with_arena_mut(|arena| {
+        arena
+            .get_mut(node_id)
+            .and_then(|node| node.get_mut().pending_damage.take())
+    });
+
     let mut updated_renderable = None;
     let content_damage = engine.scene.with_arena(|arena| {
         let opt_renderable = engine.scene.renderables.get(&node_id.into());
@@ -280,7 +288,7 @@ pub(crate) fn update_node_single(
                 || opacity_changed
             // || changed_filters
             {
-                let new_renderable = do_repaint(&renderable, scene_node);
+                let new_renderable = do_repaint(&renderable, scene_node, pending_damage);
                 repaint_damage = new_renderable.repaint_damage;
                 updated_renderable = Some(new_renderable);
             }
