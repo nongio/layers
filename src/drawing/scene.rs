@@ -25,13 +25,59 @@ use std::{
     iter::IntoIterator,
 };
 
-/// Downsample factor applied before blurring and inverted after.
-/// Blurring on a smaller image is significantly cheaper — at 0.25× we blur in the
-/// downsampled space with sigma `BACKGROUND_BLUR_SIGMA * BACKGROUND_BLUR_DOWNSAMPLE`,
-/// operating on an image with `BACKGROUND_BLUR_DOWNSAMPLE²` of the original pixels.
-/// After scaling back up, the apparent blur in output space is still ≈`BACKGROUND_BLUR_SIGMA`.
-/// For sigma=25 the downscaling artifacts are imperceptible.
-pub(crate) const BACKGROUND_BLUR_DOWNSAMPLE: f32 = 0.25;
+/// Manual filter-chain downsample factor (scale-down → blur → scale-up).
+///
+/// Now that the backdrop downscaling is done by the save_layer itself via
+/// [`set_backdrop_scale`] (Skia's experimental small-save-layer feature), the filter
+/// chain blurs at full resolution — set to 1.0 so we don't downscale twice. The
+/// `matrix_transform` stages collapse to identity and the blur uses the full sigma.
+pub(crate) const BACKGROUND_BLUR_DOWNSAMPLE: f32 = 1.0;
+
+/// Backdrop snapshot scale for the `BackgroundBlur` save_layer.
+///
+/// Passed to Skia's experimental `fExperimentalBackdropScale`: the backdrop is captured
+/// and filtered into an offscreen buffer this much smaller in each dimension (so
+/// `BACKGROUND_BLUR_SAVE_SCALE²` of the pixels). Since the result is heavily blurred the
+/// reduced resolution is imperceptible, but the layer is far cheaper to allocate and blur.
+pub(crate) const BACKGROUND_BLUR_SAVE_SCALE: f32 = 0.1;
+
+/// Sets the experimental backdrop downscale factor on a [`skia_safe::canvas::SaveLayerRec`].
+///
+/// skia-safe exposes no setter for `SkCanvas::SaveLayerRec::fExperimentalBackdropScale`
+/// (the field is private and `NativeAccess` is not re-exported), so we mirror the
+/// `#[repr(C)]` layout and write the trailing field directly. The compile-time size
+/// assertion guards against the upstream layout drifting. Matches skia-safe 0.93.
+fn set_backdrop_scale(rec: &mut skia_safe::canvas::SaveLayerRec, scale: f32) {
+    // Mirror of skia_safe::canvas::SaveLayerRec (skia-safe 0.93, #[repr(C)]).
+    // filters is an SkSpan = { ptr, len }.
+    #[repr(C)]
+    struct SaveLayerRecLayout<'a> {
+        bounds: Option<&'a skia_safe::Rect>,
+        paint: Option<&'a skia_safe::Paint>,
+        filters_ptr: *const std::ffi::c_void,
+        filters_len: usize,
+        backdrop: *const std::ffi::c_void,
+        backdrop_tile_mode: u32,
+        color_space: *const std::ffi::c_void,
+        flags: skia_safe::canvas::SaveLayerFlags,
+        experimental_backdrop_scale: f32,
+    }
+    // Fail the build if the upstream layout ever drifts from our mirror.
+    //
+    // CAVEAT: this only catches *size* changes. If a future skia-safe version reorders
+    // fields, or swaps two same-sized fields, the total size is unchanged and this
+    // assertion still passes — yet we'd write `scale` into the wrong field. This is why
+    // skia-safe is pinned to `=0.93` in Cargo.toml: a version bump is the only thing that
+    // can change the upstream layout, so re-check the real `SaveLayerRec` definition (and
+    // this mirror) whenever that pin moves.
+    const _: () = assert!(
+        std::mem::size_of::<SaveLayerRecLayout<'static>>()
+            == std::mem::size_of::<skia_safe::canvas::SaveLayerRec<'static>>()
+    );
+    // SAFETY: identical #[repr(C)] layout (size asserted above); we only write the trailing f32.
+    let mirror = unsafe { &mut *(rec as *mut _ as *mut SaveLayerRecLayout) };
+    mirror.experimental_backdrop_scale = scale;
+}
 
 // Thread-local caches so the filter objects are built once per rendering thread
 // and reused every frame. Skia ImageFilters are immutable ref-counted descriptors
@@ -67,28 +113,41 @@ fn backdrop_filter(apply_vibrancy: bool) -> Option<skia_safe::ImageFilter> {
 /// Prefer `backdrop_filter()` over calling this directly so the result is cached.
 fn build_backdrop_filter(blur_sigma: f32, apply_vibrancy: bool) -> Option<skia_safe::ImageFilter> {
     let s = BACKGROUND_BLUR_DOWNSAMPLE;
-    let sampling =
-        skia_safe::SamplingOptions::new(skia_safe::FilterMode::Linear, skia_safe::MipmapMode::None);
 
-    // Scale the backdrop down, blur with a proportionally smaller sigma,
-    // then scale back up. The save_layer bounds already constrain the output
-    // region so no explicit crop_rect is needed.
-    let scale_down = skia_safe::image_filters::matrix_transform(
-        &skia_safe::Matrix::scale((s, s)),
-        sampling,
-        None,
-    )?;
-    let blur = skia_safe::image_filters::blur(
-        (blur_sigma * s, blur_sigma * s),
-        skia_safe::TileMode::Mirror,
-        scale_down,
-        None,
-    )?;
-    let blurred = skia_safe::image_filters::matrix_transform(
-        &skia_safe::Matrix::scale((1.0 / s, 1.0 / s)),
-        sampling,
-        blur,
-    )?;
+    // Scale the backdrop down, blur with a proportionally smaller sigma, then scale back
+    // up. The save_layer bounds already constrain the output region so no explicit
+    // crop_rect is needed. When `s == 1.0` the scale stages are identity and the blur
+    // runs at full resolution — downsampling is delegated to the save_layer's backdrop
+    // scale (see [`set_backdrop_scale`]) instead, so skip building the no-op transforms.
+    let blurred = if s == 1.0 {
+        skia_safe::image_filters::blur(
+            (blur_sigma, blur_sigma),
+            skia_safe::TileMode::Mirror,
+            None,
+            None,
+        )?
+    } else {
+        let sampling = skia_safe::SamplingOptions::new(
+            skia_safe::FilterMode::Linear,
+            skia_safe::MipmapMode::None,
+        );
+        let scale_down = skia_safe::image_filters::matrix_transform(
+            &skia_safe::Matrix::scale((s, s)),
+            sampling,
+            None,
+        )?;
+        let blur = skia_safe::image_filters::blur(
+            (blur_sigma * s, blur_sigma * s),
+            skia_safe::TileMode::Mirror,
+            scale_down,
+            None,
+        )?;
+        skia_safe::image_filters::matrix_transform(
+            &skia_safe::Matrix::scale((1.0 / s, 1.0 / s)),
+            sampling,
+            blur,
+        )?
+    };
 
     if apply_vibrancy {
         // Add a mild tone map to feel more "material".
@@ -596,6 +655,7 @@ pub fn render_node_tree(
                             save_layer_rec =
                                 save_layer_rec.bounds(&path_bounds).paint(&backdrop_paint);
                             save_layer_rec = save_layer_rec.backdrop(&filter);
+                            set_backdrop_scale(&mut save_layer_rec, BACKGROUND_BLUR_SAVE_SCALE);
                             render_canvas.save_layer(&save_layer_rec);
                         }
 
@@ -634,7 +694,7 @@ pub fn render_node_tree(
 
     render_canvas.restore_to_count(restore_point);
 }
-pub(crate) const BACKGROUND_BLUR_SIGMA: f32 = 25.0;
+pub(crate) const BACKGROUND_BLUR_SIGMA: f32 = 40.0;
 
 // paint a single node in the provided canvas
 #[profiling::function]
@@ -692,6 +752,7 @@ pub(crate) fn paint_node(
             let mut save_layer_rec = skia_safe::canvas::SaveLayerRec::default();
             save_layer_rec = save_layer_rec.bounds(&bounds_to_origin).paint(&paint);
             save_layer_rec = save_layer_rec.backdrop(&blur);
+            set_backdrop_scale(&mut save_layer_rec, BACKGROUND_BLUR_SAVE_SCALE);
             canvas.save_layer(&save_layer_rec);
             canvas.restore_to_count(before_backdrop);
         }
