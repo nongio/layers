@@ -156,7 +156,7 @@ mod tests {
 
         assert_eq!(
             scene_damage,
-            skia_safe::Rect::from_xywh(75.0, 75.0, 150.0, 150.0)
+            skia_safe::Rect::from_xywh(60.0, 60.0, 180.0, 180.0)
         );
     }
 
@@ -541,7 +541,7 @@ mod tests {
         // the damage is bigger because of the blend mode
         assert_eq!(
             scene_damage,
-            skia_safe::Rect::from_xywh(75.0, 75.0, 150.0, 150.0)
+            skia_safe::Rect::from_xywh(60.0, 60.0, 180.0, 180.0)
         );
     }
 
