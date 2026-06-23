@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["compute_occlusion","compute_occlusion_aware_damage"],"type":["OcclusionMap"]};
