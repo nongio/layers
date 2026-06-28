@@ -393,7 +393,7 @@ pub fn paint_node_tree(
     skip_self: bool,
     occluded: Option<&HashSet<NodeRef>>,
     damage_region: Option<&skia_safe::Region>,
-    external_backdrop: Option<&skia_safe::Image>,
+    external_backdrop: Option<(&skia_safe::Image, f32)>,
 ) {
     let node_id: TreeStorageId = node_ref.into();
 
@@ -470,7 +470,7 @@ pub fn render_node_tree(
     context_opacity: f32,
     occluded: Option<&HashSet<NodeRef>>,
     damage_region: Option<&skia_safe::Region>,
-    external_backdrop: Option<&skia_safe::Image>,
+    external_backdrop: Option<(&skia_safe::Image, f32)>,
 ) {
     let node_id: TreeStorageId = node_ref.into();
     #[cfg(feature = "profile-with-puffin")]
@@ -716,7 +716,7 @@ pub(crate) fn paint_node(
     context_opacity: f32,
     offscreen: bool,
     damage_region: Option<&skia_safe::Region>,
-    external_backdrop: Option<&skia_safe::Image>,
+    external_backdrop: Option<(&skia_safe::Image, f32)>,
 ) -> usize {
     let node_id: TreeStorageId = node_ref.into();
     let node = scene_arena.get(node_id).unwrap().get();
@@ -765,9 +765,21 @@ pub(crate) fn paint_node(
         // subtree already painted, so the backdrop the blur reads is the true
         // composite: lower planes plus earlier same-subtree content. Confined to
         // the blur clip set above.
-        if let Some(backdrop) = external_backdrop {
+        //
+        // `scale` is the backdrop's resolution relative to the scene (1.0 = full,
+        // 0.1 = a 1/10 image): the layer's global region is sampled at that scale
+        // and stretched up to the layer bounds. Skia then re-downscales when
+        // blurring (set_backdrop_scale below), so a low-res backdrop is
+        // imperceptible after blurring but far cheaper to build, hold and upload.
+        if let Some((backdrop, scale)) = external_backdrop {
             profiling::scope!("seed external backdrop");
-            let src = render_layer.global_transformed_bounds;
+            let gb = render_layer.global_transformed_bounds;
+            let src = skia_safe::Rect::from_xywh(
+                gb.x() * scale,
+                gb.y() * scale,
+                gb.width() * scale,
+                gb.height() * scale,
+            );
             let mut backdrop_paint = skia_safe::Paint::default();
             backdrop_paint.set_blend_mode(skia_safe::BlendMode::DstOver);
             canvas.draw_image_rect(
@@ -953,6 +965,21 @@ pub fn render_subtree_to_buffer(
     let backdrop = if has_blur { backdrop } else { None };
     let backdrop_id = backdrop.map(|b| b.unique_id()).unwrap_or(0);
 
+    // The backdrop may be supplied at a reduced resolution (e.g. 1/10 the scene
+    // size) to keep it cheap to build and upload — the result is blurred anyway.
+    // Infer its scale from `width / scene_width` so the blur samples the right
+    // region: a backdrop covering the whole scene at scale `s` has dimensions
+    // `scene_size * s`. (Pass a full-size backdrop for scale 1.0.)
+    let scaled_backdrop = backdrop.map(|b| {
+        let scene_w = scene.size.read().unwrap_or_else(|e| e.into_inner()).x;
+        let scale = if scene_w > 0.0 {
+            b.width() as f32 / scene_w
+        } else {
+            1.0
+        };
+        (b, scale)
+    });
+
     // Cache hit: same content, same backdrop, same buffer size -> reuse.
     let cached = SUBTREE_BUFFER_CACHE.with(|c| {
         let cache = c.borrow();
@@ -1001,7 +1028,7 @@ pub fn render_subtree_to_buffer(
             1.0,
             None,
             None,
-            backdrop,
+            scaled_backdrop,
         );
         canvas.restore_to_count(restore_point);
     }

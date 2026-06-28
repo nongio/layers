@@ -118,19 +118,33 @@ fn main() {
         (overlay.id, "overlay"),
     ];
 
-    // `backdrops[i]` is the cumulative composite of planes BELOW plane `i` — the
-    // backdrop fed to plane `i`. We persist these across frames and only refresh
-    // a snapshot when a lower plane actually changed, so an idle blur plane keeps
-    // receiving the *same* backdrop image and therefore hits the engine cache
-    // (the engine keys blur planes on the backdrop's identity).
+    // The backdrop is kept at 1/10 the scene resolution: it is only ever sampled
+    // through a heavy blur, so a tiny image is visually identical but ~100x
+    // cheaper to composite, hold and upload. The engine infers the scale from the
+    // image size, so we just pass the small image.
+    const BACKDROP_SCALE: f32 = 0.1;
+    let acc_w = (W * BACKDROP_SCALE).ceil() as i32;
+    let acc_h = (H * BACKDROP_SCALE).ceil() as i32;
+    let linear = skia::SamplingOptions::new(skia::FilterMode::Linear, skia::MipmapMode::None);
+    let no_paint = skia::Paint::default();
+
+    // `backdrops[i]` is the cumulative composite of planes BELOW plane `i` (at
+    // 1/10 scale) — the backdrop fed to plane `i`. We persist these across frames
+    // and only refresh a snapshot when a lower plane actually changed, so an idle
+    // blur plane keeps receiving the *same* backdrop image and therefore hits the
+    // engine cache (the engine keys blur planes on the backdrop's identity).
     let mut backdrops: Vec<Option<skia::Image>> = vec![None; planes.len() + 1];
 
-    // One "frame": render each plane on its own, feeding each the composite of
-    // the planes below it. Returns the stacked composite (what KMS would scan out).
+    // One "frame": render each plane on its own, feeding each the (1/10) composite
+    // of the planes below it. Returns the full-res stacked composite (KMS scanout).
     let mut render_frame = |engine: &Engine, label: &str| -> skia::Image {
-        let mut acc =
-            skia::surfaces::raster_n32_premul((W as i32, H as i32)).expect("backdrop surface");
+        // Small accumulator for the blur backdrop ...
+        let mut acc = skia::surfaces::raster_n32_premul((acc_w, acc_h)).expect("backdrop surface");
         acc.canvas().clear(skia::Color::BLACK);
+        // ... and a full-res one only to produce the final composited preview.
+        let mut full =
+            skia::surfaces::raster_n32_premul((W as i32, H as i32)).expect("composite surface");
+        full.canvas().clear(skia::Color::BLACK);
         let mut stack_dirty = false;
 
         for (i, (root, name)) in planes.iter().enumerate() {
@@ -145,16 +159,25 @@ fn main() {
             );
             save_png(&buf.image, &format!("out/plane_{}_{}.png", i, name));
 
-            // Fold this plane into the running composite, then publish it as the
-            // backdrop for the next plane up — but only re-snapshot when the stack
-            // below has changed, so unchanged planes keep a stable backdrop.
-            acc.canvas()
+            full.canvas()
                 .draw_image(&buf.image, (buf.origin.x, buf.origin.y), None);
+
+            // Fold this plane into the 1/10 backdrop for the next plane up — but
+            // only re-snapshot when the stack below changed, so unchanged planes
+            // keep a stable backdrop image (and thus a cache hit).
+            let dst = skia::Rect::from_xywh(
+                buf.origin.x * BACKDROP_SCALE,
+                buf.origin.y * BACKDROP_SCALE,
+                buf.size.width as f32 * BACKDROP_SCALE,
+                buf.size.height as f32 * BACKDROP_SCALE,
+            );
+            acc.canvas()
+                .draw_image_rect_with_sampling_options(&buf.image, None, dst, linear, &no_paint);
             if stack_dirty || backdrops[i + 1].is_none() {
                 backdrops[i + 1] = Some(acc.image_snapshot());
             }
         }
-        acc.image_snapshot()
+        full.image_snapshot()
     };
 
     // Frame 1: everything renders fresh.
