@@ -56,41 +56,51 @@ fn main() {
     root.set_position((0.0, 0.0), None);
     root.set_size(Size::points(W, H), None);
 
-    // --- Wallpaper: two colored bands so the blur has something to mix. ---
+    // --- Wallpaper: bright vertical stripes (HIGH-FREQUENCY content), so the
+    //     blur has sharp edges to visibly smear. Blurring a flat color shows
+    //     nothing; blurring stripes turns them into a smooth gradient. ---
     let wallpaper = engine.new_layer();
     engine.append_layer(&wallpaper, Some(root.id)).unwrap();
     wallpaper.set_layout_style(absolute());
     wallpaper.set_position((0.0, 0.0), None);
     wallpaper.set_size(Size::points(W, H), None);
-    wallpaper.set_background_color(Color::new_hex("#1f6feb"), None);
+    wallpaper.set_background_color(Color::new_hex("#101010"), None);
 
-    let band = engine.new_layer();
-    engine.append_layer(&band, Some(wallpaper.id)).unwrap();
-    band.set_layout_style(absolute());
-    band.set_position((0.0, 0.0), None);
-    band.set_size(Size::points(W / 2.0, H), None);
-    band.set_background_color(Color::new_hex("#f0883e"), None);
+    let stripe_colors = [
+        "#ff3b30", "#ff9500", "#ffcc00", "#34c759", "#00c7be", "#30b0c7", "#007aff", "#5856d6",
+        "#af52de", "#ff2d55",
+    ];
+    let stripe_w = W / stripe_colors.len() as f32;
+    for (i, hex) in stripe_colors.iter().enumerate() {
+        let stripe = engine.new_layer();
+        engine.append_layer(&stripe, Some(wallpaper.id)).unwrap();
+        stripe.set_layout_style(absolute());
+        stripe.set_position((i as f32 * stripe_w, 0.0), None);
+        stripe.set_size(Size::points(stripe_w, H), None);
+        stripe.set_background_color(Color::new_hex(hex), None);
+    }
 
-    // --- Window N ---
-    let window_n = window(&engine, root.id, 120.0, 120.0, Color::new_hex("#2ea043"));
+    // --- Window N: an opaque app window. ---
+    let window_n = window(&engine, root.id, 90.0, 300.0, Color::new_hex("#2ea043"));
 
-    // --- Window N+1, overlapping N, with a frosted (BackgroundBlur) titlebar ---
-    let window_n1 = window(&engine, root.id, 360.0, 220.0, Color::new_hex("#8957e5"));
-    let titlebar = engine.new_layer();
-    engine.append_layer(&titlebar, Some(window_n1.id)).unwrap();
-    titlebar.set_layout_style(absolute());
-    titlebar.set_position((0.0, 0.0), None);
-    titlebar.set_size(Size::points(360.0, 56.0), None);
-    titlebar.set_background_color(Color::new_rgba255(255, 255, 255, 20), None);
-    titlebar.set_blend_mode(BlendMode::BackgroundBlur);
+    // --- Window N+1: a FROSTED GLASS window (whole body is BackgroundBlur with
+    //     almost no tint), overlapping the stripes and window N. Its buffer is
+    //     rendered separately, yet its blur samples the composition behind it. ---
+    let window_n1 = engine.new_layer();
+    engine.append_layer(&window_n1, Some(root.id)).unwrap();
+    window_n1.set_layout_style(absolute());
+    window_n1.set_position((250.0, 120.0), None);
+    window_n1.set_size(Size::points(420.0, 300.0), None);
+    window_n1.set_background_color(Color::new_rgba255(255, 255, 255, 8), None);
+    window_n1.set_blend_mode(BlendMode::BackgroundBlur);
 
-    // --- Overlay: a translucent full-screen frost (e.g. a notification scrim) ---
+    // --- Overlay: a frosted top bar (e.g. a menu/notification bar). ---
     let overlay = engine.new_layer();
     engine.append_layer(&overlay, Some(root.id)).unwrap();
     overlay.set_layout_style(absolute());
-    overlay.set_position((640.0, 40.0), None);
-    overlay.set_size(Size::points(220.0, 120.0), None);
-    overlay.set_background_color(Color::new_rgba255(255, 255, 255, 16), None);
+    overlay.set_position((120.0, 24.0), None);
+    overlay.set_size(Size::points(660.0, 72.0), None);
+    overlay.set_background_color(Color::new_rgba255(255, 255, 255, 10), None);
     overlay.set_blend_mode(BlendMode::BackgroundBlur);
 
     engine.update(0.016);
