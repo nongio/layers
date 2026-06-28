@@ -1,14 +1,18 @@
-//! Headless demo of `render_subtrees_to_buffers`.
+//! Headless demo of `render_subtree_to_buffer` — the per-plane API a KMS/DRM
+//! compositor would drive.
 //!
-//! Builds a desktop-composition scene — wallpaper / window N / window N+1 (with
-//! a frosted titlebar) / overlay — renders each plane into its OWN buffer the way
-//! an external compositor would consume them, and writes:
-//!   - `out/plane_{z}_{key}.png`     one independent buffer per subtree, and
-//!   - `out/composited.png`          the buffers re-stacked in z-order.
+//! Builds a desktop-composition scene (wallpaper / window N / frosted glass
+//! window N+1 / frosted overlay) and renders each plane into its OWN buffer, one
+//! at a time, bottom -> top. The caller owns plane order and compositing: it
+//! keeps a running backdrop (the stack of lower planes) and passes it to each
+//! plane so `BackgroundBlur` layers can bake a blur of the real content behind
+//! them — cross-buffer vibrancy — even though every plane is an independent
+//! buffer.
 //!
-//! The frosted titlebar of window N+1 is a `BackgroundBlur` layer: even though it
-//! lives in its own isolated buffer, its blur samples the composition of the
-//! wallpaper + window N below it (cross-buffer vibrancy).
+//! It renders TWO frames to show the per-subtree cache: nothing changes between
+//! them, so every plane reports `from_cache == true` the second time. Writes:
+//!   - `out/plane_{z}_{key}.png`   one independent buffer per subtree, and
+//!   - `out/composited.png`        the planes the caller stacked (== KMS output).
 //!
 //! Run with: `cargo run -p hello-subtrees`
 
@@ -105,31 +109,61 @@ fn main() {
 
     engine.update(0.016);
 
-    // Render every plane into its own buffer, bottom -> top.
-    let roots = [wallpaper.id, window_n.id, window_n1.id, overlay.id];
-    let names = ["wallpaper", "window_n", "window_n1", "overlay"];
-    let buffers = render_subtrees_to_buffers(engine.scene(), &roots, None);
+    // The plane stack, bottom -> top. This is the only ordering the engine needs;
+    // it is owned by the caller (here) the way a KMS compositor owns its planes.
+    let planes = [
+        (wallpaper.id, "wallpaper"),
+        (window_n.id, "window_n"),
+        (window_n1.id, "window_n1"),
+        (overlay.id, "overlay"),
+    ];
 
-    println!("rendered {} subtree buffers:", buffers.len());
-    for (b, name) in buffers.iter().zip(names) {
-        println!(
-            "  z{} {:<10} origin=({:.0},{:.0}) size={}x{}",
-            b.z_index, name, b.origin.x, b.origin.y, b.size.width, b.size.height
-        );
-        save_png(&b.image, &format!("out/plane_{}_{}.png", b.z_index, name));
-    }
+    // `backdrops[i]` is the cumulative composite of planes BELOW plane `i` — the
+    // backdrop fed to plane `i`. We persist these across frames and only refresh
+    // a snapshot when a lower plane actually changed, so an idle blur plane keeps
+    // receiving the *same* backdrop image and therefore hits the engine cache
+    // (the engine keys blur planes on the backdrop's identity).
+    let mut backdrops: Vec<Option<skia::Image>> = vec![None; planes.len() + 1];
 
-    // Re-stack the independent buffers the way an external compositor would, to
-    // confirm the result is a coherent desktop with working cross-buffer blur.
-    let mut composite =
-        skia::surfaces::raster_n32_premul((W as i32, H as i32)).expect("composite surface");
-    {
-        let canvas = composite.canvas();
-        canvas.clear(skia::Color::BLACK);
-        for b in &buffers {
-            canvas.draw_image(&b.image, (b.origin.x, b.origin.y), None);
+    // One "frame": render each plane on its own, feeding each the composite of
+    // the planes below it. Returns the stacked composite (what KMS would scan out).
+    let mut render_frame = |engine: &Engine, label: &str| -> skia::Image {
+        let mut acc =
+            skia::surfaces::raster_n32_premul((W as i32, H as i32)).expect("backdrop surface");
+        acc.canvas().clear(skia::Color::BLACK);
+        let mut stack_dirty = false;
+
+        for (i, (root, name)) in planes.iter().enumerate() {
+            let buf = engine
+                .render_subtree(*root, backdrops[i].as_ref(), None)
+                .expect("plane buffer");
+            stack_dirty |= !buf.from_cache;
+
+            println!(
+                "[{label}] {name:<10} origin=({:.0},{:.0}) size={}x{} cached={}",
+                buf.origin.x, buf.origin.y, buf.size.width, buf.size.height, buf.from_cache
+            );
+            save_png(&buf.image, &format!("out/plane_{}_{}.png", i, name));
+
+            // Fold this plane into the running composite, then publish it as the
+            // backdrop for the next plane up — but only re-snapshot when the stack
+            // below has changed, so unchanged planes keep a stable backdrop.
+            acc.canvas()
+                .draw_image(&buf.image, (buf.origin.x, buf.origin.y), None);
+            if stack_dirty || backdrops[i + 1].is_none() {
+                backdrops[i + 1] = Some(acc.image_snapshot());
+            }
         }
-    }
-    save_png(&composite.image_snapshot(), "out/composited.png");
+        acc.image_snapshot()
+    };
+
+    // Frame 1: everything renders fresh.
+    let composited = render_frame(&engine, "frame 1");
+    save_png(&composited, "out/composited.png");
+
+    // Frame 2: nothing changed, so every plane comes straight from the cache.
+    println!("--- re-rendering with no changes (expect cached=true) ---");
+    render_frame(&engine, "frame 2");
+
     println!("wrote out/composited.png");
 }

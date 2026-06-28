@@ -1,5 +1,5 @@
 pub use super::drawing::scene::{
-    draw_scene, render_node_tree, render_subtrees_to_buffers, SubtreeBuffer,
+    draw_scene, render_node_tree, render_subtree_to_buffer, SubtreeBuffer,
 };
 pub use super::{
     drawing::scene::DrawScene,

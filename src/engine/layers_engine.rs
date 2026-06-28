@@ -372,21 +372,26 @@ impl LayersEngine {
         layers_debug_server::start_debugger_server(self.engine.clone());
     }
 
-    /// Render each subtree `root` into its own independent buffer, in z-order
-    /// (`roots[0]` is bottom-most). Returns one [`SubtreeBuffer`] per root, ready
-    /// to hand to an external compositor (Wayland / hardware planes).
+    /// Render a single subtree `root` into its own buffer, for an external
+    /// compositor (e.g. a KMS/DRM plane). Returns the cached buffer untouched
+    /// (`SubtreeBuffer::from_cache == true`) when neither the subtree's content
+    /// nor the supplied `backdrop` changed since the last call for this root, so
+    /// callers can render every plane each frame and only re-upload what changed.
     ///
-    /// `BackgroundBlur` layers inside any subtree sample the composite of all
-    /// lower subtrees (cross-buffer vibrancy): a running backdrop accumulator is
-    /// built bottom-to-top and seeded into each blur shape before blurring.
+    /// `backdrop` is the composite of the planes BELOW this one, in scene/global
+    /// coordinates (the caller owns plane order). It is sampled to bake any
+    /// `BackgroundBlur` layers in the subtree so vibrancy reflects the real
+    /// content behind the plane. Pass `None` for the bottom plane or a subtree
+    /// with no blur.
     ///
     /// Pass a GPU `context` for GPU-backed surfaces, or `None` for raster.
-    pub fn render_subtrees(
+    pub fn render_subtree(
         &self,
-        roots: &[NodeRef],
+        root: NodeRef,
+        backdrop: Option<&skia::Image>,
         context: Option<&mut skia::gpu::DirectContext>,
-    ) -> Vec<SubtreeBuffer> {
-        render_subtrees_to_buffers(self.scene().clone(), roots, context)
+    ) -> Option<SubtreeBuffer> {
+        render_subtree_to_buffer(self.scene().clone(), root, backdrop, context)
     }
 
     pub fn layer_as_content(&self, layer: &Layer) -> ContentDrawFunction {

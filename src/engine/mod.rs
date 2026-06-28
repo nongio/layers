@@ -987,6 +987,18 @@ impl Engine {
     pub fn scene(&self) -> Arc<Scene> {
         self.scene.clone()
     }
+    /// Render a single subtree `root` into its own cached buffer for an external
+    /// compositor (e.g. a KMS/DRM plane). See
+    /// [`crate::drawing::scene::render_subtree_to_buffer`] for the full contract
+    /// (caller-supplied backdrop for cross-buffer blur, per-subtree caching).
+    pub fn render_subtree(
+        &self,
+        root: NodeRef,
+        backdrop: Option<&skia_safe::Image>,
+        context: Option<&mut skia_safe::gpu::DirectContext>,
+    ) -> Option<crate::drawing::scene::SubtreeBuffer> {
+        crate::drawing::scene::render_subtree_to_buffer(self.scene(), root, backdrop, context)
+    }
     pub fn scene_root(&self) -> Option<NodeRef> {
         *self.scene_root.read().unwrap()
     }
