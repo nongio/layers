@@ -20,3 +20,6 @@ examples/hello-rust/assets/
 .vscode/settings.json
 
 node_modules/
+# Generated render artifacts from hello-subtrees example and subtree_buffers test
+/out/
+tests/subtree_buffers/

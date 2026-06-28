@@ -372,6 +372,36 @@ impl LayersEngine {
         layers_debug_server::start_debugger_server(self.engine.clone());
     }
 
+    /// Render a single subtree `root` into its own buffer, for an external
+    /// compositor (e.g. a KMS/DRM plane). Returns the cached buffer untouched
+    /// (`SubtreeBuffer::from_cache == true`) when neither the subtree's content
+    /// nor the supplied `backdrop` changed since the last call for this root, so
+    /// callers can render every plane each frame and only re-upload what changed.
+    ///
+    /// `backdrop` is the composite of the planes BELOW this one, in scene/global
+    /// coordinates (the caller owns plane order). It is sampled to bake any
+    /// `BackgroundBlur` layers in the subtree so vibrancy reflects the real
+    /// content behind the plane. Pass `None` for the bottom plane or a subtree
+    /// with no blur.
+    ///
+    /// Pass a GPU `context` for GPU-backed surfaces, or `None` for raster.
+    pub fn render_subtree(
+        &self,
+        root: NodeRef,
+        backdrop: Option<&skia::Image>,
+        context: Option<&mut skia::gpu::DirectContext>,
+    ) -> Option<SubtreeBuffer> {
+        render_subtree_to_buffer(self.scene().clone(), root, backdrop, context)
+    }
+
+    /// Drop the cached subtree buffer for `root`, freeing its render surface and
+    /// image. Call when a plane is retired (e.g. its window closed) so its buffer
+    /// doesn't linger for the process lifetime. Returns `true` if an entry was
+    /// present. Must run on the render thread.
+    pub fn forget_subtree_buffer(&self, root: NodeRef) -> bool {
+        forget_subtree_buffer(root)
+    }
+
     pub fn layer_as_content(&self, layer: &Layer) -> ContentDrawFunction {
         let layer_ref = layer.clone();
         let engine_ref = self.clone();
@@ -380,7 +410,7 @@ impl LayersEngine {
             let scene = engine_ref.scene();
             scene.with_arena(|arena| {
                 scene.with_renderable_arena(|renderable_arena| {
-                    render_node_tree(id, arena, renderable_arena, c, 1.0, None, None);
+                    render_node_tree(id, arena, renderable_arena, c, 1.0, None, None, None);
                 });
             });
             skia::Rect::from_xywh(0.0, 0.0, w, h)

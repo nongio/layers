@@ -987,6 +987,24 @@ impl Engine {
     pub fn scene(&self) -> Arc<Scene> {
         self.scene.clone()
     }
+    /// Render a single subtree `root` into its own cached buffer for an external
+    /// compositor (e.g. a KMS/DRM plane). See
+    /// [`crate::drawing::scene::render_subtree_to_buffer`] for the full contract
+    /// (caller-supplied backdrop for cross-buffer blur, per-subtree caching).
+    pub fn render_subtree(
+        &self,
+        root: NodeRef,
+        backdrop: Option<&skia_safe::Image>,
+        context: Option<&mut skia_safe::gpu::DirectContext>,
+    ) -> Option<crate::drawing::scene::SubtreeBuffer> {
+        crate::drawing::scene::render_subtree_to_buffer(self.scene(), root, backdrop, context)
+    }
+    /// Drop the cached subtree buffer for `root`, freeing its render surface and
+    /// image. Call when a plane is retired so its buffer doesn't linger for the
+    /// process lifetime. Returns `true` if an entry was present. Render thread only.
+    pub fn forget_subtree_buffer(&self, root: NodeRef) -> bool {
+        crate::drawing::scene::forget_subtree_buffer(root)
+    }
     pub fn scene_root(&self) -> Option<NodeRef> {
         *self.scene_root.read().unwrap()
     }
@@ -2105,7 +2123,7 @@ impl Engine {
 
             // Try-lock to avoid blocking while a writer holds (or waits on) the arenas.
             if let (Ok(nodes), Ok(renderables)) = (nodes.try_read(), renderables.try_read()) {
-                render_node_tree(layer_id, &nodes, &renderables, c, 1.0, None, None);
+                render_node_tree(layer_id, &nodes, &renderables, c, 1.0, None, None, None);
             }
             skia::Rect::from_xywh(0.0, 0.0, w, h)
         };
