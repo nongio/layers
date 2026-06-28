@@ -345,9 +345,8 @@ pub fn create_surface_for_node(
     context: &mut skia_safe::gpu::DirectContext,
 ) -> Option<Surface> {
     let bounds = surface_size_for_render_layer(render_layer);
-    const safe_multiplier: f32 = 1.2;
-    let width = (bounds.x * safe_multiplier) as i32;
-    let height = (bounds.y * safe_multiplier) as i32;
+    let width = (bounds.x * SUBTREE_SAFE_MARGIN) as i32;
+    let height = (bounds.y * SUBTREE_SAFE_MARGIN) as i32;
     if width == 0 || height == 0 {
         // tracing::warn!(
         //     "Invalid size for surface {:?} [{:?}]",
@@ -837,8 +836,9 @@ pub struct SubtreeBuffer {
 }
 
 /// Edge margin applied to each subtree buffer so blur kernels and clipped
-/// children near the bounds aren't cut off. Mirrors `create_surface_for_node`.
-const SUBTREE_SAFE_MARGIN: f32 = 1.2;
+/// children near the bounds aren't cut off. Shared with `create_surface_for_node`
+/// so the offscreen-cache and subtree-buffer surfaces grow by the same amount.
+pub(crate) const SUBTREE_SAFE_MARGIN: f32 = 1.2;
 
 /// Allocate a drawing surface, GPU-backed when a context is given, else raster.
 fn alloc_subtree_surface(
@@ -891,10 +891,32 @@ thread_local! {
         std::cell::RefCell::new(HashMap::new());
 }
 
+/// Drop the cached subtree buffer for `root`, freeing its render surface and
+/// image snapshot. Call this when a plane is retired (e.g. its window closed) so
+/// its buffer doesn't linger in the cache for the lifetime of the process — the
+/// cache is only ever populated on render and is not otherwise evicted. Returns
+/// `true` if an entry was present. Must run on the render thread (same thread
+/// that called `render_subtree_to_buffer`).
+pub fn forget_subtree_buffer(root: NodeRef) -> bool {
+    SUBTREE_BUFFER_CACHE.with(|c| c.borrow_mut().remove(&root).is_some())
+}
+
+/// Drop every cached subtree buffer, freeing all retained render surfaces and
+/// image snapshots. Useful on teardown or when the whole plane set is rebuilt.
+/// Must run on the render thread.
+pub fn clear_subtree_buffer_cache() {
+    SUBTREE_BUFFER_CACHE.with(|c| c.borrow_mut().clear());
+}
+
 /// Sum of `frame_number` across the subtree rooted at `node_id`. A node's frame
 /// is bumped on any repaint, so the sum is a cheap monotonic dirty signal for
 /// the whole subtree (unlike the root's own frame, which a deep descendant
 /// change does not touch unless the root is `image_cache`d).
+///
+/// This is a heuristic: in principle two distinct subtree states could sum to
+/// the same value and yield a false cache hit, but it requires `usize` wrap or an
+/// exact cross-node cancellation between two polls, so the probability is
+/// negligible and the cheap `O(nodes)` sum is preferred over hashing every node.
 fn subtree_dirty_signature(node_id: NodeId, arena: &Arena<SceneNode>) -> usize {
     let mut sum: usize = 0;
     if let Some(node) = arena.get(node_id) {
@@ -940,6 +962,10 @@ pub fn render_subtree_to_buffer(
     let node_id: TreeStorageId = root.into();
     let node = scene_arena.get(node_id)?;
     if node.is_removed() || node.get().hidden() {
+        // A removed/hidden root produces no buffer; drop any cached surface for it
+        // so a retired plane (e.g. a closed window) reclaims its memory instead of
+        // leaking, and a reused index slot can't inherit a stale entry.
+        forget_subtree_buffer(root);
         return None;
     }
     let scene_node = node.get();
@@ -969,14 +995,29 @@ pub fn render_subtree_to_buffer(
     // size) to keep it cheap to build and upload — the result is blurred anyway.
     // Infer its scale from `width / scene_width` so the blur samples the right
     // region: a backdrop covering the whole scene at scale `s` has dimensions
-    // `scene_size * s`. (Pass a full-size backdrop for scale 1.0.)
+    // `scene_size * s`. (Pass a full-size backdrop for scale 1.0.) The contract
+    // is a *uniformly* scaled copy of the *whole* scene; a partial or
+    // non-uniformly scaled backdrop would sample the wrong region, so we assert
+    // the inferred x/y scales agree (debug builds) rather than fail silently.
     let scaled_backdrop = backdrop.map(|b| {
-        let scene_w = scene.size.read().unwrap_or_else(|e| e.into_inner()).x;
-        let scale = if scene_w > 0.0 {
-            b.width() as f32 / scene_w
+        let scene_size = *scene.size.read().unwrap_or_else(|e| e.into_inner());
+        let scale = if scene_size.x > 0.0 {
+            b.width() as f32 / scene_size.x
         } else {
             1.0
         };
+        debug_assert!(
+            scene_size.y <= 0.0
+                || (b.height() as f32 / scene_size.y - scale).abs() <= scale.max(1.0) * 0.05,
+            "render_subtree backdrop must be a uniformly scaled copy of the whole scene \
+             ({}x{}): got {}x{} (x-scale {:.3}, y-scale {:.3})",
+            scene_size.x,
+            scene_size.y,
+            b.width(),
+            b.height(),
+            scale,
+            b.height() as f32 / scene_size.y,
+        );
         (b, scale)
     });
 

@@ -288,3 +288,60 @@ pub fn subtree_buffers_root_is_blur_layer() {
         seam
     );
 }
+
+// The per-subtree cache is only populated on render and is never evicted on its
+// own, so retired planes would leak their surfaces. `forget_subtree_buffer` (and
+// rendering a now-hidden root) must drop the cached entry: the next render is a
+// fresh miss rather than a stale hit.
+#[test]
+pub fn subtree_buffers_forget_evicts_cache() {
+    let engine = Engine::create(300.0, 300.0);
+
+    let root = engine.new_layer();
+    engine.add_layer(&root).unwrap();
+    root.set_layout_style(absolute());
+    root.set_position((0.0, 0.0), None);
+    root.set_size(Size::points(300.0, 300.0), None);
+
+    let plane = engine.new_layer();
+    engine.append_layer(&plane, Some(root.id)).unwrap();
+    plane.set_layout_style(absolute());
+    plane.set_position((20.0, 20.0), None);
+    plane.set_size(Size::points(100.0, 100.0), None);
+    plane.set_background_color(Color::new_hex("#00ff00"), None);
+
+    engine.update(0.016);
+
+    // First render is a miss; an immediate re-render hits the cache.
+    let first = render_subtree_to_buffer(engine.scene(), plane.id, None, None).unwrap();
+    assert!(!first.from_cache, "first render should not be cached");
+    let cached = render_subtree_to_buffer(engine.scene(), plane.id, None, None).unwrap();
+    assert!(cached.from_cache, "unchanged plane should hit cache");
+
+    // Explicit eviction drops the entry: the next render is a miss again.
+    assert!(
+        forget_subtree_buffer(plane.id),
+        "forget_subtree_buffer should report it evicted an existing entry"
+    );
+    assert!(
+        !forget_subtree_buffer(plane.id),
+        "second forget should find nothing to evict"
+    );
+    let after_forget = render_subtree_to_buffer(engine.scene(), plane.id, None, None).unwrap();
+    assert!(
+        !after_forget.from_cache,
+        "render after forget must be a fresh miss"
+    );
+
+    // Rendering a hidden root returns no buffer and evicts its cached entry.
+    plane.set_hidden(true);
+    engine.update(0.016);
+    assert!(
+        render_subtree_to_buffer(engine.scene(), plane.id, None, None).is_none(),
+        "hidden root should produce no buffer"
+    );
+    assert!(
+        !forget_subtree_buffer(plane.id),
+        "hidden-root render should already have evicted the cache entry"
+    );
+}

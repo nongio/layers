@@ -999,6 +999,12 @@ impl Engine {
     ) -> Option<crate::drawing::scene::SubtreeBuffer> {
         crate::drawing::scene::render_subtree_to_buffer(self.scene(), root, backdrop, context)
     }
+    /// Drop the cached subtree buffer for `root`, freeing its render surface and
+    /// image. Call when a plane is retired so its buffer doesn't linger for the
+    /// process lifetime. Returns `true` if an entry was present. Render thread only.
+    pub fn forget_subtree_buffer(&self, root: NodeRef) -> bool {
+        crate::drawing::scene::forget_subtree_buffer(root)
+    }
     pub fn scene_root(&self) -> Option<NodeRef> {
         *self.scene_root.read().unwrap()
     }

@@ -394,6 +394,14 @@ impl LayersEngine {
         render_subtree_to_buffer(self.scene().clone(), root, backdrop, context)
     }
 
+    /// Drop the cached subtree buffer for `root`, freeing its render surface and
+    /// image. Call when a plane is retired (e.g. its window closed) so its buffer
+    /// doesn't linger for the process lifetime. Returns `true` if an entry was
+    /// present. Must run on the render thread.
+    pub fn forget_subtree_buffer(&self, root: NodeRef) -> bool {
+        forget_subtree_buffer(root)
+    }
+
     pub fn layer_as_content(&self, layer: &Layer) -> ContentDrawFunction {
         let layer_ref = layer.clone();
         let engine_ref = self.clone();
