@@ -811,7 +811,16 @@ impl Layer {
             let damage = scene
                 .try_with_arena(|arena| {
                     scene.with_renderable_arena(|renderable_arena| {
-                        render_node_tree(layer_id, arena, renderable_arena, c, 1.0, None, None);
+                        render_node_tree(
+                            layer_id,
+                            arena,
+                            renderable_arena,
+                            c,
+                            1.0,
+                            None,
+                            None,
+                            None,
+                        );
                     });
                     // the damage of a mirrored layer is the bounds with children
                     if let Some(scene_node) = arena.get(layer_id.0) {

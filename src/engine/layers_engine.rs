@@ -372,6 +372,23 @@ impl LayersEngine {
         layers_debug_server::start_debugger_server(self.engine.clone());
     }
 
+    /// Render each subtree `root` into its own independent buffer, in z-order
+    /// (`roots[0]` is bottom-most). Returns one [`SubtreeBuffer`] per root, ready
+    /// to hand to an external compositor (Wayland / hardware planes).
+    ///
+    /// `BackgroundBlur` layers inside any subtree sample the composite of all
+    /// lower subtrees (cross-buffer vibrancy): a running backdrop accumulator is
+    /// built bottom-to-top and seeded into each blur shape before blurring.
+    ///
+    /// Pass a GPU `context` for GPU-backed surfaces, or `None` for raster.
+    pub fn render_subtrees(
+        &self,
+        roots: &[NodeRef],
+        context: Option<&mut skia::gpu::DirectContext>,
+    ) -> Vec<SubtreeBuffer> {
+        render_subtrees_to_buffers(self.scene().clone(), roots, context)
+    }
+
     pub fn layer_as_content(&self, layer: &Layer) -> ContentDrawFunction {
         let layer_ref = layer.clone();
         let engine_ref = self.clone();
@@ -380,7 +397,7 @@ impl LayersEngine {
             let scene = engine_ref.scene();
             scene.with_arena(|arena| {
                 scene.with_renderable_arena(|renderable_arena| {
-                    render_node_tree(id, arena, renderable_arena, c, 1.0, None, None);
+                    render_node_tree(id, arena, renderable_arena, c, 1.0, None, None, None);
                 });
             });
             skia::Rect::from_xywh(0.0, 0.0, w, h)

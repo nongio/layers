@@ -132,6 +132,7 @@ impl DrawScene for SkiaFboRenderer {
                         1.0,
                         occluded.as_ref(),
                         None,
+                        None,
                     );
                 }
             });

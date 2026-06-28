@@ -1,4 +1,6 @@
-pub use super::drawing::scene::{draw_scene, render_node_tree};
+pub use super::drawing::scene::{
+    draw_scene, render_node_tree, render_subtrees_to_buffers, SubtreeBuffer,
+};
 pub use super::{
     drawing::scene::DrawScene,
     easing::Interpolate,
