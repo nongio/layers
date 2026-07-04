@@ -1259,11 +1259,12 @@ impl Engine {
             && started_animations.is_empty()
             && finished_animations.is_empty()
         {
+            // cleanup_nodes attributes removed-node damage to surviving
+            // ancestors in the per-subtree map as a side effect.
             let removed_damage = cleanup_nodes(self);
             if !removed_damage.is_empty() {
                 let mut current_damage = self.damage.write().unwrap();
                 current_damage.join(removed_damage);
-                self.record_removed_damage(removed_damage);
                 return true;
             }
             return false;
@@ -1280,7 +1281,6 @@ impl Engine {
 
         let mut damage = self.update_nodes();
         damage.join(removed_damage);
-        self.record_removed_damage(removed_damage);
 
         // 5.0 trigger the callbacks for the listeners on the transitions
         trigger_callbacks(self, &started_animations);
@@ -2160,15 +2160,24 @@ impl Engine {
     pub fn damage(&self) -> skia_safe::Rect {
         *self.damage.read().unwrap()
     }
-    /// Fold damage from removed nodes into the accumulator consumed by
-    /// `subtree_damage()`. Removed nodes can't be attributed to a subtree,
-    /// so this damage conservatively applies to every subtree query.
-    fn record_removed_damage(&self, removed_damage: skia_safe::Rect) {
-        if !removed_damage.is_empty() {
-            self.removed_nodes_damage
-                .write()
-                .unwrap()
-                .join(removed_damage);
+    /// Fold damage from removed nodes into the per-subtree damage map.
+    /// `attributed` entries carry the removed node's nearest surviving
+    /// ancestor, so `subtree_damage()` queries stay scoped to the subtree
+    /// the removal happened in. Damage with no surviving ancestor goes to
+    /// the global accumulator and conservatively applies to every query.
+    pub(crate) fn attribute_removed_damage(
+        &self,
+        attributed: Vec<(NodeRef, skia_safe::Rect)>,
+        unattributed: skia_safe::Rect,
+    ) {
+        if !attributed.is_empty() {
+            let mut map = self.per_node_damage.write().unwrap();
+            for (node, rect) in attributed {
+                map.entry(node).or_default().join(rect);
+            }
+        }
+        if !unattributed.is_empty() {
+            self.removed_nodes_damage.write().unwrap().join(unattributed);
         }
     }
 
