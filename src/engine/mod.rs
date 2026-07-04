@@ -356,6 +356,16 @@ pub struct Engine {
 
     /// The damage rect for the current frame
     pub(crate) damage: Arc<RwLock<skia_safe::Rect>>,
+    /// Per-node damage accumulated since the last `clear_damage()`, in global
+    /// scene coordinates. Keyed by the damaged node; queried by
+    /// [`Engine::subtree_damage`] to answer "did anything under this subtree
+    /// root change" for callers compositing subtrees onto separate buffers
+    /// (e.g. KMS planes).
+    pub(crate) per_node_damage: Arc<RwLock<HashMap<NodeRef, skia_safe::Rect>>>,
+    /// Damage from nodes removed since the last `clear_damage()`. Removed
+    /// nodes are gone from the arena, so their damage can't be attributed to a
+    /// subtree — `subtree_damage` joins this rect conservatively.
+    pub(crate) removed_nodes_damage: Arc<RwLock<skia_safe::Rect>>,
     /// The current pointer position
     pointer_position: RwLock<skia::Point>,
     /// The node that is currently hovered by the pointer
@@ -585,6 +595,8 @@ impl Engine {
             layout_root,
             scene_root,
             damage,
+            per_node_damage: Arc::new(RwLock::new(HashMap::new())),
+            removed_nodes_damage: Arc::new(RwLock::new(skia_safe::Rect::default())),
             pointer_handlers: FlatStorage::new(),
             pointer_position: RwLock::new(skia::Point::default()),
             current_hover_node: RwLock::new(None),
@@ -1251,6 +1263,7 @@ impl Engine {
             if !removed_damage.is_empty() {
                 let mut current_damage = self.damage.write().unwrap();
                 current_damage.join(removed_damage);
+                self.record_removed_damage(removed_damage);
                 return true;
             }
             return false;
@@ -1267,6 +1280,7 @@ impl Engine {
 
         let mut damage = self.update_nodes();
         damage.join(removed_damage);
+        self.record_removed_damage(removed_damage);
 
         // 5.0 trigger the callbacks for the listeners on the transitions
         trigger_callbacks(self, &started_animations);
@@ -1353,6 +1367,20 @@ impl Engine {
                     per_node_damage.insert(NodeRef(*node_id), result.damage);
                 }
                 total_damage.join(result.damage);
+            }
+        }
+
+        // Accumulate per-node damage into the engine-level map so
+        // `subtree_damage()` can answer per-subtree queries until the caller
+        // resets it via `clear_damage()`. Unclipped by occlusion on purpose:
+        // subtree consumers composite onto separate buffers where the
+        // occluder may live on another buffer.
+        if !per_node_damage.is_empty() {
+            let mut acc = self.per_node_damage.write().unwrap();
+            for (node, rect) in per_node_damage.iter() {
+                acc.entry(*node)
+                    .and_modify(|r| r.join(*rect))
+                    .or_insert(*rect);
             }
         }
 
@@ -2132,9 +2160,55 @@ impl Engine {
     pub fn damage(&self) -> skia_safe::Rect {
         *self.damage.read().unwrap()
     }
+    /// Fold damage from removed nodes into the accumulator consumed by
+    /// `subtree_damage()`. Removed nodes can't be attributed to a subtree,
+    /// so this damage conservatively applies to every subtree query.
+    fn record_removed_damage(&self, removed_damage: skia_safe::Rect) {
+        if !removed_damage.is_empty() {
+            self.removed_nodes_damage
+                .write()
+                .unwrap()
+                .join(removed_damage);
+        }
+    }
+
     pub fn clear_damage(&self) {
         let mut damage = self.damage.write().unwrap();
         *damage = skia_safe::Rect::default();
+        self.per_node_damage.write().unwrap().clear();
+        *self.removed_nodes_damage.write().unwrap() = skia_safe::Rect::default();
+    }
+
+    /// Union of the damage recorded under `root` (inclusive) since the last
+    /// `clear_damage()`, in global scene coordinates. Damage from removed
+    /// nodes anywhere in the scene is joined conservatively — their subtree
+    /// membership is unknowable after removal. Returns `None` when nothing
+    /// under `root` changed.
+    ///
+    /// Intended for callers that composite subtrees onto separate buffers
+    /// (e.g. KMS planes) and want to skip re-rendering unchanged subtrees.
+    pub fn subtree_damage(&self, root: NodeRef) -> Option<skia_safe::Rect> {
+        let mut total = *self.removed_nodes_damage.read().unwrap();
+        {
+            let map = self.per_node_damage.read().unwrap();
+            if !map.is_empty() {
+                self.scene.with_arena(|arena| {
+                    let root_id: TreeStorageId = root.into();
+                    if arena.get(root_id).map(|n| !n.is_removed()).unwrap_or(false) {
+                        for id in root_id.descendants(arena) {
+                            if let Some(rect) = map.get(&NodeRef(id)) {
+                                total.join(*rect);
+                            }
+                        }
+                    }
+                });
+            }
+        }
+        if total.is_empty() {
+            None
+        } else {
+            Some(total)
+        }
     }
 
     /// Compute occlusion culling for the given root node.

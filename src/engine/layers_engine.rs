@@ -233,7 +233,12 @@ impl LayersEngine {
     /// Clear the damage rect of the scene
     #[profiling::function]
     pub fn clear_damage(&self) {
-        *self.engine.damage.write().unwrap() = skia_safe::Rect::default();
+        self.engine.clear_damage();
+    }
+    /// Union of damage under `root` since the last `clear_damage()`.
+    /// See [`Engine::subtree_damage`].
+    pub fn subtree_damage(&self, root: NodeRef) -> Option<skia_safe::Rect> {
+        self.engine.subtree_damage(root)
     }
     /// Sends a pointer move event to the engine
     ///
