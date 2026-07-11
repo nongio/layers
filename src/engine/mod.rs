@@ -2214,10 +2214,43 @@ impl Engine {
             }
         }
         if total.is_empty() {
-            None
-        } else {
-            Some(total)
+            return None;
         }
+
+        // Expand damage to cover the whole output of any `BackgroundBlur`
+        // layer in this subtree that the damage reaches. A blur samples a
+        // neighborhood of its input, so damage under (or within a blur radius
+        // of) a blur shape changes the blurred result across the shape;
+        // repainting only a sub-rect of the shape leaves a visible seam where
+        // the fresh and stale blur meet. So — like the whole-scene Phase 8
+        // expansion in `update_nodes()` — join the entire blur shape rather
+        // than a radius-outset band. The intersection test is itself outset by
+        // `BACKGROUND_BLUR_SIGMA` so damage just outside the shape (but within
+        // a blur radius of its edge) still triggers the repaint.
+        //
+        // `bubble_up_backdrop_blur_regions()` collects every descendant blur
+        // shape onto the subtree root's `backdrop_blur_region` in the root's
+        // local frame; `transform_33` maps it to the global frame `total` is in.
+        let sigma = crate::drawing::scene::BACKGROUND_BLUR_SIGMA;
+        self.scene.with_arena(|arena| {
+            let root_id: TreeStorageId = root.into();
+            if let Some(node) = arena.get(root_id) {
+                let render_layer = node.get().render_layer();
+                if let Some(rrects) = &render_layer.backdrop_blur_region {
+                    let to_global = render_layer.transform_33;
+                    for rrect in rrects {
+                        let (blur_bounds, _) = to_global.map_rect(rrect.rect());
+                        let mut reach = total;
+                        reach.outset((sigma, sigma));
+                        if reach.intersects(blur_bounds) {
+                            total.join(blur_bounds);
+                        }
+                    }
+                }
+            }
+        });
+
+        Some(total)
     }
 
     /// Compute occlusion culling for the given root node.
