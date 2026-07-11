@@ -41,6 +41,24 @@ pub(crate) const BACKGROUND_BLUR_DOWNSAMPLE: f32 = 1.0;
 /// reduced resolution is imperceptible, but the layer is far cheaper to allocate and blur.
 pub(crate) const BACKGROUND_BLUR_SAVE_SCALE: f32 = 0.1;
 
+/// A backdrop image handed to `BackgroundBlur` layers that render into isolated
+/// buffers (e.g. KMS planes) and therefore can't see the content behind them.
+///
+/// - `image`: composite of the planes below, a uniformly scaled copy of the
+///   whole scene (see `scale`).
+/// - `scale`: the image's resolution relative to the scene (1.0 = full res,
+///   0.25 = quarter). The layer's global region is sampled at this scale.
+/// - `blurred`: the caller already blurred `image`. The consumer then seeds it
+///   directly and SKIPS its own blur pass — blurring within the layer's clipped
+///   shape samples transparent pixels at the edge and leaves a faded rim that
+///   re-exposes the raw seed. Blurring the whole image once avoids that.
+#[derive(Clone, Copy)]
+pub struct ExternalBackdrop<'a> {
+    pub image: &'a skia_safe::Image,
+    pub scale: f32,
+    pub blurred: bool,
+}
+
 /// Sets the experimental backdrop downscale factor on a [`skia_safe::canvas::SaveLayerRec`].
 ///
 /// skia-safe exposes no setter for `SkCanvas::SaveLayerRec::fExperimentalBackdropScale`
@@ -392,7 +410,7 @@ pub fn paint_node_tree(
     skip_self: bool,
     occluded: Option<&HashSet<NodeRef>>,
     damage_region: Option<&skia_safe::Region>,
-    external_backdrop: Option<(&skia_safe::Image, f32)>,
+    external_backdrop: Option<ExternalBackdrop>,
 ) {
     let node_id: TreeStorageId = node_ref.into();
 
@@ -469,7 +487,7 @@ pub fn render_node_tree(
     context_opacity: f32,
     occluded: Option<&HashSet<NodeRef>>,
     damage_region: Option<&skia_safe::Region>,
-    external_backdrop: Option<(&skia_safe::Image, f32)>,
+    external_backdrop: Option<ExternalBackdrop>,
 ) {
     let node_id: TreeStorageId = node_ref.into();
     #[cfg(feature = "profile-with-puffin")]
@@ -715,7 +733,7 @@ pub(crate) fn paint_node(
     context_opacity: f32,
     offscreen: bool,
     damage_region: Option<&skia_safe::Region>,
-    external_backdrop: Option<(&skia_safe::Image, f32)>,
+    external_backdrop: Option<ExternalBackdrop>,
 ) -> usize {
     let node_id: TreeStorageId = node_ref.into();
     let node = scene_arena.get(node_id).unwrap().get();
@@ -767,11 +785,16 @@ pub(crate) fn paint_node(
         //
         // `scale` is the backdrop's resolution relative to the scene (1.0 = full,
         // 0.1 = a 1/10 image): the layer's global region is sampled at that scale
-        // and stretched up to the layer bounds. Skia then re-downscales when
-        // blurring (set_backdrop_scale below), so a low-res backdrop is
-        // imperceptible after blurring but far cheaper to build, hold and upload.
-        if let Some((backdrop, scale)) = external_backdrop {
+        // and stretched up to the layer bounds.
+        let mut backdrop_preblurred = false;
+        if let Some(ExternalBackdrop {
+            image: backdrop,
+            scale,
+            blurred,
+        }) = external_backdrop
+        {
             profiling::scope!("seed external backdrop");
+            backdrop_preblurred = blurred;
             let gb = render_layer.global_transformed_bounds;
             let src = skia_safe::Rect::from_xywh(
                 gb.x() * scale,
@@ -789,14 +812,21 @@ pub(crate) fn paint_node(
             );
         }
 
-        if let Some(blur) = backdrop_filter(true) {
-            profiling::scope!("apply backdrop");
-            let mut save_layer_rec = skia_safe::canvas::SaveLayerRec::default();
-            save_layer_rec = save_layer_rec.bounds(&bounds_to_origin).paint(&paint);
-            save_layer_rec = save_layer_rec.backdrop(&blur);
-            set_backdrop_scale(&mut save_layer_rec, BACKGROUND_BLUR_SAVE_SCALE);
-            canvas.save_layer(&save_layer_rec);
-            canvas.restore_to_count(before_backdrop);
+        // A pre-blurred external backdrop is seeded as-is: running the blur
+        // save_layer over the clipped shape would sample transparent pixels at
+        // the shape edge and fade the rim, re-exposing the raw seed. Skip it and
+        // rely on the caller's whole-image blur. For a raw backdrop (or an
+        // in-scene BackgroundBlur with no external backdrop) do the real blur.
+        if !backdrop_preblurred {
+            if let Some(blur) = backdrop_filter(true) {
+                profiling::scope!("apply backdrop");
+                let mut save_layer_rec = skia_safe::canvas::SaveLayerRec::default();
+                save_layer_rec = save_layer_rec.bounds(&bounds_to_origin).paint(&paint);
+                save_layer_rec = save_layer_rec.backdrop(&blur);
+                set_backdrop_scale(&mut save_layer_rec, BACKGROUND_BLUR_SAVE_SCALE);
+                canvas.save_layer(&save_layer_rec);
+                canvas.restore_to_count(before_backdrop);
+            }
         }
     }
     if node.is_picture_cached() && draw_cache.is_some() {
@@ -1018,7 +1048,13 @@ pub fn render_subtree_to_buffer(
             scale,
             b.height() as f32 / scene_size.y,
         );
-        (b, scale)
+        // render_subtree callers pass a raw (unblurred) backdrop; the consumer
+        // applies its own blur. Pre-blurred backdrops go through render_node_tree.
+        ExternalBackdrop {
+            image: b,
+            scale,
+            blurred: false,
+        }
     });
 
     // Cache hit: same content, same backdrop, same buffer size -> reuse.
