@@ -52,11 +52,18 @@ pub(crate) const BACKGROUND_BLUR_SAVE_SCALE: f32 = 0.1;
 ///   directly and SKIPS its own blur pass — blurring within the layer's clipped
 ///   shape samples transparent pixels at the edge and leaves a faded rim that
 ///   re-exposes the raw seed. Blurring the whole image once avoids that.
+/// - `raw_image`: the *unblurred* composite of the planes below, at the same
+///   `scale`. A layer with `blur_include_content` set seeds THIS instead of the
+///   pre-blurred `image` and runs the real blur, so same-plane content painted
+///   earlier in the pass (e.g. a popup underneath this one) is blurred into the
+///   result — the pre-blurred `image` can't include it. `None` (the default)
+///   leaves such layers on the pre-blurred fast path.
 #[derive(Clone, Copy)]
 pub struct ExternalBackdrop<'a> {
     pub image: &'a skia_safe::Image,
     pub scale: f32,
     pub blurred: bool,
+    pub raw_image: Option<&'a skia_safe::Image>,
 }
 
 /// Sets the experimental backdrop downscale factor on a [`skia_safe::canvas::SaveLayerRec`].
@@ -763,15 +770,36 @@ pub(crate) fn paint_node(
 
     let draw_cache = node_renderable.draw_cache.as_ref();
 
+    let is_blur = blend_mode == crate::prelude::BlendMode::BackgroundBlur;
+    // A fading blur layer must apply its opacity ONCE, over the composite of
+    // backdrop seed + blur + content. Attenuating each piece separately stacks
+    // their alphas in the buffer (≈3·o coverage) while colors only reach ≈1·o,
+    // so the region dips towards black mid-fade instead of fading out. Group
+    // them under a single save_layer and put the opacity on its restore paint.
+    let blur_fade_group = is_blur && opacity > 0.001 && opacity < 1.0;
+    let group_restore = canvas.save();
+    if blur_fade_group {
+        let mut group_paint = skia_safe::Paint::default();
+        group_paint.set_alpha_f(opacity);
+        let rec = skia_safe::canvas::SaveLayerRec::default().paint(&group_paint);
+        canvas.save_layer(&rec);
+    }
+    // Inside the group everything paints at full strength; without a group the
+    // per-piece paints carry the opacity directly.
+    let draw_opacity = if blur_fade_group { 1.0 } else { opacity };
+
     let before_backdrop = canvas.save();
 
     let bounds_to_origin =
         skia_safe::Rect::from_xywh(0.0, 0.0, render_layer.size.width, render_layer.size.height);
 
     let mut paint = skia_safe::Paint::default();
-    paint.set_alpha_f(opacity);
+    paint.set_alpha_f(draw_opacity);
 
-    if blend_mode == crate::prelude::BlendMode::BackgroundBlur && opacity > 0.0 {
+    // Below ~0.001 the blur is invisible — skip the whole block so effectively
+    // faded-out layers (spring animations settle near, not at, zero) neither
+    // seed a backdrop nor pay for a blur.
+    if is_blur && opacity > 0.001 {
         profiling::scope!("background_blur");
         render_layer.clip_to_shape(canvas, skia_safe::ClipOp::Intersect, true);
 
@@ -788,12 +816,25 @@ pub(crate) fn paint_node(
         // and stretched up to the layer bounds.
         let mut backdrop_preblurred = false;
         if let Some(ExternalBackdrop {
-            image: backdrop,
+            image,
             scale,
             blurred,
+            raw_image,
         }) = external_backdrop
         {
             profiling::scope!("seed external backdrop");
+            // A layer that overlaps other same-plane content (popups stacked in
+            // one plane) opts into `blur_include_content`: seed the RAW lower-
+            // plane composite and fall through to the real blur below, so the
+            // blur samples raw-desktop + whatever this pass already painted
+            // behind it (the popup underneath). Everything else seeds the
+            // pre-blurred image and skips the blur (crisp, rim-free panels).
+            let use_raw = render_layer.blur_include_content && raw_image.is_some();
+            let (backdrop, blurred) = if use_raw {
+                (raw_image.unwrap(), false)
+            } else {
+                (image, blurred)
+            };
             backdrop_preblurred = blurred;
             let gb = render_layer.global_transformed_bounds;
             let src = skia_safe::Rect::from_xywh(
@@ -804,6 +845,10 @@ pub(crate) fn paint_node(
             );
             let mut backdrop_paint = skia_safe::Paint::default();
             backdrop_paint.set_blend_mode(skia_safe::BlendMode::DstOver);
+            // The seed must honor the layer's effective opacity (via the fade
+            // group above, or directly): at full alpha a faded-out layer would
+            // leave a permanent opaque backdrop patch in its shape — a "ghost".
+            backdrop_paint.set_alpha_f(draw_opacity);
             canvas.draw_image_rect(
                 backdrop,
                 Some((&src, skia_safe::canvas::SrcRectConstraint::Fast)),
@@ -833,13 +878,15 @@ pub(crate) fn paint_node(
         let draw_cache = draw_cache.unwrap();
         // Only pass paint when opacity is not 1.0: passing Some(paint) forces Skia
         // to create an intermediate offscreen layer even when alpha is a no-op.
-        let p = (opacity != 1.0).then_some(&paint);
+        let p = (draw_opacity != 1.0).then_some(&paint);
         // passing a None for paint is important to optimise
         // skia creates a new layer when painting a picture with a paint
         draw_cache.draw(canvas, p);
     } else {
-        draw_layer(canvas, &render_layer, opacity, node_renderable);
+        draw_layer(canvas, &render_layer, draw_opacity, node_renderable);
     }
+    // Applies the fade group's single opacity multiply (no-op otherwise).
+    canvas.restore_to_count(group_restore);
 
     restore_transform
 }
@@ -1054,6 +1101,7 @@ pub fn render_subtree_to_buffer(
             image: b,
             scale,
             blurred: false,
+            raw_image: None,
         }
     });
 

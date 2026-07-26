@@ -400,6 +400,16 @@ impl Layer {
         self.engine
             .schedule_change(self.id, Arc::new(NoopChange::paint(attribute_id)), None);
     }
+    /// Opt a `BackgroundBlur` layer into blurring same-plane content painted
+    /// behind it (e.g. a popup stacked over another popup in one plane) rather
+    /// than only the pre-blurred lower-plane backdrop. See
+    /// `RenderLayer::blur_include_content`.
+    pub fn set_blur_include_content(&self, include: bool) {
+        self.model.blur_include_content.set(include);
+        let attribute_id = self.model.blur_include_content.id;
+        self.engine
+            .schedule_change(self.id, Arc::new(NoopChange::paint(attribute_id)), None);
+    }
     pub fn set_display(&self, display: Display) {
         self.model.display.set(display);
     }

@@ -88,6 +88,12 @@ pub struct RenderLayer {
     /// with opaque pixels. When true, the layer can act as an occluder even if
     /// its background color is transparent.
     pub content_opaque: bool,
+    /// For a `BackgroundBlur` layer rendered into an isolated plane buffer: seed
+    /// the *raw* (unblurred) external backdrop and run the real blur, instead of
+    /// seeding the pre-blurred backdrop and skipping it. Set on layers that
+    /// overlap other same-plane content (e.g. a popup stacked over another) so
+    /// that content is blurred into this layer's backdrop. See `ExternalBackdrop`.
+    pub blur_include_content: bool,
 }
 
 impl RenderLayer {
@@ -250,6 +256,7 @@ impl RenderLayer {
         self.image_filter = model.image_filter.value();
         self.image_filter_bounds = *model.filter_bounds.read().unwrap();
         self.color_filter = model.color_filter.value();
+        self.blur_include_content = model.blur_include_content.value();
     }
 
     pub(crate) fn has_visible_drawables(&self) -> bool {
@@ -539,6 +546,7 @@ impl RenderLayer {
             visible: true,
             backdrop_blur_region: None,
             content_opaque: false,
+            blur_include_content: model.blur_include_content.value(),
         };
 
         render_layer.visible = render_layer.has_visible_drawables();
@@ -603,6 +611,7 @@ impl Default for RenderLayer {
             visible: false,
             backdrop_blur_region: None,
             content_opaque: false,
+            blur_include_content: false,
         }
     }
 }

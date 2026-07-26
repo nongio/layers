@@ -126,6 +126,9 @@ pub(crate) struct ModelLayer {
     pub image_filter_progress: Attribute<f32>,
     pub clip_content: Attribute<bool>,
     pub clip_children: Attribute<bool>,
+    /// See `RenderLayer::blur_include_content` — opt-in for a `BackgroundBlur`
+    /// layer to blur same-plane content painted behind it (stacked popups).
+    pub blur_include_content: Attribute<bool>,
     pub shape: Arc<RwLock<Shape>>,
 }
 
@@ -165,6 +168,7 @@ impl Default for ModelLayer {
         let filter_bounds = Arc::new(RwLock::new(None));
         let clip_content = Attribute::new(false);
         let clip_children = Attribute::new(false);
+        let blur_include_content = Attribute::new(false);
         let pointer_events = Arc::new(AtomicBool::new(true));
         let shape = Arc::new(RwLock::new(Shape::default()));
         // let hidden = Arc::new(AtomicBool::new(false));
@@ -196,6 +200,7 @@ impl Default for ModelLayer {
             filter_bounds,
             clip_content,
             clip_children,
+            blur_include_content,
             shape,
         }
     }

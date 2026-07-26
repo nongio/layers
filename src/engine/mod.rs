@@ -1591,7 +1591,9 @@ impl Engine {
                 let child = child_node.get();
 
                 // Early exit: skip if child is hidden (entire subtree is hidden)
-                if child.hidden() {
+                // or effectively invisible — an opacity-0 layer must not blur its
+                // backdrop (e.g. closed-but-kept-alive notification cards).
+                if child.hidden() || child.render_layer.opacity <= 0.001 {
                     return;
                 }
 
