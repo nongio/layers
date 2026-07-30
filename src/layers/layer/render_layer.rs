@@ -255,8 +255,7 @@ impl RenderLayer {
             }
             None => bounds,
         };
-        let (local_transformed_bwc, _) =
-            self.local_transform.to_m33().map_rect(bounds_with_shadow);
+        let (local_transformed_bwc, _) = self.local_transform.to_m33().map_rect(bounds_with_shadow);
         let (global_transformed_bwc, _) = self.transform_33.map_rect(bounds_with_shadow);
 
         self.bounds_with_children = bounds_with_shadow;

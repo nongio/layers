@@ -849,10 +849,50 @@ pub(crate) fn paint_node(
             // group above, or directly): at full alpha a faded-out layer would
             // leave a permanent opaque backdrop patch in its shape — a "ghost".
             backdrop_paint.set_alpha_f(draw_opacity);
+            // Raw seed: blur it here, from a source region OUTSET by the blur's
+            // reach, rather than leaving it to the save_layer below.
+            //
+            // The seed has to precede the save_layer so the blur input is
+            // OPAQUE — otherwise the blurred copy of same-pass content inherits
+            // that content's alpha and a translucent menu underneath shows
+            // through its own blurred copy (the submenu stops looking blurred).
+            // But the save_layer can only sample what survives the shape clip,
+            // so its output fades at the edges and whatever is beneath shows
+            // through there — a raw seed would re-appear sharp exactly at the
+            // rim. Pre-blurring the seed from a wider source makes that fade
+            // land on correctly blurred desktop instead. The seed is then
+            // blurred twice (once here, once by the save_layer); at this sigma
+            // the extra pass is not perceptible.
+            let (seed_src, seed_dst) = if use_raw {
+                let reach = BACKGROUND_BLUR_SIGMA * 3.0;
+                let wide = src.with_outset((reach * scale, reach * scale));
+                let dst_wide = bounds_to_origin.with_outset((reach, reach));
+                // Sampling past the image is undefined with `Fast`, so clamp the
+                // source to the image and shrink the destination to match.
+                let img_rect = skia_safe::Rect::from_iwh(backdrop.width(), backdrop.height());
+                let mut clamped = wide;
+                if !clamped.intersect(img_rect) {
+                    clamped = wide;
+                }
+                let sx = dst_wide.width() / wide.width();
+                let sy = dst_wide.height() / wide.height();
+                let dst = skia_safe::Rect::new(
+                    dst_wide.left + (clamped.left - wide.left) * sx,
+                    dst_wide.top + (clamped.top - wide.top) * sy,
+                    dst_wide.right - (wide.right - clamped.right) * sx,
+                    dst_wide.bottom - (wide.bottom - clamped.bottom) * sy,
+                );
+                if let Some(blur) = backdrop_filter(true) {
+                    backdrop_paint.set_image_filter(blur);
+                }
+                (clamped, dst)
+            } else {
+                (src, bounds_to_origin)
+            };
             canvas.draw_image_rect(
                 backdrop,
-                Some((&src, skia_safe::canvas::SrcRectConstraint::Fast)),
-                bounds_to_origin,
+                Some((&seed_src, skia_safe::canvas::SrcRectConstraint::Fast)),
+                seed_dst,
                 &backdrop_paint,
             );
         }
