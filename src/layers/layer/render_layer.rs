@@ -239,11 +239,31 @@ impl RenderLayer {
         let (global_shape_bounds, _) = self.transform_33.map_rect(self.shape_bounds);
         self.global_shape_bounds = global_shape_bounds;
 
-        self.bounds_with_children = bounds;
+        // The drop shadow paints OUTSIDE `bounds`, so the `*_with_children`
+        // rects — which is what damage and subtree culling are computed from —
+        // must cover it, or the shadow band never gets repainted and comes out
+        // clipped to the layer box. Seeding it here also bubbles the extra
+        // extent up through `bubble_up_bounds_to_parent`, so an ancestor being
+        // shown (a popup unhiding) damages its descendants' shadows too. The
+        // plain `bounds` / `global_transformed_bounds` stay tight: occlusion,
+        // hit-testing and clipping must not grow with the shadow.
+        let bounds_with_shadow = match self.shadow_bounds() {
+            Some(shadow) => {
+                let mut r = bounds;
+                r.join(shadow);
+                r
+            }
+            None => bounds,
+        };
+        let (local_transformed_bwc, _) =
+            self.local_transform.to_m33().map_rect(bounds_with_shadow);
+        let (global_transformed_bwc, _) = self.transform_33.map_rect(bounds_with_shadow);
+
+        self.bounds_with_children = bounds_with_shadow;
         self.local_transformed_bounds = local_transformed_bounds;
-        self.local_transformed_bounds_with_children = local_transformed_bounds;
+        self.local_transformed_bounds_with_children = local_transformed_bwc;
         self.global_transformed_bounds = transformed_bounds;
-        self.global_transformed_bounds_with_children = transformed_bounds;
+        self.global_transformed_bounds_with_children = global_transformed_bwc;
         self.global_transformed_rbounds =
             skia_safe::RRect::new_rect_radii(transformed_bounds, &border_corner_radius.into());
 
@@ -257,6 +277,44 @@ impl RenderLayer {
         self.image_filter_bounds = *model.filter_bounds.read().unwrap();
         self.color_filter = model.color_filter.value();
         self.blur_include_content = model.blur_include_content.value();
+    }
+
+    /// Rect covered by the drop shadow in the layer's own (untransformed)
+    /// coordinate space, or `None` when the layer draws no shadow.
+    ///
+    /// The shadow is the layer box shifted by `shadow_offset`, outset by
+    /// `shadow_spread`, then blurred — a Gaussian with sigma `shadow_radius`
+    /// reaches ~3 sigma, so that is the extra margin included here.
+    pub(crate) fn shadow_bounds(&self) -> Option<skia_safe::Rect> {
+        if self.shadow_color.alpha <= 0.0 {
+            return None;
+        }
+        let reach = self.shadow_spread + self.shadow_radius * 3.0;
+        Some(
+            skia_safe::Rect::from_xywh(
+                self.shadow_offset.x,
+                self.shadow_offset.y,
+                self.size.width,
+                self.size.height,
+            )
+            .with_outset((reach, reach)),
+        )
+    }
+
+    /// The layer's OWN global bounds (no children) grown to cover its drop
+    /// shadow. Use this wherever a rect is joined into damage: the tight
+    /// `global_transformed_bounds` stops at the layer box, so moving, resizing
+    /// or removing a shadowed layer would leave the shadow band unrepainted.
+    pub(crate) fn global_bounds_with_shadow(&self) -> skia_safe::Rect {
+        match self.shadow_bounds() {
+            Some(shadow) => {
+                let mut local = self.bounds;
+                local.join(shadow);
+                let (global, _) = self.transform_33.map_rect(local);
+                global
+            }
+            None => self.global_transformed_bounds,
+        }
     }
 
     pub(crate) fn has_visible_drawables(&self) -> bool {

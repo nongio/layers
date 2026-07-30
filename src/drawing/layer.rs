@@ -122,9 +122,11 @@ pub fn draw_layer(
         shadow_paint.set_alpha_f(opacity * layer.shadow_color.alpha);
         canvas.draw_path(&shadow_path, &shadow_paint);
         canvas.restore_to_count(save_count);
-        let damage_rect = shadow_rect.with_outset((layer.shadow_radius, layer.shadow_radius));
-
-        draw_damage.join(damage_rect);
+        // A Gaussian with sigma `shadow_radius` reaches ~3 sigma — outsetting by
+        // one radius left the faint tail of the shadow outside the damage rect.
+        if let Some(damage_rect) = layer.shadow_bounds() {
+            draw_damage.join(damage_rect);
+        }
     }
 
     // Draw content if any

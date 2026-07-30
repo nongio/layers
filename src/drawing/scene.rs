@@ -870,9 +870,15 @@ pub(crate) fn paint_node(
                 save_layer_rec = save_layer_rec.backdrop(&blur);
                 set_backdrop_scale(&mut save_layer_rec, BACKGROUND_BLUR_SAVE_SCALE);
                 canvas.save_layer(&save_layer_rec);
-                canvas.restore_to_count(before_backdrop);
             }
         }
+
+        // Drop the shape clip (and any blur save_layer) before the layer paints
+        // its own content: the drop shadow is drawn OUTSIDE the shape, so a
+        // leaked clip erases it entirely. Pre-blurred seeds took an early-out
+        // above and used to leave the clip active — no shadow on popups/panels
+        // rendered through a plane's external backdrop.
+        canvas.restore_to_count(before_backdrop);
     }
     if node.is_picture_cached() && draw_cache.is_some() {
         let draw_cache = draw_cache.unwrap();

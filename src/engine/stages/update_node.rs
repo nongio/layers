@@ -99,6 +99,7 @@ pub(crate) fn update_node_single(
         // render_layer.visible accounts for the hidden flag (set by update_render_layer_if_needed);
         // this lets us detect hidden-state changes separately from drawable-content changes.
         prev_render_layer_visible,
+        prev_global_bounds_shadow,
     ) = engine.scene.with_arena(|arena| {
         if let Some(node) = arena.get(node_id) {
             let scene_node = node.get();
@@ -113,6 +114,7 @@ pub(crate) fn update_node_single(
                 scene_node.render_layer.has_filters(),
                 scene_node.render_layer.is_layout_only_passthrough(),
                 scene_node.render_layer.visible,
+                scene_node.render_layer.global_bounds_with_shadow(),
             )
         } else {
             (
@@ -124,6 +126,7 @@ pub(crate) fn update_node_single(
                 false,
                 false,
                 false,
+                skia_safe::Rect::default(),
             )
         }
     });
@@ -200,6 +203,7 @@ pub(crate) fn update_node_single(
         new_has_filters,
         new_is_layout_only_passthrough,
         is_now_hidden,
+        new_global_bounds_shadow,
     ) = engine.scene.with_arena(|arena| {
         let node = arena.get(node_id).unwrap();
         let scene_node = node.get();
@@ -214,6 +218,7 @@ pub(crate) fn update_node_single(
             scene_node.render_layer.has_filters(),
             scene_node.render_layer.is_layout_only_passthrough(),
             scene_node.hidden(),
+            scene_node.render_layer.global_bounds_with_shadow(),
         )
     });
 
@@ -330,8 +335,10 @@ pub(crate) fn update_node_single(
     if geometry_changed_self
         && ((has_visible_drawables && self_contributes_visual_output) || is_debug)
     {
-        total_damage.join(prev_global_bounds);
-        total_damage.join(new_global_bounds);
+        // Shadow-inclusive: a shadowed layer that moves or resizes must repaint
+        // the band its shadow covered, or the old shadow stays on screen.
+        total_damage.join(prev_global_bounds_shadow);
+        total_damage.join(new_global_bounds_shadow);
     }
 
     if geometry_changed_children && (has_visible_drawables || is_debug) && !passthrough_only {
