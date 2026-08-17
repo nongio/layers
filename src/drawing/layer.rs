@@ -129,8 +129,23 @@ pub fn draw_layer(
         }
     }
 
-    // Draw content if any
-    if let Some(content) = renderable.content_cache.as_ref() {
+    // Draw content if any.
+    //
+    // An EMPTY recording does not count as a cache hit. `do_repaint` records
+    // `content_cache` unconditionally, so a repaint that lands while the source
+    // has nothing to give (a mirrored surface between buffers, a layer measured
+    // at zero size mid-layout) stores an empty picture over a good one. Since
+    // that empty picture is still `Some`, replaying it here would lock the layer
+    // blank forever: nothing about the layer changes afterwards, so no later
+    // repaint is scheduled, and the closure — the only thing that knows the
+    // content came back — is never consulted again. Falling through to it on an
+    // empty recording keeps a genuinely blank layer blank while letting one that
+    // has content recover on the very next frame.
+    let cached_content = renderable
+        .content_cache
+        .as_ref()
+        .filter(|c| c.approximate_op_count() > 0);
+    if let Some(content) = cached_content {
         let save_count = canvas.save();
         if layer.clip_content {
             layer.clip_to_shape(canvas, ClipOp::Intersect, true);
