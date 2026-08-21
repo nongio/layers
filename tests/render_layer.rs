@@ -4,6 +4,7 @@ mod tests {
         prelude::*,
         types::{Color, PaintColor, Size},
     };
+    use skia_safe::Contains;
 
     #[test]
     pub fn render_layer_size() {
@@ -182,6 +183,89 @@ mod tests {
         assert_eq!(
             prl.global_transformed_bounds_with_children,
             skia_safe::Rect::from_xywh(0.0, 0.0, 120.0, 130.0)
+        );
+    }
+
+    /// A clipping parent confines its children to its own box, so an oversized
+    /// child must not grow the parent's subtree rects — otherwise anything driven
+    /// off `bounds_with_children` (damage, subtree culling, and in Otto the
+    /// window geometry and its drop shadow) tracks the child's buffer instead of
+    /// what is actually on screen. The same scene without `clip_children` is
+    /// asserted alongside it, so the test fails if the clamp is applied
+    /// unconditionally.
+    #[test]
+    pub fn clip_children_confines_bounds_with_children() {
+        fn parent_bounds_with_children(clip: bool) -> skia_safe::Rect {
+            let engine = Engine::create(1000.0, 1000.0);
+
+            let parent = engine.new_layer();
+            parent.set_size(Size::points(100.0, 100.0), None);
+            parent.set_clip_children(clip, None);
+            engine.add_layer(&parent).unwrap();
+
+            // Overflows the parent on the right and, like a scrolling pane's
+            // content subsurface, hangs far past its bottom edge.
+            let child = engine.new_layer();
+            child.set_position((70.0, 80.0), None);
+            child.set_size(Size::points(50.0, 500.0), None);
+            child.set_background_color(Color::new_hex("#ff0000ff"), None);
+            engine.append_layer(&child, parent.id).unwrap();
+
+            engine.update(0.016);
+
+            engine.render_layer(&parent).unwrap().bounds_with_children
+        }
+
+        // Clipped: stays inside the parent box, even though the child is 500 tall.
+        assert_eq!(
+            parent_bounds_with_children(true),
+            skia_safe::Rect::from_xywh(0.0, 0.0, 100.0, 100.0)
+        );
+
+        // Not clipped: still grows to cover the whole child (70+50, 80+500).
+        assert_eq!(
+            parent_bounds_with_children(false),
+            skia_safe::Rect::from_xywh(0.0, 0.0, 120.0, 580.0)
+        );
+    }
+
+    /// Clipping the children must not clip the parent's OWN drop shadow, which
+    /// legitimately paints outside `bounds` and has to stay in the damage rects.
+    #[test]
+    pub fn clip_children_keeps_own_shadow_in_bounds_with_children() {
+        let engine = Engine::create(1000.0, 1000.0);
+
+        let parent = engine.new_layer();
+        parent.set_position((200.0, 200.0), None);
+        parent.set_size(Size::points(100.0, 100.0), None);
+        parent.set_clip_children(true, None);
+        parent.set_shadow_color(Color::new_hex("#000000ff"), None);
+        parent.set_shadow_radius(10.0, None);
+        engine.add_layer(&parent).unwrap();
+
+        let child = engine.new_layer();
+        child.set_size(Size::points(50.0, 500.0), None);
+        child.set_background_color(Color::new_hex("#ff0000ff"), None);
+        engine.append_layer(&child, parent.id).unwrap();
+
+        engine.update(0.016);
+
+        let prl = engine.render_layer(&parent).unwrap();
+
+        // The shadow reaches 3 sigma past the box, so the subtree rect must be
+        // strictly larger than `bounds` — but only because of the shadow, not
+        // because of the 500px-tall child.
+        assert!(
+            prl.bounds_with_children.top() < prl.bounds.top()
+                && prl.bounds_with_children.bottom() > prl.bounds.bottom(),
+            "shadow should extend bounds_with_children on both edges, got {:?} vs bounds {:?}",
+            prl.bounds_with_children,
+            prl.bounds
+        );
+        assert!(
+            prl.bounds_with_children.bottom() < 200.0,
+            "child height must not leak into bounds_with_children, got {:?}",
+            prl.bounds_with_children
         );
     }
 
@@ -416,5 +500,191 @@ mod tests {
             prl.global_transformed_bounds_with_children,
             skia_safe::Rect::from_xywh(0.0, 0.0, 350.0, 350.0)
         );
+    }
+
+    /// A mirror layer (`as_content` + `add_follower_node`) paints the leader's
+    /// whole subtree into its own box. Otto's exposé previews are exactly that,
+    /// and the window subtree they mirror carries a shadow drawn outside the
+    /// window box — so the preview's `*_with_children` rects have to cover that
+    /// band, or moving or scaling it leaves the shadow behind as a ghost.
+    #[test]
+    pub fn mirror_layer_inherits_the_leader_subtree_extent() {
+        let engine = Engine::create(4000.0, 4000.0);
+
+        // Scene root — the first layer added becomes it, and neither the
+        // preview nor the window may be an ancestor of the other.
+        let root = engine.new_layer();
+        root.set_layout_style(taffy::Style {
+            position: taffy::Position::Absolute,
+            ..Default::default()
+        });
+        root.set_size(Size::points(4000.0, 4000.0), None);
+        engine.add_layer(&root).unwrap();
+
+        // Leader: a box whose child paints a band all around it, the way the
+        // window shadow view paints outside the window.
+        let leader = engine.new_layer();
+        leader.set_layout_style(taffy::Style {
+            position: taffy::Position::Absolute,
+            ..Default::default()
+        });
+        leader.set_size(Size::points(800.0, 600.0), None);
+        engine.add_layer(&leader).unwrap();
+
+        let shadow = engine.new_layer();
+        shadow.set_layout_style(taffy::Style {
+            position: taffy::Position::Absolute,
+            ..Default::default()
+        });
+        shadow.set_position((-100.0, -100.0), None);
+        shadow.set_size(Size::points(1000.0, 800.0), None);
+        shadow.set_background_color(Color::new_rgba(0.0, 0.0, 0.0, 0.3), None);
+        engine.append_layer(&shadow, leader.id).unwrap();
+
+        // Follower: the preview. Same size as the leader, no children of its own.
+        let mirror = engine.new_layer();
+        mirror.set_layout_style(taffy::Style {
+            position: taffy::Position::Absolute,
+            ..Default::default()
+        });
+        mirror.set_size(Size::points(800.0, 600.0), None);
+        mirror.set_position((1000.0, 1000.0), None);
+        mirror.set_draw_content(leader.as_content());
+        mirror.set_picture_cached(false);
+        leader.add_follower_node(&mirror);
+        engine.add_layer(&mirror).unwrap();
+
+        engine.update(0.016);
+        engine.update(0.016);
+
+        let leader_extent = leader.render_layer().bounds_with_children;
+        assert!(
+            leader_extent.left() < 0.0 && leader_extent.top() < 0.0,
+            "the leader subtree must reach outside its own box: {:?}",
+            leader_extent
+        );
+
+        engine.clear_damage();
+        let painted_before = mirror
+            .render_layer()
+            .global_transformed_bounds_with_children;
+        mirror.set_position((1400.0, 1000.0), None);
+        engine.update(0.016);
+        let painted_after = mirror
+            .render_layer()
+            .global_transformed_bounds_with_children;
+
+        assert_eq!(
+            mirror.render_layer().bounds_with_children,
+            leader_extent,
+            "the preview must carry the leader's subtree extent"
+        );
+        assert!(
+            painted_before.width() > mirror.render_layer().bounds.width(),
+            "the preview's painted rect should be wider than its own box: {:?}",
+            painted_before
+        );
+
+        let damage = engine.damage();
+        assert!(
+            damage.contains(painted_before),
+            "damage {:?} misses what the preview painted at the old position {:?}",
+            damage,
+            painted_before
+        );
+        assert!(
+            damage.contains(painted_after),
+            "damage {:?} misses what the preview paints at the new position {:?}",
+            damage,
+            painted_after
+        );
+    }
+
+    /// The exposé drag: the preview is scaled down as it moves toward the
+    /// workspace row, several steps per second. Each step has to damage what
+    /// the preview covered at the PREVIOUS, larger scale — a shrink damaged
+    /// only at its new size leaves a ring of the old shadow on screen.
+    #[test]
+    pub fn mirror_layer_scaled_down_damages_the_previous_size() {
+        let engine = Engine::create(4000.0, 4000.0);
+
+        let root = engine.new_layer();
+        root.set_layout_style(taffy::Style {
+            position: taffy::Position::Absolute,
+            ..Default::default()
+        });
+        root.set_size(Size::points(4000.0, 4000.0), None);
+        engine.add_layer(&root).unwrap();
+
+        let leader = engine.new_layer();
+        leader.set_layout_style(taffy::Style {
+            position: taffy::Position::Absolute,
+            ..Default::default()
+        });
+        leader.set_size(Size::points(800.0, 600.0), None);
+        engine.append_layer(&leader, root.id).unwrap();
+
+        let shadow = engine.new_layer();
+        shadow.set_layout_style(taffy::Style {
+            position: taffy::Position::Absolute,
+            ..Default::default()
+        });
+        shadow.set_position((-100.0, -100.0), None);
+        shadow.set_size(Size::points(1000.0, 800.0), None);
+        shadow.set_background_color(Color::new_rgba(0.0, 0.0, 0.0, 0.3), None);
+        engine.append_layer(&shadow, leader.id).unwrap();
+
+        let mirror = engine.new_layer();
+        mirror.set_layout_style(taffy::Style {
+            position: taffy::Position::Absolute,
+            ..Default::default()
+        });
+        mirror.set_size(Size::points(800.0, 600.0), None);
+        mirror.set_position((1500.0, 1500.0), None);
+        mirror.set_anchor_point((0.5, 0.5), None);
+        mirror.set_draw_content(leader.as_content());
+        mirror.set_picture_cached(false);
+        leader.add_follower_node(&mirror);
+        engine.append_layer(&mirror, root.id).unwrap();
+
+        engine.update(0.016);
+        engine.update(0.016);
+
+        // Drag upward while shrinking, the way `update_drag_scale` ramps the
+        // preview down toward the workspace-selector scale.
+        let steps = [(1400.0, 0.75), (1300.0, 0.5), (1200.0, 0.3), (1100.0, 0.2)];
+        for (y, scale) in steps {
+            let painted_before = mirror
+                .render_layer()
+                .global_transformed_bounds_with_children;
+            assert!(
+                painted_before.width() > mirror.render_layer().global_transformed_bounds.width(),
+                "the preview must know it paints the mirrored shadow outside its box: {painted_before:?} vs {:?}",
+                mirror.render_layer().global_transformed_bounds
+            );
+
+            engine.clear_damage();
+            mirror.set_position((1500.0, y), None);
+            mirror.set_scale((scale, scale), None);
+            engine.update(0.016);
+
+            let painted_after = mirror
+                .render_layer()
+                .global_transformed_bounds_with_children;
+            assert!(
+                painted_before.width() > painted_after.width(),
+                "step {scale} should be a shrink: {painted_before:?} -> {painted_after:?}"
+            );
+
+            let damage = engine.damage();
+            assert!(
+                damage.contains(painted_before),
+                "damage {damage:?} misses what the preview covered at the previous scale {painted_before:?}"
+            );
+            assert!(
+                damage.contains(painted_after),
+                "damage {damage:?} misses what the preview covers now {painted_after:?}"
+            );
+        }
     }
 }

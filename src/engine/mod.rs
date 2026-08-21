@@ -1401,6 +1401,59 @@ impl Engine {
             self.bubble_up_bounds_to_parent(*node_id);
         }
 
+        // Phase 5.5: Hand every mirror layer the extent of the subtree it
+        // mirrors. A follower (`Layer::as_content()` + `add_follower_node`)
+        // paints the leader's whole subtree into its own box — an exposé
+        // preview carries the window's shadow, which reaches outside the
+        // window box — but it has no children of its own, so nothing else
+        // would put that ink in its `*_with_children` rects. Without it,
+        // moving or scaling the preview damages only the tight preview box
+        // and the shadow stays on screen at the size and place it had before.
+        // Runs here, after Phase 5, so the leader's extent already includes
+        // everything its children bubbled up this frame.
+        let mirrored_extents: Vec<(NodeRef, skia_safe::Rect)> = self.scene.with_arena(|arena| {
+            let mut out = Vec::new();
+            for node_id in nodes_post_order.iter() {
+                let Some(node) = arena.get(*node_id) else {
+                    continue;
+                };
+                let scene_node = node.get();
+                if scene_node.followers.is_empty() {
+                    continue;
+                }
+                let extent = scene_node.render_layer.bounds_with_children;
+                for follower in scene_node.followers.iter() {
+                    let Some(follower_node) = arena.get(follower.0) else {
+                        continue;
+                    };
+                    if follower_node.is_removed() {
+                        continue;
+                    }
+                    // A follower nested inside its own leader draws nothing:
+                    // `as_content()` bails on the recursion. Taking the
+                    // leader's extent here would also feed this follower's
+                    // rects back into it through Phase 5 and grow both without
+                    // bound, frame after frame.
+                    if follower.0.ancestors(arena).any(|a| a == *node_id) {
+                        continue;
+                    }
+                    out.push((*follower, extent));
+                }
+            }
+            out
+        });
+        if !mirrored_extents.is_empty() {
+            self.scene.with_arena_mut(|arena| {
+                for (follower, extent) in mirrored_extents {
+                    if let Some(node) = arena.get_mut(follower.0).filter(|n| !n.is_removed()) {
+                        node.get_mut()
+                            .render_layer_mut()
+                            .set_content_overflow(extent);
+                    }
+                }
+            });
+        }
+
         // Phase 6: Clear all backdrop blur regions before rebuilding
         self.scene.with_arena_mut(|arena| {
             for node_id in nodes_post_order.iter() {

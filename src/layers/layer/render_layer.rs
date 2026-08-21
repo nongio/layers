@@ -27,6 +27,14 @@ pub struct RenderLayer {
     pub local_transformed_bounds_with_children: skia_safe::Rect,
     /// The bounds of the layers, including children bounds
     pub bounds_with_children: skia_safe::Rect,
+    /// Rect the content draw closure actually painted into, in the layer's own
+    /// coordinate space. A closure is free to paint outside `bounds` — a
+    /// mirrored subtree (`Layer::as_content`) carries the source's drop shadow
+    /// with it — and the `*_with_children` rects have to cover that ink or the
+    /// band outside the layer box never gets repainted. Written by the engine
+    /// after each repaint from the closure's returned rect; empty when the
+    /// layer has no content closure.
+    pub(crate) content_overflow: skia_safe::Rect,
     /// The transformed bounds of the layer, relative to the root
     pub global_transformed_bounds: skia_safe::Rect,
     /// The transformed rounded bounds of the layer, relative to the root
@@ -247,7 +255,7 @@ impl RenderLayer {
         // shown (a popup unhiding) damages its descendants' shadows too. The
         // plain `bounds` / `global_transformed_bounds` stay tight: occlusion,
         // hit-testing and clipping must not grow with the shadow.
-        let bounds_with_shadow = match self.shadow_bounds() {
+        let mut bounds_with_shadow = match self.shadow_bounds() {
             Some(shadow) => {
                 let mut r = bounds;
                 r.join(shadow);
@@ -255,6 +263,12 @@ impl RenderLayer {
             }
             None => bounds,
         };
+        // Same reasoning for the ink a content closure puts outside the layer
+        // box: a mirror layer draws the source subtree including its shadow,
+        // and moving it has to repaint the band that shadow covered.
+        if !self.content_overflow.is_empty() {
+            bounds_with_shadow.join(self.content_overflow);
+        }
         let (local_transformed_bwc, _) = self.local_transform.to_m33().map_rect(bounds_with_shadow);
         let (global_transformed_bwc, _) = self.transform_33.map_rect(bounds_with_shadow);
 
@@ -300,20 +314,42 @@ impl RenderLayer {
         )
     }
 
+    /// Record the rect the content closure painted into and grow the
+    /// `*_with_children` rects to cover it right away. Growing them here, and
+    /// not only on the next `update_with_model_and_layout`, means the rects
+    /// this frame leaves behind — the ones the next frame compares against as
+    /// "where the layer used to be" — already include the overflow band.
+    pub(crate) fn set_content_overflow(&mut self, overflow: skia_safe::Rect) {
+        self.content_overflow = overflow;
+        if overflow.is_empty() {
+            return;
+        }
+        self.bounds_with_children.join(overflow);
+        let (local, _) = self.local_transform.to_m33().map_rect(overflow);
+        self.local_transformed_bounds_with_children.join(local);
+        let (global, _) = self.transform_33.map_rect(overflow);
+        self.global_transformed_bounds_with_children.join(global);
+    }
+
     /// The layer's OWN global bounds (no children) grown to cover its drop
-    /// shadow. Use this wherever a rect is joined into damage: the tight
+    /// shadow and any ink its content closure put outside the layer box. Use
+    /// this wherever a rect is joined into damage: the tight
     /// `global_transformed_bounds` stops at the layer box, so moving, resizing
     /// or removing a shadowed layer would leave the shadow band unrepainted.
     pub(crate) fn global_bounds_with_shadow(&self) -> skia_safe::Rect {
-        match self.shadow_bounds() {
-            Some(shadow) => {
-                let mut local = self.bounds;
-                local.join(shadow);
-                let (global, _) = self.transform_33.map_rect(local);
-                global
-            }
-            None => self.global_transformed_bounds,
+        let shadow = self.shadow_bounds();
+        if shadow.is_none() && self.content_overflow.is_empty() {
+            return self.global_transformed_bounds;
         }
+        let mut local = self.bounds;
+        if let Some(shadow) = shadow {
+            local.join(shadow);
+        }
+        if !self.content_overflow.is_empty() {
+            local.join(self.content_overflow);
+        }
+        let (global, _) = self.transform_33.map_rect(local);
+        global
     }
 
     pub(crate) fn has_visible_drawables(&self) -> bool {
@@ -582,6 +618,7 @@ impl RenderLayer {
             premultiplied_opacity,
             bounds,
             bounds_with_children: bounds,
+            content_overflow: skia_safe::Rect::default(),
             local_transformed_bounds,
             local_transformed_bounds_with_children: local_transformed_bounds,
             global_transformed_bounds: transformed_bounds,
@@ -655,6 +692,7 @@ impl Default for RenderLayer {
             local_transformed_bounds: skia_safe::Rect::default(),
             local_transformed_bounds_with_children: skia_safe::Rect::default(),
             bounds_with_children: skia_safe::Rect::default(),
+            content_overflow: skia_safe::Rect::default(),
             global_transformed_bounds: skia_safe::Rect::default(),
             global_transformed_bounds_with_children: skia_safe::Rect::default(),
             global_transformed_rbounds: skia_safe::RRect::default(),
