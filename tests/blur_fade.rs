@@ -32,9 +32,12 @@ fn absolute() -> taffy::Style {
 
 fn solid_image(v: u8) -> skia::Image {
     let mut surface = skia::surfaces::raster_n32_premul((W, H)).unwrap();
-    surface
-        .canvas()
-        .clear(skia::Color4f::new(v as f32 / 255.0, v as f32 / 255.0, v as f32 / 255.0, 1.0));
+    surface.canvas().clear(skia::Color4f::new(
+        v as f32 / 255.0,
+        v as f32 / 255.0,
+        v as f32 / 255.0,
+        1.0,
+    ));
     surface.image_snapshot()
 }
 
@@ -156,9 +159,7 @@ fn blur_fade_is_energy_preserving() {
         let want = expected(o);
         let plane = plane_path(o);
         let direct = direct_path(o);
-        println!(
-            "opacity {o}: expected ~{want:.1} plane={plane:?} direct={direct:?}"
-        );
+        println!("opacity {o}: expected ~{want:.1} plane={plane:?} direct={direct:?}");
         assert!(
             (plane[0] as f32 - want).abs() <= 6.0,
             "plane path at opacity {o}: got {plane:?}, expected ~{want:.1}"

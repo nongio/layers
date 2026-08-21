@@ -175,41 +175,57 @@ fn build_backdrop_filter(blur_sigma: f32, apply_vibrancy: bool) -> Option<skia_s
     };
 
     if apply_vibrancy {
-        // Add a mild tone map to feel more "material".
-        // Slightly increase contrast and saturation.
-        let sat = 1.10_f32;
-        let con = 1.06_f32;
-
-        let matrix = skia_safe::ColorMatrix::new(
-            con * (0.213 + 0.787 * sat),
-            con * (0.715 - 0.715 * sat),
-            con * (0.072 - 0.072 * sat),
-            0.0,
-            0.0,
-            con * (0.213 - 0.213 * sat),
-            con * (0.715 + 0.285 * sat),
-            con * (0.072 - 0.072 * sat),
-            0.0,
-            0.0,
-            con * (0.213 - 0.213 * sat),
-            con * (0.715 - 0.715 * sat),
-            con * (0.072 + 0.928 * sat),
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            1.0,
-            0.0,
-        );
-
-        let tone_filter = skia_safe::color_filters::matrix(&matrix, None);
-
         // Apply vibrancy on top of the upscaled blur.
-        skia_safe::image_filters::color_filter(tone_filter, blurred, None)
+        skia_safe::image_filters::color_filter(vibrancy_color_filter(), blurred, None)
     } else {
         Some(blurred)
     }
+}
+
+/// Saturation and contrast of the vibrancy tone map. Mild by design: the
+/// point is to keep a frosted surface distinguishable from what is behind it
+/// — a plain Gaussian blur of a flat white background is still flat white, and
+/// a translucent material over it composites back to white — without the
+/// backdrop reading as a filtered photograph.
+const VIBRANCY_SATURATION: f32 = 1.10;
+const VIBRANCY_CONTRAST: f32 = 1.06;
+
+thread_local! {
+    static VIBRANCY_FILTER_CACHE: std::cell::RefCell<Option<skia_safe::ColorFilter>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// The tone map applied to a blurred backdrop, built once per thread.
+///
+/// Every frosted surface goes through this, whichever path blurred it: layers
+/// that blur their own backdrop in the scene, and consumers that seed an
+/// already-blurred backdrop from outside (a compositor building one composite
+/// for several render targets, where the blur happens once, up front, and the
+/// layers skip their own). Both must grade the result identically or the same
+/// material takes on two different tints depending on how it was drawn — which
+/// is why this is a shared function rather than a constant each side copies.
+pub fn vibrancy_color_filter() -> skia_safe::ColorFilter {
+    VIBRANCY_FILTER_CACHE.with(|cell| {
+        let mut opt = cell.borrow_mut();
+        opt.get_or_insert_with(|| skia_safe::color_filters::matrix(&vibrancy_matrix(), None))
+            .clone()
+    })
+}
+
+/// The luma-preserving saturation matrix scaled by the contrast gain, as a
+/// colour matrix. Rec. 709 coefficients.
+fn vibrancy_matrix() -> skia_safe::ColorMatrix {
+    let sat = VIBRANCY_SATURATION;
+    let con = VIBRANCY_CONTRAST;
+    let (lr, lg, lb) = (0.213_f32, 0.715_f32, 0.072_f32);
+    #[rustfmt::skip]
+    let matrix = skia_safe::ColorMatrix::new(
+        con * (lr + (1.0 - lr) * sat), con * (lg - lg * sat),         con * (lb - lb * sat),         0.0, 0.0,
+        con * (lr - lr * sat),         con * (lg + (1.0 - lg) * sat), con * (lb - lb * sat),         0.0, 0.0,
+        con * (lr - lr * sat),         con * (lg - lg * sat),         con * (lb + (1.0 - lb) * sat), 0.0, 0.0,
+        0.0,                           0.0,                           0.0,                           1.0, 0.0,
+    );
+    matrix
 }
 
 pub trait DrawScene {
@@ -661,7 +677,22 @@ pub fn render_node_tree(
 
                     // Apply backdrop effects for descendant regions that need it
                     // Converts Vec<RRect> to Path for clipping with rounded rectangles
-                    if let Some(backdrop_rrects) = &render_layer.backdrop_blur_region {
+                    //
+                    // A `BackgroundBlur` descendant cannot blur anything inside the
+                    // offscreen (the pixels behind the subtree are not in it), so the
+                    // blur is done here instead, straight on the destination, under the
+                    // region the descendant occupies. That only lines up while the
+                    // cached image lands where the layout says it does. An image filter
+                    // moves or deforms it — the genie minimize warps the window down
+                    // into the dock — and the blur would stay behind as a crisp,
+                    // undeformed rectangle of frosted desktop at the old position while
+                    // the window animates away from it. No blur is the lesser artifact.
+                    let deformed = render_layer.image_filter.is_some();
+                    if let Some(backdrop_rrects) = render_layer
+                        .backdrop_blur_region
+                        .as_ref()
+                        .filter(|_| !deformed)
+                    {
                         profiling::scope!("background_blur_image_cached_descendants");
 
                         let before_backdrop = render_canvas.save();
