@@ -96,6 +96,22 @@ pub struct SceneNode {
     pub(crate) pending_damage: Option<skia_safe::Rect>,
 }
 
+/// What changed when a node's `RenderLayer` was refreshed.
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct RenderLayerUpdate {
+    /// The layer's own box changed size — the recorded picture is stale.
+    pub size_changed: bool,
+    /// The layer's origin in its parent's space changed — the picture is still
+    /// valid, only the transform used to replay it differs.
+    pub moved: bool,
+}
+
+impl RenderLayerUpdate {
+    pub fn any(&self) -> bool {
+        self.size_changed || self.moved
+    }
+}
+
 impl Default for SceneNode {
     fn default() -> Self {
         Self {
@@ -221,7 +237,13 @@ impl SceneNode {
         }
         // }
     }
-    /// update the renderlayer based on model and layout
+    /// Update the renderlayer based on model and layout.
+    ///
+    /// The returned [`RenderLayerUpdate`] keeps `size_changed` separate from
+    /// `moved` because the recorded `draw_cache` picture lives in the layer's
+    /// own local space: a pure translation (or scale/rotation, which are canvas
+    /// transforms applied at draw time) leaves the picture valid, while a size
+    /// change does not.
     #[profiling::function]
     pub(crate) fn update_render_layer_if_needed(
         &mut self,
@@ -231,7 +253,7 @@ impl SceneNode {
         context_opacity: f32,
         local_children_bounds: skia_safe::Rect,
         force_update: bool,
-    ) -> bool {
+    ) -> RenderLayerUpdate {
         let is_hidden = self.hidden();
         let current_width = self.render_layer.size.width;
         let current_height = self.render_layer.size.height;
@@ -244,7 +266,7 @@ impl SceneNode {
         {
             self.set_needs_layout(true);
         }
-        let mut changed = false;
+        let mut changed = RenderLayerUpdate::default();
         if force_update
             || self.rendering_flags.contains(RenderableFlags::NEEDS_LAYOUT)
             || self.rendering_flags.contains(RenderableFlags::NEEDS_PAINT)
@@ -280,9 +302,9 @@ impl SceneNode {
                 .transform_33
                 .map_rect(self.render_layer.bounds_with_children);
             self.render_layer.global_transformed_bounds_with_children = global_bwc;
-            changed = current_width != self.render_layer.size.width
-                || current_height != self.render_layer.size.height
-                || current_x != self.render_layer.local_transformed_bounds.x()
+            changed.size_changed = current_width != self.render_layer.size.width
+                || current_height != self.render_layer.size.height;
+            changed.moved = current_x != self.render_layer.local_transformed_bounds.x()
                 || current_y != self.render_layer.local_transformed_bounds.y();
         }
         self.render_layer.visible = !is_hidden && self.render_layer.has_visible_drawables();

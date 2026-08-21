@@ -1667,8 +1667,16 @@ impl Engine {
             for ancestor_id in ancestor_ids {
                 if let Some(ancestor_node) = arena.get_mut(ancestor_id) {
                     let ancestor = ancestor_node.get_mut();
-                    ancestor.set_needs_repaint(true);
+                    // NEEDS_LAYOUT, not NEEDS_PAINT: the ancestor must be
+                    // revisited next frame so its `*_with_children` bounds pick
+                    // the moved descendant up, but its own picture is unaffected
+                    // by what a descendant did. Marking NEEDS_PAINT made every
+                    // ancestor of any moving layer re-run its content closure
+                    // and re-record its picture on every frame of the motion.
+                    ancestor.set_needs_layout(true);
                     if ancestor.is_image_cached() {
+                        // An image-cached ancestor composites the descendant into
+                        // its offscreen surface, so its pixels DID change.
                         ancestor.increase_frame();
                     }
                 }

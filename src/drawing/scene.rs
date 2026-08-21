@@ -1155,8 +1155,14 @@ pub fn render_subtree_to_buffer(
     let cached = SUBTREE_BUFFER_CACHE.with(|c| {
         let cache = c.borrow();
         cache.get(&root).and_then(|e| {
+            // `origin` is part of the key: the buffer is rendered translated by
+            // -origin, so the same content at a different origin is a different
+            // image (and the plane placement the caller reads comes from here).
+            // Since a pure move no longer bumps `frame_number`, `dirty` alone
+            // would report a hit and hand back the buffer at its OLD origin.
             (e.dirty == dirty
                 && e.backdrop_id == backdrop_id
+                && e.origin == origin
                 && e.size.width == width
                 && e.size.height == height)
                 .then(|| SubtreeBuffer {

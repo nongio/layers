@@ -175,20 +175,28 @@ pub(crate) fn update_node_single(
             .get_mut(node_id)
             .map(|node| {
                 let scene_node = node.get_mut();
-                let changed = scene_node.update_render_layer_if_needed(
+                let update = scene_node.update_render_layer_if_needed(
                     &node_layout,
                     layer.model.clone(),
                     cumulative_transform,
                     context_opacity,
                     local_children_bounds,
                     parent_changed,
-                ) || scene_node._debug_info.is_some();
+                );
+                let is_debug = scene_node._debug_info.is_some();
+                let changed = update.any() || is_debug;
 
-                if changed {
+                // Only a size change (or debug overlay) invalidates the recorded
+                // picture: it is recorded in the layer's own local space, so a
+                // pure move/scale/rotation is replayed under a different canvas
+                // transform and stays correct. Marking NEEDS_PAINT here would
+                // force `do_repaint` to re-run the content closure and re-record
+                // the picture on every frame of any translation.
+                if update.size_changed || is_debug {
                     scene_node.set_needs_repaint(true);
                 }
 
-                (changed, scene_node._debug_info.is_some())
+                (changed, is_debug)
             })
             .unwrap_or((false, false))
     });
@@ -286,13 +294,14 @@ pub(crate) fn update_node_single(
         if let (Some(node), Some(renderable)) = (node, opt_renderable) {
             let scene_node = node.get();
             let mut repaint_damage = skia_safe::Rect::default();
-            if scene_node.needs_repaint()
-                || parent_changed
-                || layout_changed
-                || position_changed
-                || opacity_changed
-            // || changed_filters
-            {
+            // Re-record only when the picture can actually be stale:
+            //   * an explicit NEEDS_PAINT (content, colors, shadow, damage...)
+            //   * a size change (the picture is recorded at the layer's size)
+            //   * no cache yet (first paint, or the layer was skipped at opacity 0)
+            // Deliberately NOT on a pure position change, a parent transform
+            // change or an opacity change: the picture is local-space and
+            // opacity is applied by the paint at replay time.
+            if scene_node.needs_repaint() || layout_changed || renderable.draw_cache.is_none() {
                 let new_renderable = do_repaint(&renderable, scene_node, pending_damage);
                 repaint_damage = new_renderable.repaint_damage;
                 updated_renderable = Some(new_renderable);
@@ -303,6 +312,7 @@ pub(crate) fn update_node_single(
         }
     });
 
+    let repainted = updated_renderable.is_some();
     if let Some(renderable) = updated_renderable {
         engine
             .scene
@@ -381,17 +391,13 @@ pub(crate) fn update_node_single(
         total_damage.join(prev_transformed_bounds);
         total_damage.join(new_transformed_bounds);
     }
-    let content_repainted = !content_damage.is_empty();
-    let damaged = content_repainted
-        || (geometry_changed_self && (has_visible_drawables || is_debug))
-        || (geometry_changed_children && (has_visible_drawables || is_debug))
-        || opacity_changed
-        || parent_changed
-        || visibility_changed
-        || changed_render_layer
-        || changed_filters;
-
-    if damaged {
+    // `frame_number` is the "my painted pixels changed" signal: it drives the
+    // image-cache offscreen surface (drawing/scene.rs) and the per-subtree
+    // buffer cache used by the KMS plane path. A node that only MOVED produces
+    // the same pixels, so bumping it there would re-render an offscreen surface
+    // that is already correct. Visibility/filter flips do change the pixels
+    // even when no picture was re-recorded.
+    if repainted || visibility_changed || changed_filters {
         engine.scene.with_arena_mut(|arena| {
             if let Some(node) = arena.get_mut(node_id) {
                 node.get_mut().increase_frame();
@@ -400,10 +406,6 @@ pub(crate) fn update_node_single(
     }
 
     let propagate_to_children = parent_changed || geometry_changed_self || opacity_changed;
-    let nid: usize = node_id.into();
-    if nid == 8 && total_damage.width() == 1000.0 {
-        println!("update_node_single: node_id={:?}, damage={:?}, layout_changed={}, position_changed={}, opacity_changed={}, visibility_changed={}, changed_render_layer={}, prev_has_filters={}, new_has_filters={}, propagate_to_children={}", nid, total_damage, layout_changed, position_changed, opacity_changed, visibility_changed, changed_render_layer, prev_has_filters, new_has_filters, propagate_to_children);
-    }
     NodeUpdateResult {
         damage: total_damage,
         propagate_to_children,
