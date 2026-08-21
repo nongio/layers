@@ -273,29 +273,43 @@ impl SceneNode {
         {
             self.render_layer
                 .update_with_model_and_layout(&model, layout, matrix, context_opacity);
-            // bounds_with_children: union in this node's local space
-            self.render_layer.bounds_with_children = self.render_layer.bounds;
-            self.render_layer
-                .bounds_with_children
-                .join(local_children_bounds);
+            // When this layer clips its children, a child can never put a pixel
+            // outside the layer box no matter how big its own buffer is, so the
+            // part of the children union that falls outside must not enlarge the
+            // subtree rects. We intersect rather than ignoring the children
+            // outright, because the visible part of an oversized child is still
+            // real geometry: damage and subtree culling need the clipped
+            // rectangle, and a child smaller than the parent should not claim the
+            // parent's whole box. The clip is against the tight `bounds`, matching
+            // what the painter clips to (`clip_to_shape`) and what occlusion uses
+            // as the child clip rect — deliberately NOT the shadow-inflated rect,
+            // since the parent's shadow is drawn behind the parent, not somewhere
+            // a child may paint.
+            let mut children_local = local_children_bounds;
+            if self.render_layer.clip_children
+                && !children_local.intersect(self.render_layer.bounds)
+            {
+                children_local = skia::Rect::new_empty();
+            }
 
-            // local_transformed_bounds_with_children: union in parent space
+            // `update_with_model_and_layout` has already seeded all three
+            // `*_with_children` rects with this layer's own bounds grown to cover
+            // its drop shadow. Join into that seed instead of overwriting it: the
+            // shadow legitimately paints outside `bounds` and must stay in the
+            // damage rects, and clipping the children must not shrink it away.
+
+            // bounds_with_children: union in this node's local space
+            self.render_layer.bounds_with_children.join(children_local);
+
             // local_transformed_bounds_with_children: union in parent-of-this-node space
             let (children_in_parent_space, _) = self
                 .render_layer
                 .local_transform
                 .to_m33()
-                .map_rect(local_children_bounds);
-            self.render_layer.local_transformed_bounds_with_children =
-                self.render_layer.local_transformed_bounds;
+                .map_rect(children_local);
             self.render_layer
                 .local_transformed_bounds_with_children
                 .join(children_in_parent_space);
-
-            let (_children_in_global_space, _) = self
-                .render_layer
-                .transform_33
-                .map_rect(local_children_bounds);
             // global_transformed_bounds_with_children: map final local union through global transform
             let (global_bwc, _) = self
                 .render_layer

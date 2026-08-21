@@ -1554,6 +1554,21 @@ impl Engine {
             if let Some(parent_node) = arena.get_mut(parent_id) {
                 let parent = parent_node.get_mut();
 
+                // A clipping parent confines its children to its own box, so only
+                // the part of the child that survives the clip may grow the
+                // parent's subtree rects. Without this the bubble-up would undo
+                // the clamp applied while updating the parent's render layer and
+                // an oversized scrolling child would inflate its parent again.
+                // Clipped against the tight `bounds`, as the painter does; the
+                // parent's own shadow extent is already folded into
+                // `bounds_with_children` and is left untouched.
+                let mut child_bounds = child_bounds;
+                if parent.render_layer.clip_children
+                    && !child_bounds.intersect(parent.render_layer.bounds)
+                {
+                    return;
+                }
+
                 // Union child bounds into parent's bounds_with_children (local space)
                 parent.render_layer.bounds_with_children.join(child_bounds);
 
