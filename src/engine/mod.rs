@@ -2255,8 +2255,101 @@ impl Engine {
             }
         }
         if !unattributed.is_empty() {
-            self.removed_nodes_damage.write().unwrap().join(unattributed);
+            self.removed_nodes_damage
+                .write()
+                .unwrap()
+                .join(unattributed);
         }
+    }
+
+    /// Diagnostic: recorded-picture op counts for a node's renderable —
+    /// `(draw_ops, content_ops)`, `-1` = cache absent, `None` = no renderable.
+    /// An op count of 0 on a node that should paint means the recording was
+    /// made while the node had nothing to give — replaying it draws nothing.
+    pub fn debug_renderable_ops(&self, node: NodeRef) -> Option<(i64, i64)> {
+        let id: crate::engine::storage::FlatStorageId = node.0.into();
+        self.scene.renderables.get(&id).map(|r| r.debug_ops())
+    }
+
+    /// Diagnostic: the raw recorded pictures of a node's renderable, for
+    /// replaying in isolation ((draw_cache picture, content_cache picture)).
+    pub fn debug_renderable_pictures(
+        &self,
+        node: NodeRef,
+    ) -> (Option<skia_safe::Picture>, Option<skia_safe::Picture>) {
+        let id: crate::engine::storage::FlatStorageId = node.0.into();
+        self.scene
+            .renderables
+            .get(&id)
+            .map(|r| {
+                (
+                    r.draw_cache.as_ref().map(|c| c.picture().clone()),
+                    r.content_cache.clone(),
+                )
+            })
+            .unwrap_or((None, None))
+    }
+
+    /// Diagnostic: the STORED size of a node's `DrawCache` — the value its
+    /// `draw()` gates on, independent of the layer's live size.
+    pub fn debug_renderable_cache_size(&self, node: NodeRef) -> Option<(f32, f32)> {
+        let id: crate::engine::storage::FlatStorageId = node.0.into();
+        self.scene
+            .renderables
+            .get(&id)
+            .and_then(|r| r.debug_draw_cache_size())
+    }
+
+    /// Diagnostic: the node's `local_transform` translation — what
+    /// `paint_node_tree` concatenates to position it under its parent —
+    /// plus the global `transform_33` translation for comparison.
+    pub fn debug_node_transforms(&self, node: NodeRef) -> Option<((f32, f32), (f32, f32))> {
+        self.scene.with_arena(|arena| {
+            arena.get(node.0).map(|n| {
+                let rl = n.get().render_layer();
+                let lm = rl.local_transform.to_m33();
+                let gm = rl.transform_33;
+                (
+                    (lm.translate_x(), lm.translate_y()),
+                    (gm.translate_x(), gm.translate_y()),
+                )
+            })
+        })
+    }
+
+    /// Diagnostic: cull rects of a node's recorded pictures
+    /// (draw_cache, content_cache). `canvas.draw_picture` quick-rejects
+    /// against these; `playback()` does not.
+    pub fn debug_renderable_cull_rects(
+        &self,
+        node: NodeRef,
+    ) -> (Option<skia_safe::Rect>, Option<skia_safe::Rect>) {
+        let id: crate::engine::storage::FlatStorageId = node.0.into();
+        self.scene
+            .renderables
+            .get(&id)
+            .map(|r| r.debug_cull_rects())
+            .unwrap_or((None, None))
+    }
+
+    /// Diagnostic: the pending transactions — one `(node id, change, animated)`
+    /// entry per scheduled node change. A non-empty result is what keeps
+    /// `pending_transactions_count() > 0` (and with it, a host compositor's
+    /// "scene is animating" signal) true; the change's `Debug` names the
+    /// property being written, so a caller that never goes idle can see which
+    /// layer keeps scheduling work.
+    pub fn debug_pending_transactions(&self) -> Vec<(usize, String, bool)> {
+        self.transactions.with_data(|d| {
+            d.values()
+                .map(|t| {
+                    (
+                        crate::engine::storage::FlatStorageId::from(t.node_id.0),
+                        format!("{:?}", t.change),
+                        t.animation_id.is_some(),
+                    )
+                })
+                .collect()
+        })
     }
 
     pub fn clear_damage(&self) {

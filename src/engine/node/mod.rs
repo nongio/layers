@@ -138,6 +138,43 @@ pub struct SceneNodeRenderable {
     pub(crate) content_cache: Option<Picture>,
 }
 
+impl SceneNodeRenderable {
+    /// Diagnostic summary: op counts of the recorded pictures
+    /// (`draw_cache`, `content_cache`), `-1` when absent. An op count of 0
+    /// on a node that should paint means the recording was made while the
+    /// node had nothing to give — replaying it draws nothing.
+    pub fn debug_ops(&self) -> (i64, i64) {
+        (
+            self.draw_cache
+                .as_ref()
+                .map(|c| c.picture().approximate_op_count() as i64)
+                .unwrap_or(-1),
+            self.content_cache
+                .as_ref()
+                .map(|c| c.approximate_op_count() as i64)
+                .unwrap_or(-1),
+        )
+    }
+
+    /// Diagnostic: the `DrawCache`'s STORED size — the value its `draw()`
+    /// gates on, independent of the layer's live size.
+    pub fn debug_draw_cache_size(&self) -> Option<(f32, f32)> {
+        self.draw_cache
+            .as_ref()
+            .map(|c| (c.size().width, c.size().height))
+    }
+
+    /// Diagnostic: the cull rects of the recorded pictures
+    /// (draw_cache, content_cache). `canvas.draw_picture` quick-rejects
+    /// against these; `playback()` does not.
+    pub fn debug_cull_rects(&self) -> (Option<skia_safe::Rect>, Option<skia_safe::Rect>) {
+        (
+            self.draw_cache.as_ref().map(|c| c.picture().cull_rect()),
+            self.content_cache.as_ref().map(|c| c.cull_rect()),
+        )
+    }
+}
+
 impl SceneNode {
     pub fn new() -> Self {
         Self::default()

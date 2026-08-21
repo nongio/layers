@@ -4,6 +4,11 @@ use std::{any::Any, collections::HashMap, sync::Arc};
 pub struct LayerDataProps(HashMap<String, Arc<dyn Any + Send + Sync>>);
 
 impl LayerDataProps {
+    // Only constructed behind the `layer_state` feature, like the accessors
+    // below. Building lay-rs as a path dependency drops cargo's `--cap-lints
+    // allow`, so without this the crate's `deny(warnings)` fails the build of
+    // any consumer that leaves the feature off.
+    #[allow(dead_code)]
     pub fn new() -> Self {
         Self(HashMap::new())
     }
