@@ -2,6 +2,56 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.13.0] - 2026-08-21
+
+### 🚀 Features
+
+- *(render)* Per-subtree buffer rendering with cross-buffer background blur (#21)
+
+## [1.12.0] - 2026-06-23
+
+### ⚡ Performance
+
+- *(blur)* Delegate backdrop downscaling to Skia's experimental save_layer scale
+
+### 🧪 Testing
+
+- *(damage)* Update blur damage rect expectations for sigma=40
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump version to 1.12.0 (#20)
+
+## [1.11.0] - 2026-04-11
+
+### 🚀 Features
+
+- *(damage)* Fold occlusion into scene damage aggregation (#19)
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump version to 1.11.0
+
+## [1.10.0] - 2026-04-11
+
+### 🚀 Features
+
+- *(damage)* Partial repaint via closure return + add_damage API (#18)
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump version to 1.10.0
+
+## [1.9.0] - 2026-04-09
+
+### ⚡ Performance
+
+- Optimize engine update pipeline (#17)
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump version to 1.9.0
+
 ## [1.8.0] - 2026-04-04
 
 ### 🚀 Features
@@ -16,7 +66,7 @@ All notable changes to this project will be documented in this file.
 - Upgrade skia-safe from 0.88 to 0.93
 - Cargo fmt
 - Bump version to 1.8.0
-- Update changelog for 1.8.0
+- Release v1.8.0
 
 ## [1.7.0] - 2026-03-19
 
