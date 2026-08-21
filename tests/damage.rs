@@ -121,9 +121,11 @@ mod tests {
         let render_layer = engine.render_layer(&layer).unwrap();
         let renderable = engine.renderable(&layer).unwrap();
         let damage = draw_layer(canvas, &render_layer, 1.0, &renderable);
+        // Shadow box: offset (-10,-10), 100x100, outset by spread (20) plus the
+        // blur's ~3 sigma reach (3 * radius 20 = 60) → 80 on every side.
         assert_eq!(
             damage,
-            skia_safe::Rect::from_xywh(-50.0, -50.0, 180.0, 180.0)
+            skia_safe::Rect::from_xywh(-90.0, -90.0, 260.0, 260.0)
         );
     }
 

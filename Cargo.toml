@@ -109,4 +109,5 @@ members = [
     "examples/hello-content",
     "examples/hello-filters",
     "examples/hello-portals",
+    "examples/hello-subtrees",
 ]

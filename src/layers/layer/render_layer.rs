@@ -27,6 +27,14 @@ pub struct RenderLayer {
     pub local_transformed_bounds_with_children: skia_safe::Rect,
     /// The bounds of the layers, including children bounds
     pub bounds_with_children: skia_safe::Rect,
+    /// Rect the content draw closure actually painted into, in the layer's own
+    /// coordinate space. A closure is free to paint outside `bounds` — a
+    /// mirrored subtree (`Layer::as_content`) carries the source's drop shadow
+    /// with it — and the `*_with_children` rects have to cover that ink or the
+    /// band outside the layer box never gets repainted. Written by the engine
+    /// after each repaint from the closure's returned rect; empty when the
+    /// layer has no content closure.
+    pub(crate) content_overflow: skia_safe::Rect,
     /// The transformed bounds of the layer, relative to the root
     pub global_transformed_bounds: skia_safe::Rect,
     /// The transformed rounded bounds of the layer, relative to the root
@@ -88,6 +96,12 @@ pub struct RenderLayer {
     /// with opaque pixels. When true, the layer can act as an occluder even if
     /// its background color is transparent.
     pub content_opaque: bool,
+    /// For a `BackgroundBlur` layer rendered into an isolated plane buffer: seed
+    /// the *raw* (unblurred) external backdrop and run the real blur, instead of
+    /// seeding the pre-blurred backdrop and skipping it. Set on layers that
+    /// overlap other same-plane content (e.g. a popup stacked over another) so
+    /// that content is blurred into this layer's backdrop. See `ExternalBackdrop`.
+    pub blur_include_content: bool,
 }
 
 impl RenderLayer {
@@ -233,11 +247,36 @@ impl RenderLayer {
         let (global_shape_bounds, _) = self.transform_33.map_rect(self.shape_bounds);
         self.global_shape_bounds = global_shape_bounds;
 
-        self.bounds_with_children = bounds;
+        // The drop shadow paints OUTSIDE `bounds`, so the `*_with_children`
+        // rects — which is what damage and subtree culling are computed from —
+        // must cover it, or the shadow band never gets repainted and comes out
+        // clipped to the layer box. Seeding it here also bubbles the extra
+        // extent up through `bubble_up_bounds_to_parent`, so an ancestor being
+        // shown (a popup unhiding) damages its descendants' shadows too. The
+        // plain `bounds` / `global_transformed_bounds` stay tight: occlusion,
+        // hit-testing and clipping must not grow with the shadow.
+        let mut bounds_with_shadow = match self.shadow_bounds() {
+            Some(shadow) => {
+                let mut r = bounds;
+                r.join(shadow);
+                r
+            }
+            None => bounds,
+        };
+        // Same reasoning for the ink a content closure puts outside the layer
+        // box: a mirror layer draws the source subtree including its shadow,
+        // and moving it has to repaint the band that shadow covered.
+        if !self.content_overflow.is_empty() {
+            bounds_with_shadow.join(self.content_overflow);
+        }
+        let (local_transformed_bwc, _) = self.local_transform.to_m33().map_rect(bounds_with_shadow);
+        let (global_transformed_bwc, _) = self.transform_33.map_rect(bounds_with_shadow);
+
+        self.bounds_with_children = bounds_with_shadow;
         self.local_transformed_bounds = local_transformed_bounds;
-        self.local_transformed_bounds_with_children = local_transformed_bounds;
+        self.local_transformed_bounds_with_children = local_transformed_bwc;
         self.global_transformed_bounds = transformed_bounds;
-        self.global_transformed_bounds_with_children = transformed_bounds;
+        self.global_transformed_bounds_with_children = global_transformed_bwc;
         self.global_transformed_rbounds =
             skia_safe::RRect::new_rect_radii(transformed_bounds, &border_corner_radius.into());
 
@@ -250,6 +289,67 @@ impl RenderLayer {
         self.image_filter = model.image_filter.value();
         self.image_filter_bounds = *model.filter_bounds.read().unwrap();
         self.color_filter = model.color_filter.value();
+        self.blur_include_content = model.blur_include_content.value();
+    }
+
+    /// Rect covered by the drop shadow in the layer's own (untransformed)
+    /// coordinate space, or `None` when the layer draws no shadow.
+    ///
+    /// The shadow is the layer box shifted by `shadow_offset`, outset by
+    /// `shadow_spread`, then blurred — a Gaussian with sigma `shadow_radius`
+    /// reaches ~3 sigma, so that is the extra margin included here.
+    pub(crate) fn shadow_bounds(&self) -> Option<skia_safe::Rect> {
+        if self.shadow_color.alpha <= 0.0 {
+            return None;
+        }
+        let reach = self.shadow_spread + self.shadow_radius * 3.0;
+        Some(
+            skia_safe::Rect::from_xywh(
+                self.shadow_offset.x,
+                self.shadow_offset.y,
+                self.size.width,
+                self.size.height,
+            )
+            .with_outset((reach, reach)),
+        )
+    }
+
+    /// Record the rect the content closure painted into and grow the
+    /// `*_with_children` rects to cover it right away. Growing them here, and
+    /// not only on the next `update_with_model_and_layout`, means the rects
+    /// this frame leaves behind — the ones the next frame compares against as
+    /// "where the layer used to be" — already include the overflow band.
+    pub(crate) fn set_content_overflow(&mut self, overflow: skia_safe::Rect) {
+        self.content_overflow = overflow;
+        if overflow.is_empty() {
+            return;
+        }
+        self.bounds_with_children.join(overflow);
+        let (local, _) = self.local_transform.to_m33().map_rect(overflow);
+        self.local_transformed_bounds_with_children.join(local);
+        let (global, _) = self.transform_33.map_rect(overflow);
+        self.global_transformed_bounds_with_children.join(global);
+    }
+
+    /// The layer's OWN global bounds (no children) grown to cover its drop
+    /// shadow and any ink its content closure put outside the layer box. Use
+    /// this wherever a rect is joined into damage: the tight
+    /// `global_transformed_bounds` stops at the layer box, so moving, resizing
+    /// or removing a shadowed layer would leave the shadow band unrepainted.
+    pub(crate) fn global_bounds_with_shadow(&self) -> skia_safe::Rect {
+        let shadow = self.shadow_bounds();
+        if shadow.is_none() && self.content_overflow.is_empty() {
+            return self.global_transformed_bounds;
+        }
+        let mut local = self.bounds;
+        if let Some(shadow) = shadow {
+            local.join(shadow);
+        }
+        if !self.content_overflow.is_empty() {
+            local.join(self.content_overflow);
+        }
+        let (global, _) = self.transform_33.map_rect(local);
+        global
     }
 
     pub(crate) fn has_visible_drawables(&self) -> bool {
@@ -518,6 +618,7 @@ impl RenderLayer {
             premultiplied_opacity,
             bounds,
             bounds_with_children: bounds,
+            content_overflow: skia_safe::Rect::default(),
             local_transformed_bounds,
             local_transformed_bounds_with_children: local_transformed_bounds,
             global_transformed_bounds: transformed_bounds,
@@ -539,6 +640,7 @@ impl RenderLayer {
             visible: true,
             backdrop_blur_region: None,
             content_opaque: false,
+            blur_include_content: model.blur_include_content.value(),
         };
 
         render_layer.visible = render_layer.has_visible_drawables();
@@ -590,6 +692,7 @@ impl Default for RenderLayer {
             local_transformed_bounds: skia_safe::Rect::default(),
             local_transformed_bounds_with_children: skia_safe::Rect::default(),
             bounds_with_children: skia_safe::Rect::default(),
+            content_overflow: skia_safe::Rect::default(),
             global_transformed_bounds: skia_safe::Rect::default(),
             global_transformed_bounds_with_children: skia_safe::Rect::default(),
             global_transformed_rbounds: skia_safe::RRect::default(),
@@ -603,6 +706,7 @@ impl Default for RenderLayer {
             visible: false,
             backdrop_blur_region: None,
             content_opaque: false,
+            blur_include_content: false,
         }
     }
 }

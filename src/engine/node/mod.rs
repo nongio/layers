@@ -96,6 +96,22 @@ pub struct SceneNode {
     pub(crate) pending_damage: Option<skia_safe::Rect>,
 }
 
+/// What changed when a node's `RenderLayer` was refreshed.
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct RenderLayerUpdate {
+    /// The layer's own box changed size — the recorded picture is stale.
+    pub size_changed: bool,
+    /// The layer's origin in its parent's space changed — the picture is still
+    /// valid, only the transform used to replay it differs.
+    pub moved: bool,
+}
+
+impl RenderLayerUpdate {
+    pub fn any(&self) -> bool {
+        self.size_changed || self.moved
+    }
+}
+
 impl Default for SceneNode {
     fn default() -> Self {
         Self {
@@ -120,6 +136,43 @@ pub struct SceneNodeRenderable {
     pub(crate) repaint_damage: skia_safe::Rect,
     pub(crate) draw_cache: Option<DrawCache>,
     pub(crate) content_cache: Option<Picture>,
+}
+
+impl SceneNodeRenderable {
+    /// Diagnostic summary: op counts of the recorded pictures
+    /// (`draw_cache`, `content_cache`), `-1` when absent. An op count of 0
+    /// on a node that should paint means the recording was made while the
+    /// node had nothing to give — replaying it draws nothing.
+    pub fn debug_ops(&self) -> (i64, i64) {
+        (
+            self.draw_cache
+                .as_ref()
+                .map(|c| c.picture().approximate_op_count() as i64)
+                .unwrap_or(-1),
+            self.content_cache
+                .as_ref()
+                .map(|c| c.approximate_op_count() as i64)
+                .unwrap_or(-1),
+        )
+    }
+
+    /// Diagnostic: the `DrawCache`'s STORED size — the value its `draw()`
+    /// gates on, independent of the layer's live size.
+    pub fn debug_draw_cache_size(&self) -> Option<(f32, f32)> {
+        self.draw_cache
+            .as_ref()
+            .map(|c| (c.size().width, c.size().height))
+    }
+
+    /// Diagnostic: the cull rects of the recorded pictures
+    /// (draw_cache, content_cache). `canvas.draw_picture` quick-rejects
+    /// against these; `playback()` does not.
+    pub fn debug_cull_rects(&self) -> (Option<skia_safe::Rect>, Option<skia_safe::Rect>) {
+        (
+            self.draw_cache.as_ref().map(|c| c.picture().cull_rect()),
+            self.content_cache.as_ref().map(|c| c.cull_rect()),
+        )
+    }
 }
 
 impl SceneNode {
@@ -221,7 +274,13 @@ impl SceneNode {
         }
         // }
     }
-    /// update the renderlayer based on model and layout
+    /// Update the renderlayer based on model and layout.
+    ///
+    /// The returned [`RenderLayerUpdate`] keeps `size_changed` separate from
+    /// `moved` because the recorded `draw_cache` picture lives in the layer's
+    /// own local space: a pure translation (or scale/rotation, which are canvas
+    /// transforms applied at draw time) leaves the picture valid, while a size
+    /// change does not.
     #[profiling::function]
     pub(crate) fn update_render_layer_if_needed(
         &mut self,
@@ -231,7 +290,7 @@ impl SceneNode {
         context_opacity: f32,
         local_children_bounds: skia_safe::Rect,
         force_update: bool,
-    ) -> bool {
+    ) -> RenderLayerUpdate {
         let is_hidden = self.hidden();
         let current_width = self.render_layer.size.width;
         let current_height = self.render_layer.size.height;
@@ -244,45 +303,59 @@ impl SceneNode {
         {
             self.set_needs_layout(true);
         }
-        let mut changed = false;
+        let mut changed = RenderLayerUpdate::default();
         if force_update
             || self.rendering_flags.contains(RenderableFlags::NEEDS_LAYOUT)
             || self.rendering_flags.contains(RenderableFlags::NEEDS_PAINT)
         {
             self.render_layer
                 .update_with_model_and_layout(&model, layout, matrix, context_opacity);
-            // bounds_with_children: union in this node's local space
-            self.render_layer.bounds_with_children = self.render_layer.bounds;
-            self.render_layer
-                .bounds_with_children
-                .join(local_children_bounds);
+            // When this layer clips its children, a child can never put a pixel
+            // outside the layer box no matter how big its own buffer is, so the
+            // part of the children union that falls outside must not enlarge the
+            // subtree rects. We intersect rather than ignoring the children
+            // outright, because the visible part of an oversized child is still
+            // real geometry: damage and subtree culling need the clipped
+            // rectangle, and a child smaller than the parent should not claim the
+            // parent's whole box. The clip is against the tight `bounds`, matching
+            // what the painter clips to (`clip_to_shape`) and what occlusion uses
+            // as the child clip rect — deliberately NOT the shadow-inflated rect,
+            // since the parent's shadow is drawn behind the parent, not somewhere
+            // a child may paint.
+            let mut children_local = local_children_bounds;
+            if self.render_layer.clip_children
+                && !children_local.intersect(self.render_layer.bounds)
+            {
+                children_local = skia::Rect::new_empty();
+            }
 
-            // local_transformed_bounds_with_children: union in parent space
+            // `update_with_model_and_layout` has already seeded all three
+            // `*_with_children` rects with this layer's own bounds grown to cover
+            // its drop shadow. Join into that seed instead of overwriting it: the
+            // shadow legitimately paints outside `bounds` and must stay in the
+            // damage rects, and clipping the children must not shrink it away.
+
+            // bounds_with_children: union in this node's local space
+            self.render_layer.bounds_with_children.join(children_local);
+
             // local_transformed_bounds_with_children: union in parent-of-this-node space
             let (children_in_parent_space, _) = self
                 .render_layer
                 .local_transform
                 .to_m33()
-                .map_rect(local_children_bounds);
-            self.render_layer.local_transformed_bounds_with_children =
-                self.render_layer.local_transformed_bounds;
+                .map_rect(children_local);
             self.render_layer
                 .local_transformed_bounds_with_children
                 .join(children_in_parent_space);
-
-            let (_children_in_global_space, _) = self
-                .render_layer
-                .transform_33
-                .map_rect(local_children_bounds);
             // global_transformed_bounds_with_children: map final local union through global transform
             let (global_bwc, _) = self
                 .render_layer
                 .transform_33
                 .map_rect(self.render_layer.bounds_with_children);
             self.render_layer.global_transformed_bounds_with_children = global_bwc;
-            changed = current_width != self.render_layer.size.width
-                || current_height != self.render_layer.size.height
-                || current_x != self.render_layer.local_transformed_bounds.x()
+            changed.size_changed = current_width != self.render_layer.size.width
+                || current_height != self.render_layer.size.height;
+            changed.moved = current_x != self.render_layer.local_transformed_bounds.x()
                 || current_y != self.render_layer.local_transformed_bounds.y();
         }
         self.render_layer.visible = !is_hidden && self.render_layer.has_visible_drawables();
@@ -338,6 +411,15 @@ pub fn do_repaint(
     let mut new_renderable = renderable.clone();
     if scene_node.hidden() || render_layer.premultiplied_opacity == 0.0 {
         new_renderable.repaint_damage = damage;
+        // Nothing to record for an invisible layer — but the caller clears
+        // NEEDS_PAINT all the same, so a recorded picture would survive as the
+        // only trace of the state the layer had when it was last visible.
+        // Anything changed while it was invisible (its shape, its content)
+        // would then be replayed from that stale picture the moment the layer
+        // is shown again, under an otherwise up-to-date transform. Drop the
+        // cache instead: `update_node` re-records on the next update, because a
+        // node with no draw cache always repaints.
+        new_renderable.draw_cache = None;
         return new_renderable;
     }
 

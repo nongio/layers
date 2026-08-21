@@ -569,6 +569,13 @@ pub(crate) fn cleanup_transactions(engine: &Engine, finished_transations: Vec<Fl
 #[allow(clippy::unnecessary_filter_map)]
 pub(crate) fn cleanup_nodes(engine: &Engine) -> skia_safe::Rect {
     let mut damage = skia_safe::Rect::default();
+    // Damage from removed nodes, attributed to their nearest surviving
+    // ancestor so per-subtree damage queries (`subtree_damage`) stay
+    // scoped: without attribution any removal would conservatively damage
+    // every subtree. Nodes with no surviving ancestor fall back to the
+    // engine-global removed-damage accumulator.
+    let mut attributed: Vec<(NodeRef, skia_safe::Rect)> = Vec::new();
+    let mut unattributed = skia_safe::Rect::default();
     let deleted = {
         let root = engine.scene_root();
 
@@ -588,6 +595,24 @@ pub(crate) fn cleanup_nodes(engine: &Engine) -> skia_safe::Rect {
                     if node.is_deleted() {
                         let bounds = node.transformed_bounds_with_effects();
                         damage.join(bounds);
+                        // Walk up to the first ancestor that is neither
+                        // freed nor itself marked for deletion.
+                        let mut anc = arena.get(node_id).and_then(|n| n.parent());
+                        let mut target = None;
+                        while let Some(a) = anc {
+                            match arena.get(a) {
+                                Some(an) if !an.is_removed() && !an.get().is_deleted() => {
+                                    target = Some(a);
+                                    break;
+                                }
+                                Some(an) => anc = an.parent(),
+                                None => break,
+                            }
+                        }
+                        match target {
+                            Some(t) => attributed.push((NodeRef(t), bounds)),
+                            None => unattributed.join(bounds),
+                        }
                         Some(node_id)
                     } else {
                         None
@@ -596,6 +621,7 @@ pub(crate) fn cleanup_nodes(engine: &Engine) -> skia_safe::Rect {
                 .collect::<Vec<_>>()
         })
     };
+    engine.attribute_removed_damage(attributed, unattributed);
     for id in deleted {
         engine.scene_remove_layer(&NodeRef(id));
     }

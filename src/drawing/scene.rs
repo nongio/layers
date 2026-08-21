@@ -41,6 +41,31 @@ pub(crate) const BACKGROUND_BLUR_DOWNSAMPLE: f32 = 1.0;
 /// reduced resolution is imperceptible, but the layer is far cheaper to allocate and blur.
 pub(crate) const BACKGROUND_BLUR_SAVE_SCALE: f32 = 0.1;
 
+/// A backdrop image handed to `BackgroundBlur` layers that render into isolated
+/// buffers (e.g. KMS planes) and therefore can't see the content behind them.
+///
+/// - `image`: composite of the planes below, a uniformly scaled copy of the
+///   whole scene (see `scale`).
+/// - `scale`: the image's resolution relative to the scene (1.0 = full res,
+///   0.25 = quarter). The layer's global region is sampled at this scale.
+/// - `blurred`: the caller already blurred `image`. The consumer then seeds it
+///   directly and SKIPS its own blur pass — blurring within the layer's clipped
+///   shape samples transparent pixels at the edge and leaves a faded rim that
+///   re-exposes the raw seed. Blurring the whole image once avoids that.
+/// - `raw_image`: the *unblurred* composite of the planes below, at the same
+///   `scale`. A layer with `blur_include_content` set seeds THIS instead of the
+///   pre-blurred `image` and runs the real blur, so same-plane content painted
+///   earlier in the pass (e.g. a popup underneath this one) is blurred into the
+///   result — the pre-blurred `image` can't include it. `None` (the default)
+///   leaves such layers on the pre-blurred fast path.
+#[derive(Clone, Copy)]
+pub struct ExternalBackdrop<'a> {
+    pub image: &'a skia_safe::Image,
+    pub scale: f32,
+    pub blurred: bool,
+    pub raw_image: Option<&'a skia_safe::Image>,
+}
+
 /// Sets the experimental backdrop downscale factor on a [`skia_safe::canvas::SaveLayerRec`].
 ///
 /// skia-safe exposes no setter for `SkCanvas::SaveLayerRec::fExperimentalBackdropScale`
@@ -150,41 +175,57 @@ fn build_backdrop_filter(blur_sigma: f32, apply_vibrancy: bool) -> Option<skia_s
     };
 
     if apply_vibrancy {
-        // Add a mild tone map to feel more "material".
-        // Slightly increase contrast and saturation.
-        let sat = 1.10_f32;
-        let con = 1.06_f32;
-
-        let matrix = skia_safe::ColorMatrix::new(
-            con * (0.213 + 0.787 * sat),
-            con * (0.715 - 0.715 * sat),
-            con * (0.072 - 0.072 * sat),
-            0.0,
-            0.0,
-            con * (0.213 - 0.213 * sat),
-            con * (0.715 + 0.285 * sat),
-            con * (0.072 - 0.072 * sat),
-            0.0,
-            0.0,
-            con * (0.213 - 0.213 * sat),
-            con * (0.715 - 0.715 * sat),
-            con * (0.072 + 0.928 * sat),
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            1.0,
-            0.0,
-        );
-
-        let tone_filter = skia_safe::color_filters::matrix(&matrix, None);
-
         // Apply vibrancy on top of the upscaled blur.
-        skia_safe::image_filters::color_filter(tone_filter, blurred, None)
+        skia_safe::image_filters::color_filter(vibrancy_color_filter(), blurred, None)
     } else {
         Some(blurred)
     }
+}
+
+/// Saturation and contrast of the vibrancy tone map. Mild by design: the
+/// point is to keep a frosted surface distinguishable from what is behind it
+/// — a plain Gaussian blur of a flat white background is still flat white, and
+/// a translucent material over it composites back to white — without the
+/// backdrop reading as a filtered photograph.
+const VIBRANCY_SATURATION: f32 = 1.10;
+const VIBRANCY_CONTRAST: f32 = 1.06;
+
+thread_local! {
+    static VIBRANCY_FILTER_CACHE: std::cell::RefCell<Option<skia_safe::ColorFilter>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// The tone map applied to a blurred backdrop, built once per thread.
+///
+/// Every frosted surface goes through this, whichever path blurred it: layers
+/// that blur their own backdrop in the scene, and consumers that seed an
+/// already-blurred backdrop from outside (a compositor building one composite
+/// for several render targets, where the blur happens once, up front, and the
+/// layers skip their own). Both must grade the result identically or the same
+/// material takes on two different tints depending on how it was drawn — which
+/// is why this is a shared function rather than a constant each side copies.
+pub fn vibrancy_color_filter() -> skia_safe::ColorFilter {
+    VIBRANCY_FILTER_CACHE.with(|cell| {
+        let mut opt = cell.borrow_mut();
+        opt.get_or_insert_with(|| skia_safe::color_filters::matrix(&vibrancy_matrix(), None))
+            .clone()
+    })
+}
+
+/// The luma-preserving saturation matrix scaled by the contrast gain, as a
+/// colour matrix. Rec. 709 coefficients.
+fn vibrancy_matrix() -> skia_safe::ColorMatrix {
+    let sat = VIBRANCY_SATURATION;
+    let con = VIBRANCY_CONTRAST;
+    let (lr, lg, lb) = (0.213_f32, 0.715_f32, 0.072_f32);
+    #[rustfmt::skip]
+    let matrix = skia_safe::ColorMatrix::new(
+        con * (lr + (1.0 - lr) * sat), con * (lg - lg * sat),         con * (lb - lb * sat),         0.0, 0.0,
+        con * (lr - lr * sat),         con * (lg + (1.0 - lg) * sat), con * (lb - lb * sat),         0.0, 0.0,
+        con * (lr - lr * sat),         con * (lg - lg * sat),         con * (lb + (1.0 - lb) * sat), 0.0, 0.0,
+        0.0,                           0.0,                           0.0,                           1.0, 0.0,
+    );
+    matrix
 }
 
 pub trait DrawScene {
@@ -210,6 +251,7 @@ pub fn draw_scene(canvas: &skia::Canvas, scene: std::sync::Arc<Scene>, root_id: 
                     renderables_arena,
                     canvas,
                     1.0,
+                    None,
                     None,
                     None,
                 );
@@ -344,9 +386,8 @@ pub fn create_surface_for_node(
     context: &mut skia_safe::gpu::DirectContext,
 ) -> Option<Surface> {
     let bounds = surface_size_for_render_layer(render_layer);
-    const safe_multiplier: f32 = 1.2;
-    let width = (bounds.x * safe_multiplier) as i32;
-    let height = (bounds.y * safe_multiplier) as i32;
+    let width = (bounds.x * SUBTREE_SAFE_MARGIN) as i32;
+    let height = (bounds.y * SUBTREE_SAFE_MARGIN) as i32;
     if width == 0 || height == 0 {
         // tracing::warn!(
         //     "Invalid size for surface {:?} [{:?}]",
@@ -392,6 +433,7 @@ pub fn paint_node_tree(
     skip_self: bool,
     occluded: Option<&HashSet<NodeRef>>,
     damage_region: Option<&skia_safe::Region>,
+    external_backdrop: Option<ExternalBackdrop>,
 ) {
     let node_id: TreeStorageId = node_ref.into();
 
@@ -404,6 +446,7 @@ pub fn paint_node_tree(
             context_opacity,
             offscreen,
             damage_region,
+            external_backdrop,
         );
         if let Some(dbg_info) = dbg_info {
             draw_debug(render_canvas, dbg_info, render_layer);
@@ -444,6 +487,7 @@ pub fn paint_node_tree(
             context_opacity,
             occluded,
             damage_region,
+            external_backdrop,
         );
         render_canvas.restore_to_count(restore_point);
     });
@@ -466,6 +510,7 @@ pub fn render_node_tree(
     context_opacity: f32,
     occluded: Option<&HashSet<NodeRef>>,
     damage_region: Option<&skia_safe::Region>,
+    external_backdrop: Option<ExternalBackdrop>,
 ) {
     let node_id: TreeStorageId = node_ref.into();
     #[cfg(feature = "profile-with-puffin")]
@@ -562,6 +607,10 @@ pub fn render_node_tree(
                             false, // not self-occluded (checked above)
                             occluded,
                             None, // damage is in screen-space, not offscreen-surface-space
+                            // The offscreen surface has its own matrix; the global-space
+                            // accumulator can't be aligned here, so cross-buffer blur is
+                            // not applied to image-cached subtrees' descendants.
+                            None,
                         );
                         // debug drawing
                         // let mut paint = skia_safe::Paint::default();
@@ -628,7 +677,22 @@ pub fn render_node_tree(
 
                     // Apply backdrop effects for descendant regions that need it
                     // Converts Vec<RRect> to Path for clipping with rounded rectangles
-                    if let Some(backdrop_rrects) = &render_layer.backdrop_blur_region {
+                    //
+                    // A `BackgroundBlur` descendant cannot blur anything inside the
+                    // offscreen (the pixels behind the subtree are not in it), so the
+                    // blur is done here instead, straight on the destination, under the
+                    // region the descendant occupies. That only lines up while the
+                    // cached image lands where the layout says it does. An image filter
+                    // moves or deforms it — the genie minimize warps the window down
+                    // into the dock — and the blur would stay behind as a crisp,
+                    // undeformed rectangle of frosted desktop at the old position while
+                    // the window animates away from it. No blur is the lesser artifact.
+                    let deformed = render_layer.image_filter.is_some();
+                    if let Some(backdrop_rrects) = render_layer
+                        .backdrop_blur_region
+                        .as_ref()
+                        .filter(|_| !deformed)
+                    {
                         profiling::scope!("background_blur_image_cached_descendants");
 
                         let before_backdrop = render_canvas.save();
@@ -690,6 +754,7 @@ pub fn render_node_tree(
         is_self_occluded,
         occluded,
         damage_region,
+        external_backdrop,
     );
 
     render_canvas.restore_to_count(restore_point);
@@ -706,6 +771,7 @@ pub(crate) fn paint_node(
     context_opacity: f32,
     offscreen: bool,
     damage_region: Option<&skia_safe::Region>,
+    external_backdrop: Option<ExternalBackdrop>,
 ) -> usize {
     let node_id: TreeStorageId = node_ref.into();
     let node = scene_arena.get(node_id).unwrap().get();
@@ -735,42 +801,472 @@ pub(crate) fn paint_node(
 
     let draw_cache = node_renderable.draw_cache.as_ref();
 
+    let is_blur = blend_mode == crate::prelude::BlendMode::BackgroundBlur;
+    // A fading blur layer must apply its opacity ONCE, over the composite of
+    // backdrop seed + blur + content. Attenuating each piece separately stacks
+    // their alphas in the buffer (≈3·o coverage) while colors only reach ≈1·o,
+    // so the region dips towards black mid-fade instead of fading out. Group
+    // them under a single save_layer and put the opacity on its restore paint.
+    let blur_fade_group = is_blur && opacity > 0.001 && opacity < 1.0;
+    let group_restore = canvas.save();
+    if blur_fade_group {
+        let mut group_paint = skia_safe::Paint::default();
+        group_paint.set_alpha_f(opacity);
+        let rec = skia_safe::canvas::SaveLayerRec::default().paint(&group_paint);
+        canvas.save_layer(&rec);
+    }
+    // Inside the group everything paints at full strength; without a group the
+    // per-piece paints carry the opacity directly.
+    let draw_opacity = if blur_fade_group { 1.0 } else { opacity };
+
     let before_backdrop = canvas.save();
 
     let bounds_to_origin =
         skia_safe::Rect::from_xywh(0.0, 0.0, render_layer.size.width, render_layer.size.height);
 
     let mut paint = skia_safe::Paint::default();
-    paint.set_alpha_f(opacity);
+    paint.set_alpha_f(draw_opacity);
 
-    if blend_mode == crate::prelude::BlendMode::BackgroundBlur && opacity > 0.0 {
+    // Below ~0.001 the blur is invisible — skip the whole block so effectively
+    // faded-out layers (spring animations settle near, not at, zero) neither
+    // seed a backdrop nor pay for a blur.
+    if is_blur && opacity > 0.001 {
         profiling::scope!("background_blur");
         render_layer.clip_to_shape(canvas, skia_safe::ClipOp::Intersect, true);
 
-        if let Some(blur) = backdrop_filter(true) {
-            profiling::scope!("apply backdrop");
-            let mut save_layer_rec = skia_safe::canvas::SaveLayerRec::default();
-            save_layer_rec = save_layer_rec.bounds(&bounds_to_origin).paint(&paint);
-            save_layer_rec = save_layer_rec.backdrop(&blur);
-            set_backdrop_scale(&mut save_layer_rec, BACKGROUND_BLUR_SAVE_SCALE);
-            canvas.save_layer(&save_layer_rec);
-            canvas.restore_to_count(before_backdrop);
+        // Cross-buffer vibrancy (render_subtree): when this layer lives in an
+        // isolated subtree buffer the pixels behind it are empty, so seed them
+        // with the caller-supplied backdrop (composite of the planes below, in
+        // global/scene coordinates). DstOver places it *behind* any content this
+        // subtree already painted, so the backdrop the blur reads is the true
+        // composite: lower planes plus earlier same-subtree content. Confined to
+        // the blur clip set above.
+        //
+        // `scale` is the backdrop's resolution relative to the scene (1.0 = full,
+        // 0.1 = a 1/10 image): the layer's global region is sampled at that scale
+        // and stretched up to the layer bounds.
+        let mut backdrop_preblurred = false;
+        if let Some(ExternalBackdrop {
+            image,
+            scale,
+            blurred,
+            raw_image,
+        }) = external_backdrop
+        {
+            profiling::scope!("seed external backdrop");
+            // A layer that overlaps other same-plane content (popups stacked in
+            // one plane) opts into `blur_include_content`: seed the RAW lower-
+            // plane composite and fall through to the real blur below, so the
+            // blur samples raw-desktop + whatever this pass already painted
+            // behind it (the popup underneath). Everything else seeds the
+            // pre-blurred image and skips the blur (crisp, rim-free panels).
+            let use_raw = render_layer.blur_include_content && raw_image.is_some();
+            let (backdrop, blurred) = if use_raw {
+                (raw_image.unwrap(), false)
+            } else {
+                (image, blurred)
+            };
+            backdrop_preblurred = blurred;
+            let gb = render_layer.global_transformed_bounds;
+            let src = skia_safe::Rect::from_xywh(
+                gb.x() * scale,
+                gb.y() * scale,
+                gb.width() * scale,
+                gb.height() * scale,
+            );
+            let mut backdrop_paint = skia_safe::Paint::default();
+            backdrop_paint.set_blend_mode(skia_safe::BlendMode::DstOver);
+            // The seed must honor the layer's effective opacity (via the fade
+            // group above, or directly): at full alpha a faded-out layer would
+            // leave a permanent opaque backdrop patch in its shape — a "ghost".
+            backdrop_paint.set_alpha_f(draw_opacity);
+            // Raw seed: blur it here, from a source region OUTSET by the blur's
+            // reach, rather than leaving it to the save_layer below.
+            //
+            // The seed has to precede the save_layer so the blur input is
+            // OPAQUE — otherwise the blurred copy of same-pass content inherits
+            // that content's alpha and a translucent menu underneath shows
+            // through its own blurred copy (the submenu stops looking blurred).
+            // But the save_layer can only sample what survives the shape clip,
+            // so its output fades at the edges and whatever is beneath shows
+            // through there — a raw seed would re-appear sharp exactly at the
+            // rim. Pre-blurring the seed from a wider source makes that fade
+            // land on correctly blurred desktop instead. The seed is then
+            // blurred twice (once here, once by the save_layer); at this sigma
+            // the extra pass is not perceptible.
+            let (seed_src, seed_dst) = if use_raw {
+                let reach = BACKGROUND_BLUR_SIGMA * 3.0;
+                let wide = src.with_outset((reach * scale, reach * scale));
+                let dst_wide = bounds_to_origin.with_outset((reach, reach));
+                // Sampling past the image is undefined with `Fast`, so clamp the
+                // source to the image and shrink the destination to match.
+                let img_rect = skia_safe::Rect::from_iwh(backdrop.width(), backdrop.height());
+                let mut clamped = wide;
+                if !clamped.intersect(img_rect) {
+                    clamped = wide;
+                }
+                let sx = dst_wide.width() / wide.width();
+                let sy = dst_wide.height() / wide.height();
+                let dst = skia_safe::Rect::new(
+                    dst_wide.left + (clamped.left - wide.left) * sx,
+                    dst_wide.top + (clamped.top - wide.top) * sy,
+                    dst_wide.right - (wide.right - clamped.right) * sx,
+                    dst_wide.bottom - (wide.bottom - clamped.bottom) * sy,
+                );
+                if let Some(blur) = backdrop_filter(true) {
+                    backdrop_paint.set_image_filter(blur);
+                }
+                (clamped, dst)
+            } else {
+                (src, bounds_to_origin)
+            };
+            canvas.draw_image_rect(
+                backdrop,
+                Some((&seed_src, skia_safe::canvas::SrcRectConstraint::Fast)),
+                seed_dst,
+                &backdrop_paint,
+            );
         }
+
+        // A pre-blurred external backdrop is seeded as-is: running the blur
+        // save_layer over the clipped shape would sample transparent pixels at
+        // the shape edge and fade the rim, re-exposing the raw seed. Skip it and
+        // rely on the caller's whole-image blur. For a raw backdrop (or an
+        // in-scene BackgroundBlur with no external backdrop) do the real blur.
+        if !backdrop_preblurred {
+            if let Some(blur) = backdrop_filter(true) {
+                profiling::scope!("apply backdrop");
+                let mut save_layer_rec = skia_safe::canvas::SaveLayerRec::default();
+                save_layer_rec = save_layer_rec.bounds(&bounds_to_origin).paint(&paint);
+                save_layer_rec = save_layer_rec.backdrop(&blur);
+                set_backdrop_scale(&mut save_layer_rec, BACKGROUND_BLUR_SAVE_SCALE);
+                canvas.save_layer(&save_layer_rec);
+            }
+        }
+
+        // Drop the shape clip (and any blur save_layer) before the layer paints
+        // its own content: the drop shadow is drawn OUTSIDE the shape, so a
+        // leaked clip erases it entirely. Pre-blurred seeds took an early-out
+        // above and used to leave the clip active — no shadow on popups/panels
+        // rendered through a plane's external backdrop.
+        canvas.restore_to_count(before_backdrop);
     }
     if node.is_picture_cached() && draw_cache.is_some() {
         let draw_cache = draw_cache.unwrap();
         // Only pass paint when opacity is not 1.0: passing Some(paint) forces Skia
         // to create an intermediate offscreen layer even when alpha is a no-op.
-        let p = (opacity != 1.0).then_some(&paint);
+        let p = (draw_opacity != 1.0).then_some(&paint);
         // passing a None for paint is important to optimise
         // skia creates a new layer when painting a picture with a paint
         draw_cache.draw(canvas, p);
     } else {
-        draw_layer(canvas, &render_layer, opacity, node_renderable);
+        draw_layer(canvas, &render_layer, draw_opacity, node_renderable);
     }
+    // Applies the fade group's single opacity multiply (no-op otherwise).
+    canvas.restore_to_count(group_restore);
 
     restore_transform
 }
+/// One rendered subtree buffer, ready to be handed to an external compositor
+/// (e.g. uploaded to a KMS/DRM plane).
+///
+/// `image` holds ONLY this subtree's own painted content plus the blurred
+/// backdrop baked inside any `BackgroundBlur` shapes — the planes below it are
+/// not present outside those shapes, so the compositor still owns stacking.
+#[derive(Clone)]
+pub struct SubtreeBuffer {
+    /// The subtree root this buffer was produced from.
+    pub root: NodeRef,
+    /// The rendered image (snapshot of the per-subtree surface).
+    pub image: skia_safe::Image,
+    /// Global top-left where the compositor should place `image`.
+    pub origin: skia_safe::Point,
+    /// Pixel size of `image`.
+    pub size: skia_safe::ISize,
+    /// `true` if this buffer was returned unchanged from the cache (the subtree
+    /// and the supplied backdrop were identical to the previous call), so the
+    /// caller can skip re-uploading it to its plane.
+    pub from_cache: bool,
+}
+
+/// Edge margin applied to each subtree buffer so blur kernels and clipped
+/// children near the bounds aren't cut off. Shared with `create_surface_for_node`
+/// so the offscreen-cache and subtree-buffer surfaces grow by the same amount.
+pub(crate) const SUBTREE_SAFE_MARGIN: f32 = 1.2;
+
+/// Allocate a drawing surface, GPU-backed when a context is given, else raster.
+fn alloc_subtree_surface(
+    width: i32,
+    height: i32,
+    context: Option<&mut skia_safe::gpu::DirectContext>,
+) -> Option<Surface> {
+    match context {
+        Some(ctx) => {
+            let image_info = skia_safe::ImageInfo::new(
+                (width, height),
+                skia_safe::ColorType::RGBA8888,
+                skia_safe::AlphaType::Premul,
+                None,
+            );
+            skia_safe::gpu::surfaces::render_target(
+                ctx,
+                skia_safe::gpu::Budgeted::No,
+                &image_info,
+                None,
+                skia_safe::gpu::SurfaceOrigin::TopLeft,
+                None,
+                false,
+                false,
+            )
+        }
+        None => skia_safe::surfaces::raster_n32_premul((width, height)),
+    }
+}
+
+/// A cached subtree buffer plus the inputs it was rendered from, so a later
+/// call can decide whether anything changed.
+struct CachedSubtree {
+    /// Sum of `frame_number` over the subtree — changes whenever any node in the
+    /// subtree is repainted, added, or removed.
+    dirty: usize,
+    /// `unique_id()` of the backdrop image it was baked against (0 if none).
+    backdrop_id: u32,
+    /// Reused render surface (kept so the allocation survives across frames).
+    surface: Surface,
+    image: skia_safe::Image,
+    origin: skia_safe::Point,
+    size: skia_safe::ISize,
+}
+
+thread_local! {
+    /// Per-subtree buffer cache. Skia surfaces/images are not `Send`, so this is
+    /// thread-local — render each subtree on the same (render) thread.
+    static SUBTREE_BUFFER_CACHE: std::cell::RefCell<HashMap<NodeRef, CachedSubtree>> =
+        std::cell::RefCell::new(HashMap::new());
+}
+
+/// Drop the cached subtree buffer for `root`, freeing its render surface and
+/// image snapshot. Call this when a plane is retired (e.g. its window closed) so
+/// its buffer doesn't linger in the cache for the lifetime of the process — the
+/// cache is only ever populated on render and is not otherwise evicted. Returns
+/// `true` if an entry was present. Must run on the render thread (same thread
+/// that called `render_subtree_to_buffer`).
+pub fn forget_subtree_buffer(root: NodeRef) -> bool {
+    SUBTREE_BUFFER_CACHE.with(|c| c.borrow_mut().remove(&root).is_some())
+}
+
+/// Drop every cached subtree buffer, freeing all retained render surfaces and
+/// image snapshots. Useful on teardown or when the whole plane set is rebuilt.
+/// Must run on the render thread.
+pub fn clear_subtree_buffer_cache() {
+    SUBTREE_BUFFER_CACHE.with(|c| c.borrow_mut().clear());
+}
+
+/// Sum of `frame_number` across the subtree rooted at `node_id`. A node's frame
+/// is bumped on any repaint, so the sum is a cheap monotonic dirty signal for
+/// the whole subtree (unlike the root's own frame, which a deep descendant
+/// change does not touch unless the root is `image_cache`d).
+///
+/// This is a heuristic: in principle two distinct subtree states could sum to
+/// the same value and yield a false cache hit, but it requires `usize` wrap or an
+/// exact cross-node cancellation between two polls, so the probability is
+/// negligible and the cheap `O(nodes)` sum is preferred over hashing every node.
+fn subtree_dirty_signature(node_id: NodeId, arena: &Arena<SceneNode>) -> usize {
+    let mut sum: usize = 0;
+    if let Some(node) = arena.get(node_id) {
+        if node.is_removed() {
+            return 0;
+        }
+        sum = sum.wrapping_add(node.get().frame_number());
+        for child in node_id.children(arena) {
+            sum = sum.wrapping_add(subtree_dirty_signature(child, arena));
+        }
+    }
+    sum
+}
+
+/// Render a single subtree `root` into its own buffer, for an external
+/// compositor (e.g. a KMS/DRM plane). Re-renders only when the subtree's content
+/// or the supplied `backdrop` changed since the last call for this root;
+/// otherwise returns the cached buffer (`SubtreeBuffer::from_cache == true`).
+///
+/// `backdrop` is the composite of the planes BELOW this one, in scene/global
+/// coordinates (the caller owns plane order and compositing — typically the
+/// stack of lower KMS framebuffers). It is used to bake any `BackgroundBlur`
+/// layers in the subtree: the blur samples this image so vibrancy reflects the
+/// real content behind the plane even though planes are rendered independently.
+/// Pass `None` for the bottom plane or a subtree with no blur.
+///
+/// Pass a GPU `context` for GPU-backed surfaces, or `None` for raster surfaces.
+///
+/// Note: if `root` is itself `image_cache(true)`, cross-buffer blur is not
+/// applied to its descendants (the offscreen cache has its own coordinate
+/// space); render such subtrees without `image_cache` to get vibrancy.
+pub fn render_subtree_to_buffer(
+    scene: std::sync::Arc<Scene>,
+    root: NodeRef,
+    backdrop: Option<&skia_safe::Image>,
+    context: Option<&mut skia_safe::gpu::DirectContext>,
+) -> Option<SubtreeBuffer> {
+    let nodes_arc = scene.nodes.data();
+    let renderables_arc = scene.renderables.data();
+    let scene_arena = nodes_arc.read().unwrap_or_else(|e| e.into_inner());
+    let renderables_arena = renderables_arc.read().unwrap_or_else(|e| e.into_inner());
+
+    let node_id: TreeStorageId = root.into();
+    let node = scene_arena.get(node_id)?;
+    if node.is_removed() || node.get().hidden() {
+        // A removed/hidden root produces no buffer; drop any cached surface for it
+        // so a retired plane (e.g. a closed window) reclaims its memory instead of
+        // leaking, and a reused index slot can't inherit a stale entry.
+        forget_subtree_buffer(root);
+        return None;
+    }
+    let scene_node = node.get();
+    let render_layer = &scene_node.render_layer;
+
+    // Buffer geometry in global space.
+    let gbounds = render_layer.global_transformed_bounds_with_children;
+    let origin = skia_safe::Point::new(gbounds.x(), gbounds.y());
+    let width = (gbounds.width() * SUBTREE_SAFE_MARGIN).ceil() as i32;
+    let height = (gbounds.height() * SUBTREE_SAFE_MARGIN).ceil() as i32;
+    if width <= 0 || height <= 0 {
+        return None;
+    }
+
+    let dirty = subtree_dirty_signature(node_id.into(), &scene_arena);
+    // The backdrop only affects the output if the subtree actually contains a
+    // BackgroundBlur layer: either the root itself, or a descendant (whose region
+    // bubbles into `backdrop_blur_region`). For non-blur subtrees the backdrop is
+    // unused, so keep it out of the cache key — a plane that ignores the backdrop
+    // must not be invalidated when it changes.
+    let has_blur = render_layer.blend_mode == crate::prelude::BlendMode::BackgroundBlur
+        || render_layer.backdrop_blur_region.is_some();
+    let backdrop = if has_blur { backdrop } else { None };
+    let backdrop_id = backdrop.map(|b| b.unique_id()).unwrap_or(0);
+
+    // The backdrop may be supplied at a reduced resolution (e.g. 1/10 the scene
+    // size) to keep it cheap to build and upload — the result is blurred anyway.
+    // Infer its scale from `width / scene_width` so the blur samples the right
+    // region: a backdrop covering the whole scene at scale `s` has dimensions
+    // `scene_size * s`. (Pass a full-size backdrop for scale 1.0.) The contract
+    // is a *uniformly* scaled copy of the *whole* scene; a partial or
+    // non-uniformly scaled backdrop would sample the wrong region, so we assert
+    // the inferred x/y scales agree (debug builds) rather than fail silently.
+    let scaled_backdrop = backdrop.map(|b| {
+        let scene_size = *scene.size.read().unwrap_or_else(|e| e.into_inner());
+        let scale = if scene_size.x > 0.0 {
+            b.width() as f32 / scene_size.x
+        } else {
+            1.0
+        };
+        debug_assert!(
+            scene_size.y <= 0.0
+                || (b.height() as f32 / scene_size.y - scale).abs() <= scale.max(1.0) * 0.05,
+            "render_subtree backdrop must be a uniformly scaled copy of the whole scene \
+             ({}x{}): got {}x{} (x-scale {:.3}, y-scale {:.3})",
+            scene_size.x,
+            scene_size.y,
+            b.width(),
+            b.height(),
+            scale,
+            b.height() as f32 / scene_size.y,
+        );
+        // render_subtree callers pass a raw (unblurred) backdrop; the consumer
+        // applies its own blur. Pre-blurred backdrops go through render_node_tree.
+        ExternalBackdrop {
+            image: b,
+            scale,
+            blurred: false,
+            raw_image: None,
+        }
+    });
+
+    // Cache hit: same content, same backdrop, same buffer size -> reuse.
+    let cached = SUBTREE_BUFFER_CACHE.with(|c| {
+        let cache = c.borrow();
+        cache.get(&root).and_then(|e| {
+            // `origin` is part of the key: the buffer is rendered translated by
+            // -origin, so the same content at a different origin is a different
+            // image (and the plane placement the caller reads comes from here).
+            // Since a pure move no longer bumps `frame_number`, `dirty` alone
+            // would report a hit and hand back the buffer at its OLD origin.
+            (e.dirty == dirty
+                && e.backdrop_id == backdrop_id
+                && e.origin == origin
+                && e.size.width == width
+                && e.size.height == height)
+                .then(|| SubtreeBuffer {
+                    root,
+                    image: e.image.clone(),
+                    origin: e.origin,
+                    size: e.size,
+                    from_cache: true,
+                })
+        })
+    });
+    if let Some(hit) = cached {
+        return Some(hit);
+    }
+
+    // Cache miss: render the subtree into a (reused if possible) surface.
+    let mut context = context;
+    let mut surface = SUBTREE_BUFFER_CACHE
+        .with(|c| {
+            c.borrow_mut().remove(&root).and_then(|e| {
+                (e.size.width == width && e.size.height == height).then_some(e.surface)
+            })
+        })
+        .or_else(|| alloc_subtree_surface(width, height, context.as_deref_mut()))?;
+
+    {
+        let canvas = surface.canvas();
+        canvas.clear(skia_safe::Color::TRANSPARENT);
+        let restore_point = canvas.save();
+        // buffer-local := global − origin; apply the root's *global* transform so
+        // the subtree (and its blur regions) land in global coordinates shifted
+        // into the buffer, aligning with the global-space backdrop.
+        canvas.translate((-origin.x, -origin.y));
+        canvas.concat(&render_layer.transform.to_m33());
+        render_node_tree(
+            root,
+            &scene_arena,
+            &renderables_arena,
+            canvas,
+            1.0,
+            None,
+            None,
+            scaled_backdrop,
+        );
+        canvas.restore_to_count(restore_point);
+    }
+
+    let image = surface.image_snapshot();
+    let size = skia_safe::ISize::new(width, height);
+
+    SUBTREE_BUFFER_CACHE.with(|c| {
+        c.borrow_mut().insert(
+            root,
+            CachedSubtree {
+                dirty,
+                backdrop_id,
+                surface,
+                image: image.clone(),
+                origin,
+                size,
+            },
+        );
+    });
+
+    Some(SubtreeBuffer {
+        root,
+        image,
+        origin,
+        size,
+        from_cache: false,
+    })
+}
+
 /// Print the node tree to the console
 pub fn print_scene(scene: std::sync::Arc<Scene>, root_id: NodeRef) {
     scene.with_arena(|arena| {

@@ -23,7 +23,11 @@ pub(crate) fn draw_layer_to_picture(
     // and the shadow. We should find a better way to handle this.
     const SAFE_MARGIN: f32 = 50.0;
 
-    let bounds_safe = render_layer.bounds.with_outset((SAFE_MARGIN, SAFE_MARGIN));
+    let mut bounds_safe = render_layer.bounds.with_outset((SAFE_MARGIN, SAFE_MARGIN));
+    // A large drop shadow can reach past the safe margin; record it in full.
+    if let Some(shadow) = render_layer.shadow_bounds() {
+        bounds_safe.join(shadow);
+    }
 
     // Enable the default bounding-box hierarchy (SkRTreeFactory) so playback
     // with a clip rect can skip draw ops that don't intersect it. Compounds

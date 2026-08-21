@@ -400,6 +400,21 @@ impl Layer {
         self.engine
             .schedule_change(self.id, Arc::new(NoopChange::paint(attribute_id)), None);
     }
+    /// Whether this layer opts into blurring same-plane content behind it.
+    /// See [`Self::set_blur_include_content`].
+    pub fn blur_include_content(&self) -> bool {
+        self.model.blur_include_content.value()
+    }
+    /// Opt a `BackgroundBlur` layer into blurring same-plane content painted
+    /// behind it (e.g. a popup stacked over another popup in one plane) rather
+    /// than only the pre-blurred lower-plane backdrop. See
+    /// `RenderLayer::blur_include_content`.
+    pub fn set_blur_include_content(&self, include: bool) {
+        self.model.blur_include_content.set(include);
+        let attribute_id = self.model.blur_include_content.id;
+        self.engine
+            .schedule_change(self.id, Arc::new(NoopChange::paint(attribute_id)), None);
+    }
     pub fn set_display(&self, display: Display) {
         self.model.display.set(display);
     }
@@ -773,9 +788,16 @@ impl Layer {
 
     pub fn add_follower_node(&self, follower: impl Into<NodeRef>) {
         let follower = follower.into();
+        let leader = self.id;
         self.engine.scene.with_arena_mut(|node_arena| {
             if let Some(node) = node_arena.get_mut(self.id.0).filter(|n| !n.is_removed()) {
                 node.get_mut().followers.insert(follower);
+            }
+            // Record the link on the follower too: it reproduces this node's
+            // content, so it needs to know whose subtree extent its own
+            // painted area is (see `RenderLayer::content_overflow`).
+            if let Some(node) = node_arena.get_mut(follower.0).filter(|n| !n.is_removed()) {
+                node.get_mut().following = Some(leader);
             }
         });
         let attribute_id = self.model.blend_mode.id;
@@ -784,9 +806,16 @@ impl Layer {
     }
     pub fn remove_follower_node(&self, follower: impl Into<NodeRef>) {
         let follower = follower.into();
+        let leader = self.id;
         self.engine.scene.with_arena_mut(|node_arena| {
             if let Some(node) = node_arena.get_mut(self.id.0).filter(|n| !n.is_removed()) {
                 node.get_mut().followers.remove(&follower);
+            }
+            if let Some(node) = node_arena.get_mut(follower.0).filter(|n| !n.is_removed()) {
+                let scene_node = node.get_mut();
+                if scene_node.following == Some(leader) {
+                    scene_node.following = None;
+                }
             }
         });
     }
@@ -811,7 +840,16 @@ impl Layer {
             let damage = scene
                 .try_with_arena(|arena| {
                     scene.with_renderable_arena(|renderable_arena| {
-                        render_node_tree(layer_id, arena, renderable_arena, c, 1.0, None, None);
+                        render_node_tree(
+                            layer_id,
+                            arena,
+                            renderable_arena,
+                            c,
+                            1.0,
+                            None,
+                            None,
+                            None,
+                        );
                     });
                     // the damage of a mirrored layer is the bounds with children
                     if let Some(scene_node) = arena.get(layer_id.0) {

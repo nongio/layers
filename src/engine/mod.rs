@@ -356,6 +356,16 @@ pub struct Engine {
 
     /// The damage rect for the current frame
     pub(crate) damage: Arc<RwLock<skia_safe::Rect>>,
+    /// Per-node damage accumulated since the last `clear_damage()`, in global
+    /// scene coordinates. Keyed by the damaged node; queried by
+    /// [`Engine::subtree_damage`] to answer "did anything under this subtree
+    /// root change" for callers compositing subtrees onto separate buffers
+    /// (e.g. KMS planes).
+    pub(crate) per_node_damage: Arc<RwLock<HashMap<NodeRef, skia_safe::Rect>>>,
+    /// Damage from nodes removed since the last `clear_damage()`. Removed
+    /// nodes are gone from the arena, so their damage can't be attributed to a
+    /// subtree — `subtree_damage` joins this rect conservatively.
+    pub(crate) removed_nodes_damage: Arc<RwLock<skia_safe::Rect>>,
     /// The current pointer position
     pointer_position: RwLock<skia::Point>,
     /// The node that is currently hovered by the pointer
@@ -585,6 +595,8 @@ impl Engine {
             layout_root,
             scene_root,
             damage,
+            per_node_damage: Arc::new(RwLock::new(HashMap::new())),
+            removed_nodes_damage: Arc::new(RwLock::new(skia_safe::Rect::default())),
             pointer_handlers: FlatStorage::new(),
             pointer_position: RwLock::new(skia::Point::default()),
             current_hover_node: RwLock::new(None),
@@ -987,6 +999,24 @@ impl Engine {
     pub fn scene(&self) -> Arc<Scene> {
         self.scene.clone()
     }
+    /// Render a single subtree `root` into its own cached buffer for an external
+    /// compositor (e.g. a KMS/DRM plane). See
+    /// [`crate::drawing::scene::render_subtree_to_buffer`] for the full contract
+    /// (caller-supplied backdrop for cross-buffer blur, per-subtree caching).
+    pub fn render_subtree(
+        &self,
+        root: NodeRef,
+        backdrop: Option<&skia_safe::Image>,
+        context: Option<&mut skia_safe::gpu::DirectContext>,
+    ) -> Option<crate::drawing::scene::SubtreeBuffer> {
+        crate::drawing::scene::render_subtree_to_buffer(self.scene(), root, backdrop, context)
+    }
+    /// Drop the cached subtree buffer for `root`, freeing its render surface and
+    /// image. Call when a plane is retired so its buffer doesn't linger for the
+    /// process lifetime. Returns `true` if an entry was present. Render thread only.
+    pub fn forget_subtree_buffer(&self, root: NodeRef) -> bool {
+        crate::drawing::scene::forget_subtree_buffer(root)
+    }
     pub fn scene_root(&self) -> Option<NodeRef> {
         *self.scene_root.read().unwrap()
     }
@@ -1229,6 +1259,8 @@ impl Engine {
             && started_animations.is_empty()
             && finished_animations.is_empty()
         {
+            // cleanup_nodes attributes removed-node damage to surviving
+            // ancestors in the per-subtree map as a side effect.
             let removed_damage = cleanup_nodes(self);
             if !removed_damage.is_empty() {
                 let mut current_damage = self.damage.write().unwrap();
@@ -1338,6 +1370,20 @@ impl Engine {
             }
         }
 
+        // Accumulate per-node damage into the engine-level map so
+        // `subtree_damage()` can answer per-subtree queries until the caller
+        // resets it via `clear_damage()`. Unclipped by occlusion on purpose:
+        // subtree consumers composite onto separate buffers where the
+        // occluder may live on another buffer.
+        if !per_node_damage.is_empty() {
+            let mut acc = self.per_node_damage.write().unwrap();
+            for (node, rect) in per_node_damage.iter() {
+                acc.entry(*node)
+                    .and_modify(|r| r.join(*rect))
+                    .or_insert(*rect);
+            }
+        }
+
         // Phase 4.5: Fold occlusion into the accumulated damage. For the
         // scene root, walk front-to-back and subtract the global bounds
         // of any opaque layer from damage contributions of layers behind
@@ -1353,6 +1399,59 @@ impl Engine {
         // Phase 5: Bubble up bounds from children to parents
         for node_id in nodes_post_order.iter() {
             self.bubble_up_bounds_to_parent(*node_id);
+        }
+
+        // Phase 5.5: Hand every mirror layer the extent of the subtree it
+        // mirrors. A follower (`Layer::as_content()` + `add_follower_node`)
+        // paints the leader's whole subtree into its own box — an exposé
+        // preview carries the window's shadow, which reaches outside the
+        // window box — but it has no children of its own, so nothing else
+        // would put that ink in its `*_with_children` rects. Without it,
+        // moving or scaling the preview damages only the tight preview box
+        // and the shadow stays on screen at the size and place it had before.
+        // Runs here, after Phase 5, so the leader's extent already includes
+        // everything its children bubbled up this frame.
+        let mirrored_extents: Vec<(NodeRef, skia_safe::Rect)> = self.scene.with_arena(|arena| {
+            let mut out = Vec::new();
+            for node_id in nodes_post_order.iter() {
+                let Some(node) = arena.get(*node_id) else {
+                    continue;
+                };
+                let scene_node = node.get();
+                if scene_node.followers.is_empty() {
+                    continue;
+                }
+                let extent = scene_node.render_layer.bounds_with_children;
+                for follower in scene_node.followers.iter() {
+                    let Some(follower_node) = arena.get(follower.0) else {
+                        continue;
+                    };
+                    if follower_node.is_removed() {
+                        continue;
+                    }
+                    // A follower nested inside its own leader draws nothing:
+                    // `as_content()` bails on the recursion. Taking the
+                    // leader's extent here would also feed this follower's
+                    // rects back into it through Phase 5 and grow both without
+                    // bound, frame after frame.
+                    if follower.0.ancestors(arena).any(|a| a == *node_id) {
+                        continue;
+                    }
+                    out.push((*follower, extent));
+                }
+            }
+            out
+        });
+        if !mirrored_extents.is_empty() {
+            self.scene.with_arena_mut(|arena| {
+                for (follower, extent) in mirrored_extents {
+                    if let Some(node) = arena.get_mut(follower.0).filter(|n| !n.is_removed()) {
+                        node.get_mut()
+                            .render_layer_mut()
+                            .set_content_overflow(extent);
+                    }
+                }
+            });
         }
 
         // Phase 6: Clear all backdrop blur regions before rebuilding
@@ -1508,6 +1607,21 @@ impl Engine {
             if let Some(parent_node) = arena.get_mut(parent_id) {
                 let parent = parent_node.get_mut();
 
+                // A clipping parent confines its children to its own box, so only
+                // the part of the child that survives the clip may grow the
+                // parent's subtree rects. Without this the bubble-up would undo
+                // the clamp applied while updating the parent's render layer and
+                // an oversized scrolling child would inflate its parent again.
+                // Clipped against the tight `bounds`, as the painter does; the
+                // parent's own shadow extent is already folded into
+                // `bounds_with_children` and is left untouched.
+                let mut child_bounds = child_bounds;
+                if parent.render_layer.clip_children
+                    && !child_bounds.intersect(parent.render_layer.bounds)
+                {
+                    return;
+                }
+
                 // Union child bounds into parent's bounds_with_children (local space)
                 parent.render_layer.bounds_with_children.join(child_bounds);
 
@@ -1545,7 +1659,9 @@ impl Engine {
                 let child = child_node.get();
 
                 // Early exit: skip if child is hidden (entire subtree is hidden)
-                if child.hidden() {
+                // or effectively invisible — an opacity-0 layer must not blur its
+                // backdrop (e.g. closed-but-kept-alive notification cards).
+                if child.hidden() || child.render_layer.opacity <= 0.001 {
                     return;
                 }
 
@@ -1619,8 +1735,16 @@ impl Engine {
             for ancestor_id in ancestor_ids {
                 if let Some(ancestor_node) = arena.get_mut(ancestor_id) {
                     let ancestor = ancestor_node.get_mut();
-                    ancestor.set_needs_repaint(true);
+                    // NEEDS_LAYOUT, not NEEDS_PAINT: the ancestor must be
+                    // revisited next frame so its `*_with_children` bounds pick
+                    // the moved descendant up, but its own picture is unaffected
+                    // by what a descendant did. Marking NEEDS_PAINT made every
+                    // ancestor of any moving layer re-run its content closure
+                    // and re-record its picture on every frame of the motion.
+                    ancestor.set_needs_layout(true);
                     if ancestor.is_image_cached() {
+                        // An image-cached ancestor composites the descendant into
+                        // its offscreen surface, so its pixels DID change.
                         ancestor.increase_frame();
                     }
                 }
@@ -2105,7 +2229,7 @@ impl Engine {
 
             // Try-lock to avoid blocking while a writer holds (or waits on) the arenas.
             if let (Ok(nodes), Ok(renderables)) = (nodes.try_read(), renderables.try_read()) {
-                render_node_tree(layer_id, &nodes, &renderables, c, 1.0, None, None);
+                render_node_tree(layer_id, &nodes, &renderables, c, 1.0, None, None, None);
             }
             skia::Rect::from_xywh(0.0, 0.0, w, h)
         };
@@ -2114,9 +2238,190 @@ impl Engine {
     pub fn damage(&self) -> skia_safe::Rect {
         *self.damage.read().unwrap()
     }
+    /// Fold damage from removed nodes into the per-subtree damage map.
+    /// `attributed` entries carry the removed node's nearest surviving
+    /// ancestor, so `subtree_damage()` queries stay scoped to the subtree
+    /// the removal happened in. Damage with no surviving ancestor goes to
+    /// the global accumulator and conservatively applies to every query.
+    pub(crate) fn attribute_removed_damage(
+        &self,
+        attributed: Vec<(NodeRef, skia_safe::Rect)>,
+        unattributed: skia_safe::Rect,
+    ) {
+        if !attributed.is_empty() {
+            let mut map = self.per_node_damage.write().unwrap();
+            for (node, rect) in attributed {
+                map.entry(node).or_default().join(rect);
+            }
+        }
+        if !unattributed.is_empty() {
+            self.removed_nodes_damage
+                .write()
+                .unwrap()
+                .join(unattributed);
+        }
+    }
+
+    /// Diagnostic: recorded-picture op counts for a node's renderable —
+    /// `(draw_ops, content_ops)`, `-1` = cache absent, `None` = no renderable.
+    /// An op count of 0 on a node that should paint means the recording was
+    /// made while the node had nothing to give — replaying it draws nothing.
+    pub fn debug_renderable_ops(&self, node: NodeRef) -> Option<(i64, i64)> {
+        let id: crate::engine::storage::FlatStorageId = node.0.into();
+        self.scene.renderables.get(&id).map(|r| r.debug_ops())
+    }
+
+    /// Diagnostic: the raw recorded pictures of a node's renderable, for
+    /// replaying in isolation ((draw_cache picture, content_cache picture)).
+    pub fn debug_renderable_pictures(
+        &self,
+        node: NodeRef,
+    ) -> (Option<skia_safe::Picture>, Option<skia_safe::Picture>) {
+        let id: crate::engine::storage::FlatStorageId = node.0.into();
+        self.scene
+            .renderables
+            .get(&id)
+            .map(|r| {
+                (
+                    r.draw_cache.as_ref().map(|c| c.picture().clone()),
+                    r.content_cache.clone(),
+                )
+            })
+            .unwrap_or((None, None))
+    }
+
+    /// Diagnostic: the STORED size of a node's `DrawCache` — the value its
+    /// `draw()` gates on, independent of the layer's live size.
+    pub fn debug_renderable_cache_size(&self, node: NodeRef) -> Option<(f32, f32)> {
+        let id: crate::engine::storage::FlatStorageId = node.0.into();
+        self.scene
+            .renderables
+            .get(&id)
+            .and_then(|r| r.debug_draw_cache_size())
+    }
+
+    /// Diagnostic: the node's `local_transform` translation — what
+    /// `paint_node_tree` concatenates to position it under its parent —
+    /// plus the global `transform_33` translation for comparison.
+    pub fn debug_node_transforms(&self, node: NodeRef) -> Option<((f32, f32), (f32, f32))> {
+        self.scene.with_arena(|arena| {
+            arena.get(node.0).map(|n| {
+                let rl = n.get().render_layer();
+                let lm = rl.local_transform.to_m33();
+                let gm = rl.transform_33;
+                (
+                    (lm.translate_x(), lm.translate_y()),
+                    (gm.translate_x(), gm.translate_y()),
+                )
+            })
+        })
+    }
+
+    /// Diagnostic: cull rects of a node's recorded pictures
+    /// (draw_cache, content_cache). `canvas.draw_picture` quick-rejects
+    /// against these; `playback()` does not.
+    pub fn debug_renderable_cull_rects(
+        &self,
+        node: NodeRef,
+    ) -> (Option<skia_safe::Rect>, Option<skia_safe::Rect>) {
+        let id: crate::engine::storage::FlatStorageId = node.0.into();
+        self.scene
+            .renderables
+            .get(&id)
+            .map(|r| r.debug_cull_rects())
+            .unwrap_or((None, None))
+    }
+
+    /// Diagnostic: the pending transactions — one `(node id, change, animated)`
+    /// entry per scheduled node change. A non-empty result is what keeps
+    /// `pending_transactions_count() > 0` (and with it, a host compositor's
+    /// "scene is animating" signal) true; the change's `Debug` names the
+    /// property being written, so a caller that never goes idle can see which
+    /// layer keeps scheduling work.
+    pub fn debug_pending_transactions(&self) -> Vec<(usize, String, bool)> {
+        self.transactions.with_data(|d| {
+            d.values()
+                .map(|t| {
+                    (
+                        crate::engine::storage::FlatStorageId::from(t.node_id.0),
+                        format!("{:?}", t.change),
+                        t.animation_id.is_some(),
+                    )
+                })
+                .collect()
+        })
+    }
+
     pub fn clear_damage(&self) {
         let mut damage = self.damage.write().unwrap();
         *damage = skia_safe::Rect::default();
+        self.per_node_damage.write().unwrap().clear();
+        *self.removed_nodes_damage.write().unwrap() = skia_safe::Rect::default();
+    }
+
+    /// Union of the damage recorded under `root` (inclusive) since the last
+    /// `clear_damage()`, in global scene coordinates. Damage from removed
+    /// nodes anywhere in the scene is joined conservatively — their subtree
+    /// membership is unknowable after removal. Returns `None` when nothing
+    /// under `root` changed.
+    ///
+    /// Intended for callers that composite subtrees onto separate buffers
+    /// (e.g. KMS planes) and want to skip re-rendering unchanged subtrees.
+    pub fn subtree_damage(&self, root: NodeRef) -> Option<skia_safe::Rect> {
+        let mut total = *self.removed_nodes_damage.read().unwrap();
+        {
+            let map = self.per_node_damage.read().unwrap();
+            if !map.is_empty() {
+                self.scene.with_arena(|arena| {
+                    let root_id: TreeStorageId = root.into();
+                    if arena.get(root_id).map(|n| !n.is_removed()).unwrap_or(false) {
+                        for id in root_id.descendants(arena) {
+                            if let Some(rect) = map.get(&NodeRef(id)) {
+                                total.join(*rect);
+                            }
+                        }
+                    }
+                });
+            }
+        }
+        if total.is_empty() {
+            return None;
+        }
+
+        // Expand damage to cover the whole output of any `BackgroundBlur`
+        // layer in this subtree that the damage reaches. A blur samples a
+        // neighborhood of its input, so damage under (or within a blur radius
+        // of) a blur shape changes the blurred result across the shape;
+        // repainting only a sub-rect of the shape leaves a visible seam where
+        // the fresh and stale blur meet. So — like the whole-scene Phase 8
+        // expansion in `update_nodes()` — join the entire blur shape rather
+        // than a radius-outset band. The intersection test is itself outset by
+        // `BACKGROUND_BLUR_SIGMA` so damage just outside the shape (but within
+        // a blur radius of its edge) still triggers the repaint.
+        //
+        // `bubble_up_backdrop_blur_regions()` collects every descendant blur
+        // shape onto the subtree root's `backdrop_blur_region` in the root's
+        // local frame; `transform_33` maps it to the global frame `total` is in.
+        let sigma = crate::drawing::scene::BACKGROUND_BLUR_SIGMA;
+        self.scene.with_arena(|arena| {
+            let root_id: TreeStorageId = root.into();
+            if let Some(node) = arena.get(root_id) {
+                let render_layer = node.get().render_layer();
+                if let Some(rrects) = &render_layer.backdrop_blur_region {
+                    let to_global = render_layer.transform_33;
+                    for rrect in rrects {
+                        let (blur_bounds, _) = to_global.map_rect(rrect.rect());
+                        let mut reach = total;
+                        reach.outset((sigma, sigma));
+                        if reach.intersects(blur_bounds) {
+                            total.join(blur_bounds);
+                        }
+                    }
+                }
+            }
+        });
+
+        Some(total)
     }
 
     /// Compute occlusion culling for the given root node.
