@@ -360,6 +360,15 @@ pub fn do_repaint(
     let mut new_renderable = renderable.clone();
     if scene_node.hidden() || render_layer.premultiplied_opacity == 0.0 {
         new_renderable.repaint_damage = damage;
+        // Nothing to record for an invisible layer — but the caller clears
+        // NEEDS_PAINT all the same, so a recorded picture would survive as the
+        // only trace of the state the layer had when it was last visible.
+        // Anything changed while it was invisible (its shape, its content)
+        // would then be replayed from that stale picture the moment the layer
+        // is shown again, under an otherwise up-to-date transform. Drop the
+        // cache instead: `update_node` re-records on the next update, because a
+        // node with no draw cache always repaints.
+        new_renderable.draw_cache = None;
         return new_renderable;
     }
 
