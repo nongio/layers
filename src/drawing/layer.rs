@@ -145,11 +145,25 @@ pub fn draw_layer(
         .content_cache
         .as_ref()
         .filter(|c| c.approximate_op_count() > 0);
+    // Content honours `opacity` like every other part of the layer does.
+    // Background, shadow and border above simply scale their paint alpha, but
+    // content is opaque drawing commands — a recorded picture or a caller's
+    // closure — so the only way to fade it as a group is an offscreen layer.
+    // Gated on `opacity < 1.0` so the overwhelmingly common fully-opaque case
+    // never pays for a `saveLayer`. Without this a layer that is nothing but
+    // content — a mirror, above all — stays fully visible for an entire fade
+    // and then disappears the instant it is hidden.
+    let fade_content = |canvas: &Canvas| {
+        if opacity < 1.0 {
+            canvas.save_layer_alpha_f(layer.bounds, opacity);
+        }
+    };
     if let Some(content) = cached_content {
         let save_count = canvas.save();
         if layer.clip_content {
             layer.clip_to_shape(canvas, ClipOp::Intersect, true);
         }
+        fade_content(canvas);
         content.playback(canvas);
         canvas.restore_to_count(save_count);
         // draw_damage.join(renderable.repaint_damage);
@@ -158,6 +172,7 @@ pub fn draw_layer(
         if layer.clip_content {
             layer.clip_to_shape(canvas, ClipOp::Intersect, true);
         }
+        fade_content(canvas);
         let caller = draw_func.0.as_ref();
         let content_damage = caller(canvas, layer.size.width, layer.size.height);
         draw_damage.join(content_damage);

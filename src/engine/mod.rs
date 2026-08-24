@@ -1731,8 +1731,30 @@ impl Engine {
 
     fn mark_image_cached_ancestors_for_repaint(&self, node_id: indextree::NodeId) {
         self.scene.with_arena_mut(|arena| {
+            // Mirrors of any ancestor have to repaint too: a follower
+            // (`Layer::as_content()` + `add_follower_node`) replays its
+            // leader's subtree, so a change anywhere under the leader changes
+            // what the follower shows. `add_damage`/`set_damage` mark the
+            // followers of the node they are called on, which covers a mirror
+            // of a leaf, but nothing carries damage from a descendant up to
+            // the followers of a *container*. Without this a mirrored subtree
+            // freezes at whatever it held when some unrelated change last
+            // dirtied the mirror — and a consumer that gates on
+            // `subtree_damage()` of the tree the mirror lives in is told,
+            // truthfully, that it has nothing to redraw.
+            let mut followers: Vec<NodeRef> = Vec::new();
             let ancestor_ids: Vec<_> = node_id.ancestors(arena).skip(1).collect();
             for ancestor_id in ancestor_ids {
+                // Collected under the same walk the image-cache marking
+                // already does, so a tree with no mirrors pays one
+                // `is_empty()` per ancestor of a damaged node and allocates
+                // nothing.
+                if let Some(ancestor_node) = arena.get(ancestor_id) {
+                    let scene_node = ancestor_node.get();
+                    if !scene_node.followers.is_empty() {
+                        followers.extend(scene_node.followers.iter().copied());
+                    }
+                }
                 if let Some(ancestor_node) = arena.get_mut(ancestor_id) {
                     let ancestor = ancestor_node.get_mut();
                     // NEEDS_LAYOUT, not NEEDS_PAINT: the ancestor must be
@@ -1747,6 +1769,37 @@ impl Engine {
                         // its offscreen surface, so its pixels DID change.
                         ancestor.increase_frame();
                     }
+                }
+            }
+
+            for follower in followers {
+                // A follower nested inside its own leader paints nothing —
+                // `as_content()` bails on the recursion — and marking it
+                // would dirty the leader again next frame, a repaint loop
+                // that never settles.
+                if follower
+                    .0
+                    .ancestors(arena)
+                    .any(|a| a == node_id || a.ancestors(arena).any(|b| b == node_id))
+                {
+                    continue;
+                }
+                // A mirror nobody can see is left alone. This is what keeps
+                // the walk cheap on a normal desktop: every window has an
+                // exposé preview following it, and while the overview is
+                // closed those previews sit in a hidden subtree — repainting
+                // them on every window frame would cost far more than the
+                // stale-mirror bug this fixes. `set_hidden(false)` raises
+                // NEEDS_PAINT on the way back in, so nothing is lost.
+                if follower
+                    .0
+                    .ancestors(arena)
+                    .any(|a| arena.get(a).map(|n| n.get().hidden).unwrap_or(true))
+                {
+                    continue;
+                }
+                if let Some(node) = arena.get_mut(follower.0).filter(|n| !n.is_removed()) {
+                    node.get_mut().insert_flags(RenderableFlags::NEEDS_PAINT);
                 }
             }
         });
