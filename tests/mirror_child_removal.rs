@@ -33,7 +33,12 @@ mod tests {
 
     /// Green channel at `(x, y)`: 0 where the red child covers the white
     /// background, 255 where the background shows through.
-    fn green_at(engine: &std::sync::Arc<Engine>, surface: &mut skia::Surface, x: i32, y: i32) -> u8 {
+    fn green_at(
+        engine: &std::sync::Arc<Engine>,
+        surface: &mut skia::Surface,
+        x: i32,
+        y: i32,
+    ) -> u8 {
         let canvas = surface.canvas();
         canvas.clear(skia::Color::WHITE);
         draw_scene(canvas, engine.scene(), engine.scene_root().unwrap());
