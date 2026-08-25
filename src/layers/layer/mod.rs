@@ -151,7 +151,11 @@ impl Layer {
     change_model!(scale, Point, RenderableFlags::NEEDS_LAYOUT);
     change_model!(rotation, Point3d, RenderableFlags::NEEDS_LAYOUT);
     change_model!(anchor_point, Point, RenderableFlags::NEEDS_LAYOUT);
-    change_model!(opacity, f32, RenderableFlags::NEEDS_LAYOUT);
+    change_model!(
+        opacity,
+        f32,
+        RenderableFlags::NEEDS_LAYOUT.union(RenderableFlags::NEEDS_PAINT)
+    );
 
     change_model!(background_color, PaintColor, RenderableFlags::NEEDS_PAINT);
     change_model!(
