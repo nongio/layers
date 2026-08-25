@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.14.0] - 2026-08-25
+
+### 🐛 Bug Fixes
+
+- *(render)* Propagate descendant damage to mirrors, fade content with opacity (#22)
+- *(render)* Repaint on opacity change, and mirrors on node removal (#23)
+
 ## [1.13.0] - 2026-08-21
 
 ### 🚀 Features
