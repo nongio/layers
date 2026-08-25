@@ -623,6 +623,15 @@ pub(crate) fn cleanup_nodes(engine: &Engine) -> skia_safe::Rect {
     };
     engine.attribute_removed_damage(attributed, unattributed);
     for id in deleted {
+        // A mirror of an ancestor replays the subtree this node is leaving,
+        // so it has to repaint without it. Damage attribution above tells a
+        // `subtree_damage` consumer that the leader's region changed, but the
+        // follower is a different node in a different subtree and nothing
+        // else marks it — the mirror would keep painting a child that no
+        // longer exists. Same walk a descendant *change* already does, run
+        // here for a descendant *removal*, and while the ancestor chain is
+        // still intact (scene_remove_layer below detaches it).
+        engine.mark_image_cached_ancestors_for_repaint(id);
         engine.scene_remove_layer(&NodeRef(id));
     }
     damage
