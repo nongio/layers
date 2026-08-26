@@ -175,10 +175,7 @@ pub(crate) fn nodes_for_layout(engine: &Engine) -> Vec<NodeRef> {
             .iter()
             .filter_map(|node_ref| {
                 let node = engine.scene().with_arena(|arena| {
-                    let node = arena.get(node_ref.0).unwrap();
-                    if node.is_removed() {
-                        return None;
-                    }
+                    let node = arena.get(node_ref.0).filter(|n| !n.is_removed())?;
                     let scene_node = node.get();
                     if scene_node.is_deleted() {
                         return None;
@@ -211,10 +208,9 @@ pub(crate) fn update_layout_tree(engine: &Engine) {
             engine.scene.with_arena(|arena| {
                 let mut refs = Vec::new();
                 for node_id in root.0.descendants(arena) {
-                    let node = arena.get(node_id).unwrap();
-                    if node.is_removed() {
+                    let Some(node) = arena.get(node_id).filter(|n| !n.is_removed()) else {
                         return refs;
-                    }
+                    };
                     let scene_node = node.get();
                     if scene_node.needs_layout() {
                         has_changed_nodes = true;
