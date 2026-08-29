@@ -419,6 +419,32 @@ impl Layer {
         self.engine
             .schedule_change(self.id, Arc::new(NoopChange::paint(attribute_id)), None);
     }
+
+    /// The explicit `BackgroundBlur` region, if one was set.
+    /// See [`Self::set_blur_bounds`].
+    pub fn blur_bounds(&self) -> Option<skia_safe::RRect> {
+        *self.model.blur_bounds.read().unwrap()
+    }
+
+    /// Confine this layer's `BackgroundBlur` to `bounds` (layer-local
+    /// coordinates) instead of its own rounded bounds.
+    ///
+    /// A layer normally frosts everything behind its `rbounds`, which assumes
+    /// the layer's rectangle and the area meant to be frosted are the same
+    /// thing. They are not for a client that paints a transparent margin —
+    /// `ext-background-effect-v1` lets it hand over a region, and an
+    /// input-method candidate panel uses that to keep the frost inside its
+    /// rounded body and out of the drop shadow it draws around it. Without
+    /// this the blur squares off the corners and wipes the content behind the
+    /// margin, which then shows through the shadow.
+    ///
+    /// `None` restores the default. Layer-local, so it follows the layer as it
+    /// moves; it is NOT clipped to the layer's bounds, so keep it inside them.
+    pub fn set_blur_bounds(&self, bounds: Option<skia_safe::RRect>) {
+        *self.model.blur_bounds.write().unwrap() = bounds;
+        self.engine
+            .set_node_flags(self.id, RenderableFlags::NEEDS_PAINT);
+    }
     pub fn set_display(&self, display: Display) {
         self.model.display.set(display);
     }
