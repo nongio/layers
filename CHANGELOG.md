@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.15.0] - 2026-08-29
+
+### 🚀 Features
+
+- *(layer)* Let a layer confine its BackgroundBlur to an explicit region (#24)
+
+### 🐛 Bug Fixes
+
+- *(engine)* Tolerate stale node ids under indextree 4.9 (#24)
+
+### ⚙️ Miscellaneous Tasks
+
+- *(deps)* Require indextree 4.9 (#24)
+
 ## [1.14.0] - 2026-08-25
 
 ### 🐛 Bug Fixes
