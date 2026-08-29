@@ -18,7 +18,7 @@ parking_lot = "0.12"
 taffy = { version = "0.5", features = ["serde"] }
 gl-rs = { package = "gl", version = "0.14.0" }
 indexmap = { version = "1.9.1", features = ["rayon"] }
-indextree = { version = "4.7.2", features = ["par_iter", "deser"] }
+indextree = { version = "4.9", features = ["par_iter", "deser"] }
 foreign-types-shared = "0.1.1"
 rayon = "1.7.0"
 libm = "0.2.2"

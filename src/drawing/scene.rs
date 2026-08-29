@@ -832,7 +832,15 @@ pub(crate) fn paint_node(
     // seed a backdrop nor pay for a blur.
     if is_blur && opacity > 0.001 {
         profiling::scope!("background_blur");
-        render_layer.clip_to_shape(canvas, skia_safe::ClipOp::Intersect, true);
+        // An explicit blur region confines the frost to part of the layer;
+        // otherwise it covers the layer's whole shape. See
+        // `Layer::set_blur_bounds`.
+        match render_layer.blur_bounds {
+            Some(blur_bounds) => {
+                canvas.clip_rrect(blur_bounds, skia_safe::ClipOp::Intersect, Some(true));
+            }
+            None => render_layer.clip_to_shape(canvas, skia_safe::ClipOp::Intersect, true),
+        }
 
         // Cross-buffer vibrancy (render_subtree): when this layer lives in an
         // isolated subtree buffer the pixels behind it are empty, so seed them

@@ -160,8 +160,10 @@ pub fn access_removed_node_does_not_panic() {
         .scene()
         .with_arena(|arena| arena.get(node_id).map(|node| node.is_removed()));
 
-    // Node slot still exists but is marked as removed
-    assert_eq!(result, Some(true));
+    // indextree < 4.9 returns the slot flagged as removed; 4.9+ checks the
+    // stamp in `Arena::get` and returns `None` for a stale id. Either way the
+    // access must not panic and must not resolve to a live node.
+    assert!(matches!(result, None | Some(true)), "got {result:?}");
 
     // render_layer should return None for a removed node
     assert!(engine.render_layer(&node_ref).is_none());

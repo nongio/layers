@@ -92,6 +92,11 @@ pub struct RenderLayer {
     pub backdrop_blur_region: Option<Vec<skia_safe::RRect>>,
     /// The shape definition for this layer
     pub shape: Shape,
+    /// Explicit `BackgroundBlur` region in layer-local coordinates,
+    /// overriding `rbounds`. Set by clients that ask for the effect over
+    /// only part of their surface — an input-method panel whose buffer
+    /// carries a transparent shadow margin the frost must not reach.
+    pub blur_bounds: Option<skia_safe::RRect>,
     /// Hint from the user that the custom draw content fills the entire bounds
     /// with opaque pixels. When true, the layer can act as an occluder even if
     /// its background color is transparent.
@@ -241,6 +246,7 @@ impl RenderLayer {
         // For RoundRect this is the same as bounds, for custom paths we compute actual bounds
         let shape = model.shape.read().unwrap().clone();
         self.shape = shape.clone();
+        self.blur_bounds = *model.blur_bounds.read().unwrap();
         self.shape_bounds = shape.bounds(bounds, &border_corner_radius);
 
         // Transform shape bounds to global coordinates for hit-testing
@@ -628,6 +634,7 @@ impl RenderLayer {
             shape_bounds,
             global_shape_bounds,
             shape: shape.clone(),
+            blur_bounds: *model.blur_bounds.read().unwrap(),
             global_transformed_rbounds: transformed_rbounds,
             clip_content,
             clip_children,
@@ -686,6 +693,7 @@ impl Default for RenderLayer {
             premultiplied_opacity: 1.0,
             bounds: skia_safe::Rect::default(),
             rbounds: skia_safe::RRect::default(),
+            blur_bounds: None,
             shape_bounds: skia_safe::Rect::default(),
             global_shape_bounds: skia_safe::Rect::default(),
             shape: Shape::default(),

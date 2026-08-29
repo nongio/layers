@@ -1674,7 +1674,13 @@ impl Engine {
 
                 (
                     child.render_layer.blend_mode,
-                    child.render_layer.rbounds,
+                    // An explicit blur region wins over the layer's own bounds:
+                    // the layer's rectangle is not always the area meant to be
+                    // frosted. See `Layer::set_blur_bounds`.
+                    child
+                        .render_layer
+                        .blur_bounds
+                        .unwrap_or(child.render_layer.rbounds),
                     child.render_layer.backdrop_blur_region.clone(),
                     child.render_layer.local_transform.to_m33(),
                 )

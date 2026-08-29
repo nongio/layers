@@ -130,6 +130,10 @@ pub(crate) struct ModelLayer {
     /// layer to blur same-plane content painted behind it (stacked popups).
     pub blur_include_content: Attribute<bool>,
     pub shape: Arc<RwLock<Shape>>,
+    /// Explicit region this layer's `BackgroundBlur` covers, in layer-local
+    /// coordinates. `None` (the default) blurs the layer's own rounded
+    /// bounds. See [`Layer::set_blur_bounds`].
+    pub blur_bounds: Arc<RwLock<Option<skia_safe::RRect>>>,
 }
 
 impl Default for ModelLayer {
@@ -171,6 +175,7 @@ impl Default for ModelLayer {
         let blur_include_content = Attribute::new(false);
         let pointer_events = Arc::new(AtomicBool::new(true));
         let shape = Arc::new(RwLock::new(Shape::default()));
+        let blur_bounds = Arc::new(RwLock::new(None));
         // let hidden = Arc::new(AtomicBool::new(false));
 
         Self {
@@ -202,6 +207,7 @@ impl Default for ModelLayer {
             clip_children,
             blur_include_content,
             shape,
+            blur_bounds,
         }
     }
 }
