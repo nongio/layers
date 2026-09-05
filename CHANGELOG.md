@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.16.0] - 2026-09-05
+
+### 🐛 Bug Fixes
+
+- *(engine)* Re-sync the node when a pending change is cancelled (#25)
+
 ## [1.15.0] - 2026-08-29
 
 ### 🚀 Features
