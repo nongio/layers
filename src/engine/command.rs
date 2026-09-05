@@ -116,6 +116,9 @@ impl Command for NoopChange {
     fn value_id(&self) -> usize {
         self.0
     }
+    fn flags(&self) -> RenderableFlags {
+        self.1
+    }
 }
 impl SyncCommand for NoopChange {}
 
@@ -142,6 +145,9 @@ impl<I: Interpolate + PartialEq + std::fmt::Debug + Send + Sync + Clone> Command
     }
     fn value_id(&self) -> usize {
         self.value_change.target.id
+    }
+    fn flags(&self) -> RenderableFlags {
+        self.flag
     }
 }
 impl<I: Interpolate + Sync + PartialEq + Send + Clone + std::fmt::Debug + 'static> SyncCommand

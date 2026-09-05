@@ -168,3 +168,42 @@ pub fn access_removed_node_does_not_panic() {
     // render_layer should return None for a removed node
     assert!(engine.render_layer(&node_ref).is_none());
 }
+
+/// A pending immediate change is cancelled by a later change on the same
+/// attribute. When that later change is a no-op (`from == to`, because the
+/// model was already set by the cancelled one) it raises no flags, and the
+/// render layer must still catch up with the model on the next update —
+/// otherwise the layer is drawn where the cancelled change left it, for as
+/// long as nothing else dirties the node.
+#[test]
+fn cancelled_immediate_change_still_reaches_the_render_layer() {
+    use layers::prelude::*;
+    let engine = Engine::create(1000.0, 1000.0);
+    let layer = engine.new_layer();
+    layer.set_size(Size::points(100.0, 100.0), None);
+    layer.set_position((0.0, 0.0), None);
+    let _ = engine.add_layer(&layer);
+    engine.update(0.016);
+    assert_eq!(layer.render_position(), Point { x: 0.0, y: 0.0 });
+
+    // Two sets in one tick: the second cancels the first before it executed,
+    // and is itself a no-op relative to the (already updated) model.
+    layer.set_position((300.0, 300.0), None);
+    layer.set_position((300.0, 300.0), None);
+    engine.update(0.016);
+    assert_eq!(layer.position(), Point { x: 300.0, y: 300.0 });
+    assert_eq!(
+        layer.render_position(),
+        Point { x: 300.0, y: 300.0 },
+        "render layer must follow the model after a cancelled immediate change"
+    );
+
+    // Same for an animated change scheduled towards the value the model
+    // already holds.
+    layer.set_position((500.0, 500.0), None);
+    layer.set_position((500.0, 500.0), Transition::ease_out_quad(0.1));
+    for _ in 0..12 {
+        engine.update(0.016);
+    }
+    assert_eq!(layer.render_position(), Point { x: 500.0, y: 500.0 });
+}
