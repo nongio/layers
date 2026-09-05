@@ -133,10 +133,34 @@ fn backdrop_filter(apply_vibrancy: bool) -> Option<skia_safe::ImageFilter> {
     })
 }
 
+/// The backdrop filter with its input confined to `bounds` (layer-local
+/// coordinates) and mirrored beyond them, so the blur never samples pixels
+/// outside the layer — see the `BackgroundBlur` paint path for why. Built per
+/// call: the crop rect is the layer's own size, so it cannot share the cached
+/// filter. The filter graph is a handful of small allocations; the blur itself
+/// is where the time goes.
+fn backdrop_filter_within(
+    bounds: &skia_safe::Rect,
+    apply_vibrancy: bool,
+) -> Option<skia_safe::ImageFilter> {
+    let input = skia_safe::image_filters::crop(bounds, skia_safe::TileMode::Mirror, None)?;
+    build_backdrop_filter_with_input(BACKGROUND_BLUR_SIGMA, apply_vibrancy, Some(input))
+}
+
 /// Builds the backdrop `ImageFilter` from scratch.
 ///
 /// Prefer `backdrop_filter()` over calling this directly so the result is cached.
 fn build_backdrop_filter(blur_sigma: f32, apply_vibrancy: bool) -> Option<skia_safe::ImageFilter> {
+    build_backdrop_filter_with_input(blur_sigma, apply_vibrancy, None)
+}
+
+/// [`build_backdrop_filter`] over an explicit input filter (`None` = the
+/// source image).
+fn build_backdrop_filter_with_input(
+    blur_sigma: f32,
+    apply_vibrancy: bool,
+    input: Option<skia_safe::ImageFilter>,
+) -> Option<skia_safe::ImageFilter> {
     let s = BACKGROUND_BLUR_DOWNSAMPLE;
 
     // Scale the backdrop down, blur with a proportionally smaller sigma, then scale back
@@ -148,7 +172,7 @@ fn build_backdrop_filter(blur_sigma: f32, apply_vibrancy: bool) -> Option<skia_s
         skia_safe::image_filters::blur(
             (blur_sigma, blur_sigma),
             skia_safe::TileMode::Mirror,
-            None,
+            input,
             None,
         )?
     } else {
@@ -159,7 +183,7 @@ fn build_backdrop_filter(blur_sigma: f32, apply_vibrancy: bool) -> Option<skia_s
         let scale_down = skia_safe::image_filters::matrix_transform(
             &skia_safe::Matrix::scale((s, s)),
             sampling,
-            None,
+            input,
         )?;
         let blur = skia_safe::image_filters::blur(
             (blur_sigma * s, blur_sigma * s),
@@ -942,7 +966,16 @@ pub(crate) fn paint_node(
         // rely on the caller's whole-image blur. For a raw backdrop (or an
         // in-scene BackgroundBlur with no external backdrop) do the real blur.
         if !backdrop_preblurred {
-            if let Some(blur) = backdrop_filter(true) {
+            // The blur reads the canvas as far as its reach past the layer's
+            // bounds, and out there this buffer is transparent wherever nothing
+            // was painted (an isolated plane holds only its own subtree). A
+            // kernel that samples transparency thins the blurred layer's alpha,
+            // and the sharp content underneath shows through by that much —
+            // most visibly as a crisp edge wherever a same-pass surface ends
+            // under the blur (a window's edge through a titlebar). Confine the
+            // input to the layer's own bounds and mirror it past them, so the
+            // kernel only ever sees pixels that were seeded or painted.
+            if let Some(blur) = backdrop_filter_within(&bounds_to_origin, true) {
                 profiling::scope!("apply backdrop");
                 let mut save_layer_rec = skia_safe::canvas::SaveLayerRec::default();
                 save_layer_rec = save_layer_rec.bounds(&bounds_to_origin).paint(&paint);
