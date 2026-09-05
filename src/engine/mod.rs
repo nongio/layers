@@ -90,6 +90,14 @@ pub struct Timestamp(f32);
 pub trait Command {
     fn execute(&self, progress: f32) -> RenderableFlags;
     fn value_id(&self) -> usize;
+    /// The flags this change raises on its node once it has taken effect.
+    /// Used when a transaction is cancelled before it ever executed: its
+    /// value may already be in the model (an immediate change applies it at
+    /// scheduling time), so the node still has to be marked or the render
+    /// layer never picks the new value up — see `Engine::schedule_change`.
+    fn flags(&self) -> RenderableFlags {
+        RenderableFlags::empty()
+    }
 }
 
 pub trait SyncCommand: Command + Sync + Send + std::fmt::Debug {}
@@ -1166,11 +1174,26 @@ impl Engine {
         let transaction_id = self.transactions.insert(animated_node_change);
         let mut values_transactions = self.values_transactions.write().unwrap();
         if let Some(existing_transaction) = values_transactions.get(&value_id) {
+            // The cancelled change may never have executed, yet an immediate
+            // change already wrote its value into the model. The change that
+            // replaces it is built against that model value, so when the two
+            // agree it executes as a no-op and raises no flags — and the
+            // render layer is left wherever the cancelled change found it,
+            // until something unrelated dirties the node. Raise the cancelled
+            // change's flags here so the next update re-syncs the node
+            // regardless of what the replacement does. An exposé preview
+            // stuck mid-animation after a fast swipe came from this.
+            let cancelled_flags = self
+                .transactions
+                .with_data(|d| d.get(existing_transaction).map(|t| t.change.flags()));
             self.cancel_transaction(TransactionRef {
                 id: *existing_transaction,
                 value_id,
                 engine_id: self.id,
             });
+            if let Some(flags) = cancelled_flags.filter(|f| !f.is_empty()) {
+                self.set_node_flags(target_id, flags);
+            }
         }
         values_transactions.insert(value_id, transaction_id);
         TransactionRef {
