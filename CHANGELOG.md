@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ### 🐛 Bug Fixes
 
 - *(engine)* Take the transaction locks in one order
+- *(engine)* Free what a finished animation or removed node held
 
 ## [1.16.0] - 2026-09-05
 

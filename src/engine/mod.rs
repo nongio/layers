@@ -992,7 +992,16 @@ impl Engine {
                 .map(|n| !n.is_removed())
                 .unwrap_or(false);
             if node_alive {
+                // The ids are unreadable once the subtree is gone, and the
+                // surface cache is keyed by them.
+                let removed: Vec<NodeRef> = layer_id.0.descendants(arena).map(NodeRef).collect();
                 layer_id.remove_subtree(arena);
+                let freed = crate::drawing::scene::forget_surfaces_for_nodes(&removed);
+                tracing::debug!(
+                    target: "layers::cache",
+                    "removed subtree of {} nodes, freed {freed} cached surfaces",
+                    removed.len()
+                );
             }
         });
         // Remove the layer from the layers map so stale handles can no longer be found.

@@ -514,20 +514,12 @@ pub(crate) fn cleanup_animations(engine: &Engine, finished_animations: Vec<FlatS
         let animations_finished_to_remove = finished_animations;
         for animation_id in animations_finished_to_remove.iter() {
             animations.remove(animation_id);
-            // Also cleanup animation handlers for finished animations
+            // The animation is gone, so nothing can fire its handlers again:
+            // drop them all, the repeating ones included. Keeping those kept
+            // every closure — and whatever it captured, a window's worth of
+            // state in a compositor — for the life of the engine.
             engine.animation_handlers.with_data_mut(|handlers| {
-                if let Some(handler) = handlers.get_mut(animation_id) {
-                    handler.cleanup_once_callbacks();
-                }
-                // Optionally remove the handler entirely if all callbacks are gone
-                if let Some(handler) = handlers.get(animation_id) {
-                    if handler.on_start.is_empty()
-                        && handler.on_update.is_empty()
-                        && handler.on_finish.is_empty()
-                    {
-                        handlers.remove(animation_id);
-                    }
-                }
+                handlers.remove(animation_id);
             });
         }
     });
@@ -566,11 +558,12 @@ pub(crate) fn cleanup_transactions(engine: &Engine, finished_transations: Vec<Fl
             }
         }
     });
+    // A finished transaction is removed above and never fires again, so its
+    // handlers go with it, repeating ones included (value handlers stay: the
+    // value outlives the transaction).
     engine.transaction_handlers.with_data_mut(|handlers| {
         for tid in finished_transations.iter() {
-            if let Some(handler) = handlers.get_mut(tid) {
-                handler.cleanup_once_callbacks();
-            }
+            handlers.remove(tid);
         }
     });
 }

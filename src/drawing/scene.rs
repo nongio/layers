@@ -352,6 +352,45 @@ fn surface_size_for_render_layer(render_layer: &RenderLayer) -> skia_safe::Point
         .with_outset((render_layer.border_width, render_layer.border_width));
     skia_safe::Point::new(bounds.width(), bounds.height())
 }
+/// Drop the cached surfaces of nodes that have left the scene.
+///
+/// An `image_cache`d node keeps its raster here, keyed by id, and the entry
+/// is otherwise replaced only when the node grows past it: without this, a
+/// removed node's surface — a window's worth of GPU memory, unbudgeted, so
+/// Skia's own cache never trims it — stayed allocated for the life of the
+/// process, once per window ever closed.
+pub fn forget_surfaces_for_nodes<'a>(nodes: impl IntoIterator<Item = &'a NodeRef>) -> usize {
+    let mut freed = 0;
+    unsafe {
+        if let Some(ref surfaces) = NODE_SURFACES {
+            let mut surfaces = surfaces.lock().unwrap();
+            for node_ref in nodes {
+                if surfaces.remove(node_ref).is_some() {
+                    freed += 1;
+                }
+            }
+        }
+    }
+    freed
+}
+
+/// How many node surfaces are cached, and their size in bytes (RGBA8).
+pub fn node_surfaces_stats() -> (usize, usize) {
+    unsafe {
+        match NODE_SURFACES {
+            Some(ref surfaces) => {
+                let surfaces = surfaces.lock().unwrap();
+                let bytes = surfaces
+                    .values()
+                    .map(|(_, s, _)| s.width() as usize * s.height() as usize * 4)
+                    .sum();
+                (surfaces.len(), bytes)
+            }
+            None => (0, 0),
+        }
+    }
+}
+
 pub fn set_surface_for_node(
     node_ref: &NodeRef,
     surface: Surface,
