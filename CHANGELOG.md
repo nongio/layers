@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.17.0] - 2026-09-11
+
+### 🐛 Bug Fixes
+
+- *(engine)* Take the transaction locks in one order
+
 ## [1.16.0] - 2026-09-05
 
 ### 🐛 Bug Fixes
