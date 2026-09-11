@@ -535,28 +535,42 @@ pub(crate) fn cleanup_animations(engine: &Engine, finished_animations: Vec<FlatS
 
 #[profiling::function]
 pub(crate) fn cleanup_transactions(engine: &Engine, finished_transations: Vec<FlatStorageId>) {
-    engine.transactions.with_data_mut(|transactions| {
-        for tid in finished_transations.iter() {
-            if let Some(tr) = transactions.get(tid) {
-                let vid = tr.change.value_id();
+    // Lock order matters here. `schedule_change` holds `values_transactions`
+    // while it reads and cancels entries in `transactions`; taking the two the
+    // other way round, nested, deadlocks the render thread against any thread
+    // scheduling a change (the dock's model updates run on a worker). So:
+    // drop the finished entries under the transactions lock alone, remember
+    // their value ids, and only then touch the value map and the handlers.
+    let removed: Vec<(FlatStorageId, usize)> = engine.transactions.with_data_mut(|transactions| {
+        finished_transations
+            .iter()
+            .filter_map(|tid| {
+                let vid = transactions.get(tid)?.change.value_id();
                 transactions.remove(tid);
-                let mut values_transactions = engine.values_transactions.write().unwrap();
-                if let Some(existing_tid) = values_transactions.get(&vid) {
-                    if (*existing_tid) == *tid {
-                        values_transactions.remove(&vid);
-                    }
-                }
-                engine.value_handlers.with_data_mut(|handlers| {
-                    if let Some(handler) = handlers.get_mut(&vid) {
-                        handler.cleanup_once_callbacks();
-                    }
-                });
+                Some((*tid, vid))
+            })
+            .collect()
+    });
+    {
+        let mut values_transactions = engine.values_transactions.write().unwrap();
+        for (tid, vid) in removed.iter() {
+            if values_transactions.get(vid) == Some(tid) {
+                values_transactions.remove(vid);
             }
-            engine.transaction_handlers.with_data_mut(|handlers| {
-                if let Some(handler) = handlers.get_mut(tid) {
-                    handler.cleanup_once_callbacks();
-                }
-            });
+        }
+    }
+    engine.value_handlers.with_data_mut(|handlers| {
+        for (_, vid) in removed.iter() {
+            if let Some(handler) = handlers.get_mut(vid) {
+                handler.cleanup_once_callbacks();
+            }
+        }
+    });
+    engine.transaction_handlers.with_data_mut(|handlers| {
+        for tid in finished_transations.iter() {
+            if let Some(handler) = handlers.get_mut(tid) {
+                handler.cleanup_once_callbacks();
+            }
         }
     });
 }
