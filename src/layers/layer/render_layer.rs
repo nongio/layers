@@ -107,6 +107,11 @@ pub struct RenderLayer {
     /// overlap other same-plane content (e.g. a popup stacked over another) so
     /// that content is blurred into this layer's backdrop. See `ExternalBackdrop`.
     pub blur_include_content: bool,
+    /// For a `BackgroundBlur` layer: bumped by the engine whenever damage lands
+    /// beneath the blur shape, within the blur's reach. A cached blurred
+    /// backdrop is valid only for the generation it was produced under — the
+    /// layer's own content and anything painted above it leave it unchanged.
+    pub backdrop_generation: u64,
 }
 
 impl RenderLayer {
@@ -648,6 +653,7 @@ impl RenderLayer {
             backdrop_blur_region: None,
             content_opaque: false,
             blur_include_content: model.blur_include_content.value(),
+            backdrop_generation: 0,
         };
 
         render_layer.visible = render_layer.has_visible_drawables();
@@ -715,6 +721,7 @@ impl Default for RenderLayer {
             backdrop_blur_region: None,
             content_opaque: false,
             blur_include_content: false,
+            backdrop_generation: 0,
         }
     }
 }
