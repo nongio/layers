@@ -1401,10 +1401,35 @@ impl Engine {
                 if result.propagate_to_children {
                     parents_changed.insert(*node_id);
                 }
-                if !result.damage.is_empty() {
-                    per_node_damage.insert(NodeRef(*node_id), result.damage);
+                // Whatever a clipping ancestor cuts away is never drawn, so it
+                // cannot need redrawing. A scrolled band — content taller than
+                // the clip it moves inside — would otherwise damage its whole
+                // height on every step of a scroll, most of it outside the
+                // window. Parents are updated before their children, so the
+                // ancestors' bounds are already this frame's.
+                let damage = self.scene.with_arena(|arena| {
+                    let mut damage = result.damage;
+                    let mut ancestor = arena.get(*node_id).and_then(|node| node.parent());
+                    while let Some(id) = ancestor {
+                        if damage.is_empty() {
+                            break;
+                        }
+                        let Some(node) = arena.get(id) else {
+                            break;
+                        };
+                        let layer = &node.get().render_layer;
+                        if layer.clip_children && !damage.intersect(layer.global_transformed_bounds)
+                        {
+                            damage = skia_safe::Rect::default();
+                        }
+                        ancestor = node.parent();
+                    }
+                    damage
+                });
+                if !damage.is_empty() {
+                    per_node_damage.insert(NodeRef(*node_id), damage);
                 }
-                total_damage.join(result.damage);
+                total_damage.join(damage);
             }
         }
 
