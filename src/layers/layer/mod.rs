@@ -445,6 +445,24 @@ impl Layer {
         self.engine
             .set_node_flags(self.id, RenderableFlags::NEEDS_PAINT);
     }
+
+    /// Tell the engine where this layer's own content is opaque, in
+    /// layer-local coordinates.
+    ///
+    /// A `BackgroundBlur` layer draws its backdrop everywhere under its shape
+    /// and then its content over it. Wherever that content is opaque the
+    /// backdrop is covered straight away, so seeding it, blurring it or
+    /// replaying a kept blur there is work nobody sees — and on a window whose
+    /// opaque listing covers most of it, most of what a repaint costs. The
+    /// backdrop leaves these rects out. Empty (the default) leaves nothing out.
+    ///
+    /// A promise about pixels: a rect that is not really opaque shows through
+    /// to whatever was on the surface before, not to the blur.
+    pub fn set_opaque_region(&self, rects: Vec<skia_safe::Rect>) {
+        *self.model.opaque_region.write().unwrap() = rects;
+        self.engine
+            .set_node_flags(self.id, RenderableFlags::NEEDS_PAINT);
+    }
     pub fn set_display(&self, display: Display) {
         self.model.display.set(display);
     }

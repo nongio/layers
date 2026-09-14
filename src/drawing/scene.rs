@@ -838,6 +838,8 @@ pub(crate) struct BlurCacheKey {
     size: skia_safe::Size,
     rbounds: skia_safe::RRect,
     blur_bounds: Option<skia_safe::RRect>,
+    /// Left out of the blur; a kept image holds no backdrop there.
+    opaque_region: Vec<skia_safe::Rect>,
     /// Bumped by the engine whenever damage lands beneath the shape.
     generation: u64,
     /// The external backdrop images seeded under the shape, by identity.
@@ -866,6 +868,7 @@ impl BlurCacheKey {
             size: render_layer.size,
             rbounds: render_layer.rbounds,
             blur_bounds: render_layer.blur_bounds,
+            opaque_region: render_layer.opaque_region.clone(),
             generation: render_layer.backdrop_generation,
             backdrop: external_backdrop
                 .map(|b| (b.image.unique_id(), b.raw_image.map(|raw| raw.unique_id()))),
@@ -1021,6 +1024,14 @@ pub(crate) fn paint_node(
                 canvas.clip_rrect(blur_bounds, skia_safe::ClipOp::Intersect, Some(true));
             }
             None => render_layer.clip_to_shape(canvas, skia_safe::ClipOp::Intersect, true),
+        }
+        // Where the layer's own content is opaque, nothing of the backdrop can
+        // be seen: it is covered the moment the content is drawn. Seeding,
+        // blurring or replaying the kept blur there is work for pixels that
+        // are painted over straight away — on a window whose listing covers
+        // most of it, most of the frost's cost. See `Layer::set_opaque_region`.
+        for opaque in &render_layer.opaque_region {
+            canvas.clip_rect(opaque, skia_safe::ClipOp::Difference, false);
         }
 
         // Cross-buffer vibrancy (render_subtree): when this layer lives in an
