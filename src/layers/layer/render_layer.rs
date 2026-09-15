@@ -97,6 +97,9 @@ pub struct RenderLayer {
     /// only part of their surface — an input-method panel whose buffer
     /// carries a transparent shadow margin the frost must not reach.
     pub blur_bounds: Option<skia_safe::RRect>,
+    /// Where the layer's own content is opaque, layer-local. A
+    /// `BackgroundBlur` leaves these out: the content covers them.
+    pub opaque_region: Vec<skia_safe::Rect>,
     /// Hint from the user that the custom draw content fills the entire bounds
     /// with opaque pixels. When true, the layer can act as an occluder even if
     /// its background color is transparent.
@@ -107,6 +110,11 @@ pub struct RenderLayer {
     /// overlap other same-plane content (e.g. a popup stacked over another) so
     /// that content is blurred into this layer's backdrop. See `ExternalBackdrop`.
     pub blur_include_content: bool,
+    /// For a `BackgroundBlur` layer: bumped by the engine whenever damage lands
+    /// beneath the blur shape, within the blur's reach. A cached blurred
+    /// backdrop is valid only for the generation it was produced under — the
+    /// layer's own content and anything painted above it leave it unchanged.
+    pub backdrop_generation: u64,
 }
 
 impl RenderLayer {
@@ -247,6 +255,7 @@ impl RenderLayer {
         let shape = model.shape.read().unwrap().clone();
         self.shape = shape.clone();
         self.blur_bounds = *model.blur_bounds.read().unwrap();
+        self.opaque_region = model.opaque_region.read().unwrap().clone();
         self.shape_bounds = shape.bounds(bounds, &border_corner_radius);
 
         // Transform shape bounds to global coordinates for hit-testing
@@ -635,6 +644,7 @@ impl RenderLayer {
             global_shape_bounds,
             shape: shape.clone(),
             blur_bounds: *model.blur_bounds.read().unwrap(),
+            opaque_region: model.opaque_region.read().unwrap().clone(),
             global_transformed_rbounds: transformed_rbounds,
             clip_content,
             clip_children,
@@ -648,6 +658,7 @@ impl RenderLayer {
             backdrop_blur_region: None,
             content_opaque: false,
             blur_include_content: model.blur_include_content.value(),
+            backdrop_generation: 0,
         };
 
         render_layer.visible = render_layer.has_visible_drawables();
@@ -694,6 +705,7 @@ impl Default for RenderLayer {
             bounds: skia_safe::Rect::default(),
             rbounds: skia_safe::RRect::default(),
             blur_bounds: None,
+            opaque_region: Vec::new(),
             shape_bounds: skia_safe::Rect::default(),
             global_shape_bounds: skia_safe::Rect::default(),
             shape: Shape::default(),
@@ -715,6 +727,7 @@ impl Default for RenderLayer {
             backdrop_blur_region: None,
             content_opaque: false,
             blur_include_content: false,
+            backdrop_generation: 0,
         }
     }
 }

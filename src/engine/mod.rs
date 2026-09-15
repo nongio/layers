@@ -394,6 +394,11 @@ pub struct Engine {
     cached_nodes_post_order: RwLock<Vec<indextree::NodeId>>,
     /// `depth_groups` stores nodes grouped by depth (root-first), used by `update_nodes`.
     cached_depth_groups: RwLock<Vec<(usize, Vec<indextree::NodeId>)>>,
+    /// Each node's position in paint order (pre-order: a parent before its
+    /// children, earlier siblings before later ones) — the scene's z-order.
+    /// Decides what lies *beneath* a `BackgroundBlur` layer; see
+    /// `Engine::blur_expansion`.
+    cached_paint_order: RwLock<HashMap<indextree::NodeId, usize>>,
     /// Flag indicating the traversal caches need rebuild (set on tree structure changes).
     traversal_cache_dirty: AtomicBool,
 }
@@ -612,6 +617,7 @@ impl Engine {
             hit_test_node_list_dirty: AtomicBool::new(true), // Start dirty so first update populates cache
             cached_nodes_post_order: RwLock::new(Vec::new()),
             cached_depth_groups: RwLock::new(Vec::new()),
+            cached_paint_order: RwLock::new(HashMap::new()),
             traversal_cache_dirty: AtomicBool::new(true),
         }
     }
@@ -1395,10 +1401,35 @@ impl Engine {
                 if result.propagate_to_children {
                     parents_changed.insert(*node_id);
                 }
-                if !result.damage.is_empty() {
-                    per_node_damage.insert(NodeRef(*node_id), result.damage);
+                // Whatever a clipping ancestor cuts away is never drawn, so it
+                // cannot need redrawing. A scrolled band — content taller than
+                // the clip it moves inside — would otherwise damage its whole
+                // height on every step of a scroll, most of it outside the
+                // window. Parents are updated before their children, so the
+                // ancestors' bounds are already this frame's.
+                let damage = self.scene.with_arena(|arena| {
+                    let mut damage = result.damage;
+                    let mut ancestor = arena.get(*node_id).and_then(|node| node.parent());
+                    while let Some(id) = ancestor {
+                        if damage.is_empty() {
+                            break;
+                        }
+                        let Some(node) = arena.get(id) else {
+                            break;
+                        };
+                        let layer = &node.get().render_layer;
+                        if layer.clip_children && !damage.intersect(layer.global_transformed_bounds)
+                        {
+                            damage = skia_safe::Rect::default();
+                        }
+                        ancestor = node.parent();
+                    }
+                    damage
+                });
+                if !damage.is_empty() {
+                    per_node_damage.insert(NodeRef(*node_id), damage);
                 }
-                total_damage.join(result.damage);
+                total_damage.join(damage);
             }
         }
 
@@ -1500,19 +1531,32 @@ impl Engine {
             self.bubble_up_backdrop_blur_regions(*node_id);
         }
 
-        // Phase 8: Include backdrop blur regions in damage if damage is not empty
-        if !total_damage.is_empty() {
-            self.scene.with_arena(|arena| {
-                if let Some(root_node) = arena.get(*root_id) {
-                    if let Some(backdrop_rrects) =
-                        &root_node.get().render_layer.backdrop_blur_region
-                    {
-                        for rrect in backdrop_rrects {
-                            total_damage.join(rrect.rect());
+        // Phase 8: Repaint a `BackgroundBlur` shape whole where this frame's
+        // damage lands beneath it, and mark the blur it kept as stale. Damage
+        // from the layer's own content, or from anything painted above it,
+        // repaints only itself — see `blur_expansion`.
+        let removed = *self.removed_nodes_damage.read().unwrap();
+        if !per_node_damage.is_empty() || !removed.is_empty() {
+            let damaged: Vec<(indextree::NodeId, skia_safe::Rect)> = per_node_damage
+                .iter()
+                .map(|(node, rect)| (node.0, *rect))
+                .collect();
+            let paint_order = self.cached_paint_order.read().unwrap();
+            let shapes = self.scene.with_arena(|arena| {
+                Self::blur_expansion(arena, &paint_order, &damaged, removed, None)
+            });
+            drop(paint_order);
+            if !shapes.is_empty() {
+                self.scene.with_arena_mut(|arena| {
+                    for (blur_id, shape) in shapes.iter() {
+                        total_damage.join(*shape);
+                        if let Some(node) = arena.get_mut(*blur_id) {
+                            let layer = &mut node.get_mut().render_layer;
+                            layer.backdrop_generation = layer.backdrop_generation.wrapping_add(1);
                         }
                     }
-                }
-            });
+                });
+            }
         }
 
         // Phase 9: Rebuild hit test node list if dirty
@@ -2459,16 +2503,19 @@ impl Engine {
     /// Intended for callers that composite subtrees onto separate buffers
     /// (e.g. KMS planes) and want to skip re-rendering unchanged subtrees.
     pub fn subtree_damage(&self, root: NodeRef) -> Option<skia_safe::Rect> {
-        let mut total = *self.removed_nodes_damage.read().unwrap();
+        let removed = *self.removed_nodes_damage.read().unwrap();
+        let mut total = removed;
+        let mut damaged: Vec<(indextree::NodeId, skia_safe::Rect)> = Vec::new();
+        let root_id: TreeStorageId = root.into();
         {
             let map = self.per_node_damage.read().unwrap();
             if !map.is_empty() {
                 self.scene.with_arena(|arena| {
-                    let root_id: TreeStorageId = root.into();
                     if arena.get(root_id).map(|n| !n.is_removed()).unwrap_or(false) {
                         for id in root_id.descendants(arena) {
                             if let Some(rect) = map.get(&NodeRef(id)) {
                                 total.join(*rect);
+                                damaged.push((id, *rect));
                             }
                         }
                     }
@@ -2479,40 +2526,90 @@ impl Engine {
             return None;
         }
 
-        // Expand damage to cover the whole output of any `BackgroundBlur`
-        // layer in this subtree that the damage reaches. A blur samples a
-        // neighborhood of its input, so damage under (or within a blur radius
-        // of) a blur shape changes the blurred result across the shape;
-        // repainting only a sub-rect of the shape leaves a visible seam where
-        // the fresh and stale blur meet. So — like the whole-scene Phase 8
-        // expansion in `update_nodes()` — join the entire blur shape rather
-        // than a radius-outset band. The intersection test is itself outset by
-        // `BACKGROUND_BLUR_SIGMA` so damage just outside the shape (but within
-        // a blur radius of its edge) still triggers the repaint.
-        //
-        // `bubble_up_backdrop_blur_regions()` collects every descendant blur
-        // shape onto the subtree root's `backdrop_blur_region` in the root's
-        // local frame; `transform_33` maps it to the global frame `total` is in.
-        let sigma = crate::drawing::scene::BACKGROUND_BLUR_SIGMA;
-        self.scene.with_arena(|arena| {
-            let root_id: TreeStorageId = root.into();
-            if let Some(node) = arena.get(root_id) {
-                let render_layer = node.get().render_layer();
-                if let Some(rrects) = &render_layer.backdrop_blur_region {
-                    let to_global = render_layer.transform_33;
-                    for rrect in rrects {
-                        let (blur_bounds, _) = to_global.map_rect(rrect.rect());
-                        let mut reach = total;
-                        reach.outset((sigma, sigma));
-                        if reach.intersects(blur_bounds) {
-                            total.join(blur_bounds);
-                        }
-                    }
-                }
-            }
+        // A `BackgroundBlur` shape in this subtree is repainted whole when the
+        // damage lands beneath it — see `blur_expansion`.
+        let paint_order = self.cached_paint_order.read().unwrap();
+        let shapes = self.scene.with_arena(|arena| {
+            Self::blur_expansion(arena, &paint_order, &damaged, removed, Some(root_id))
         });
+        for (_, shape) in shapes {
+            total.join(shape);
+        }
 
         Some(total)
+    }
+
+    /// The `BackgroundBlur` shapes that `damaged` requires repainting whole,
+    /// in global coordinates.
+    ///
+    /// A blurred backdrop is a function of what is painted *beneath* the shape —
+    /// earlier in paint order, the scene's z-order — within the blur's reach.
+    /// Damage from the blur layer's own subtree, or from anything painted after
+    /// it, leaves the backdrop as it was: the renderer repaints just the damaged
+    /// part, over the blurred backdrop it kept from the last whole repaint.
+    ///
+    /// A blur that cannot be kept is repainted whole for any damage within
+    /// reach, as before: a translucent one (drawn inside a fade group) or one
+    /// under an image-cached ancestor (drawn offscreen). Repainting part of such
+    /// a shape would blur only that part and leave a seam.
+    ///
+    /// `removed` is damage from nodes no longer in the tree, whose place in
+    /// paint order is unknown, so it counts as beneath. `subtree` restricts the
+    /// blur layers considered to those under that node.
+    fn blur_expansion(
+        arena: &indextree::Arena<SceneNode>,
+        paint_order: &HashMap<indextree::NodeId, usize>,
+        damaged: &[(indextree::NodeId, skia_safe::Rect)],
+        removed: skia_safe::Rect,
+        subtree: Option<indextree::NodeId>,
+    ) -> Vec<(indextree::NodeId, skia_safe::Rect)> {
+        let reach = crate::drawing::scene::BACKGROUND_BLUR_SIGMA * 3.0;
+        let within_reach = |damage: &skia_safe::Rect, shape: &skia_safe::Rect| {
+            !damage.is_empty() && damage.with_outset((reach, reach)).intersects(*shape)
+        };
+
+        let mut shapes = Vec::new();
+        for (&blur_id, &blur_index) in paint_order.iter() {
+            let Some(node) = arena.get(blur_id) else {
+                continue;
+            };
+            if node.is_removed() {
+                continue;
+            }
+            let scene_node = node.get();
+            let layer = scene_node.render_layer();
+            if layer.blend_mode != crate::types::BlendMode::BackgroundBlur || scene_node.hidden() {
+                continue;
+            }
+            if let Some(root) = subtree {
+                if !blur_id.ancestors(arena).any(|ancestor| ancestor == root) {
+                    continue;
+                }
+            }
+
+            let shape = layer.global_transformed_bounds;
+            let kept = layer.premultiplied_opacity >= 1.0
+                && !blur_id.ancestors(arena).skip(1).any(|ancestor| {
+                    arena
+                        .get(ancestor)
+                        .is_some_and(|n| !n.is_removed() && n.get().is_image_cached())
+                });
+            let beneath = within_reach(&removed, &shape)
+                || damaged.iter().any(|(id, damage)| {
+                    if !within_reach(damage, &shape) {
+                        return false;
+                    }
+                    if !kept {
+                        return true;
+                    }
+                    let own = id.ancestors(arena).any(|ancestor| ancestor == blur_id);
+                    !own && paint_order.get(id).is_none_or(|index| *index < blur_index)
+                });
+            if beneath {
+                shapes.push((blur_id, shape));
+            }
+        }
+        shapes
     }
 
     /// Compute occlusion culling for the given root node.
@@ -2560,18 +2657,24 @@ impl Engine {
         let Some(root_id) = *node else {
             *self.cached_nodes_post_order.write().unwrap() = Vec::new();
             *self.cached_depth_groups.write().unwrap() = Vec::new();
+            *self.cached_paint_order.write().unwrap() = HashMap::new();
             self.traversal_cache_dirty.store(false, Ordering::Relaxed);
             return;
         };
 
-        let (post_order, depth_groups) = self.scene.with_arena(|arena| {
+        let (post_order, depth_groups, paint_order) = self.scene.with_arena(|arena| {
             let mut post_order = Vec::new();
+            let mut paint_order = HashMap::new();
             let mut depth_map: std::collections::HashMap<usize, Vec<indextree::NodeId>> =
                 std::collections::HashMap::new();
 
             for edge in root_id.traverse(arena) {
-                if let indextree::NodeEdge::End(id) = edge {
-                    post_order.push(id);
+                match edge {
+                    indextree::NodeEdge::Start(id) => {
+                        let index = paint_order.len();
+                        paint_order.insert(id, index);
+                    }
+                    indextree::NodeEdge::End(id) => post_order.push(id),
                 }
             }
 
@@ -2582,11 +2685,12 @@ impl Engine {
 
             let mut groups: Vec<_> = depth_map.into_iter().collect();
             groups.sort_by_key(|(depth, _)| *depth);
-            (post_order, groups)
+            (post_order, groups, paint_order)
         });
 
         *self.cached_nodes_post_order.write().unwrap() = post_order;
         *self.cached_depth_groups.write().unwrap() = depth_groups;
+        *self.cached_paint_order.write().unwrap() = paint_order;
         self.traversal_cache_dirty.store(false, Ordering::Relaxed);
     }
 }

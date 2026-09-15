@@ -134,6 +134,9 @@ pub(crate) struct ModelLayer {
     /// coordinates. `None` (the default) blurs the layer's own rounded
     /// bounds. See [`Layer::set_blur_bounds`].
     pub blur_bounds: Arc<RwLock<Option<skia_safe::RRect>>>,
+    /// Where this layer's own content is opaque, in layer-local coordinates.
+    /// See [`Layer::set_opaque_region`].
+    pub opaque_region: Arc<RwLock<Vec<skia_safe::Rect>>>,
 }
 
 impl Default for ModelLayer {
@@ -176,6 +179,7 @@ impl Default for ModelLayer {
         let pointer_events = Arc::new(AtomicBool::new(true));
         let shape = Arc::new(RwLock::new(Shape::default()));
         let blur_bounds = Arc::new(RwLock::new(None));
+        let opaque_region = Arc::new(RwLock::new(Vec::new()));
         // let hidden = Arc::new(AtomicBool::new(false));
 
         Self {
@@ -208,6 +212,7 @@ impl Default for ModelLayer {
             blur_include_content,
             shape,
             blur_bounds,
+            opaque_region,
         }
     }
 }

@@ -824,6 +824,127 @@ pub fn render_node_tree(
 }
 pub(crate) const BACKGROUND_BLUR_SIGMA: f32 = 40.0;
 
+/// Blurred backdrops kept per render thread. A handful of frosted layers is a
+/// busy desktop; the cap only matters when many come and go.
+const BLUR_CACHE_CAPACITY: usize = 32;
+
+/// Everything a cached blurred backdrop was produced under. The cached pixels
+/// are drawn again only while all of it still holds.
+#[derive(Clone, PartialEq)]
+pub(crate) struct BlurCacheKey {
+    /// Where the blurred shape landed on the surface, clamped to it.
+    pub(crate) device_rect: skia_safe::IRect,
+    matrix: skia_safe::Matrix,
+    size: skia_safe::Size,
+    rbounds: skia_safe::RRect,
+    blur_bounds: Option<skia_safe::RRect>,
+    /// Left out of the blur; a kept image holds no backdrop there.
+    opaque_region: Vec<skia_safe::Rect>,
+    /// Bumped by the engine whenever damage lands beneath the shape.
+    generation: u64,
+    /// The external backdrop images seeded under the shape, by identity.
+    backdrop: Option<(u32, Option<u32>)>,
+}
+
+impl BlurCacheKey {
+    fn new(
+        canvas: &skia_safe::Canvas,
+        render_layer: &RenderLayer,
+        external_backdrop: Option<ExternalBackdrop>,
+    ) -> Option<Self> {
+        // SAFETY: only read for its dimensions; the canvas outlives this call.
+        let surface = unsafe { canvas.surface() }?;
+        let matrix = canvas.local_to_device_as_3x3();
+        let bounds =
+            skia_safe::Rect::from_xywh(0.0, 0.0, render_layer.size.width, render_layer.size.height);
+        let (mapped, _) = matrix.map_rect(bounds);
+        let device_rect = skia_safe::IRect::intersect(
+            &mapped.round_out(),
+            &skia_safe::IRect::from_wh(surface.width(), surface.height()),
+        )?;
+        Some(Self {
+            device_rect,
+            matrix,
+            size: render_layer.size,
+            rbounds: render_layer.rbounds,
+            blur_bounds: render_layer.blur_bounds,
+            opaque_region: render_layer.opaque_region.clone(),
+            generation: render_layer.backdrop_generation,
+            backdrop: external_backdrop
+                .map(|b| (b.image.unique_id(), b.raw_image.map(|raw| raw.unique_id()))),
+        })
+    }
+}
+
+struct BlurCacheEntry {
+    key: BlurCacheKey,
+    image: skia_safe::Image,
+    used: u64,
+}
+
+thread_local! {
+    static BLUR_CACHE: std::cell::RefCell<std::collections::HashMap<NodeRef, BlurCacheEntry>> =
+        std::cell::RefCell::new(std::collections::HashMap::new());
+    static BLUR_CACHE_CLOCK: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+fn blur_cache_tick() -> u64 {
+    BLUR_CACHE_CLOCK.with(|clock| {
+        let now = clock.get().wrapping_add(1);
+        clock.set(now);
+        now
+    })
+}
+
+/// The blurred backdrop cached for `node`, if it was produced under `key`.
+fn blur_cache_get(node: NodeRef, key: &BlurCacheKey) -> Option<skia_safe::Image> {
+    let now = blur_cache_tick();
+    BLUR_CACHE.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        let entry = cache.get_mut(&node).filter(|entry| entry.key == *key)?;
+        entry.used = now;
+        Some(entry.image.clone())
+    })
+}
+
+/// Keep the pixels the blur just left on the surface under the shape.
+fn blur_cache_store(canvas: &skia_safe::Canvas, node: NodeRef, key: BlurCacheKey) {
+    // SAFETY: the canvas belongs to this surface for the duration of the call.
+    let Some(mut surface) = (unsafe { canvas.surface() }) else {
+        return;
+    };
+    let Some(image) = surface.image_snapshot_with_bounds(key.device_rect) else {
+        return;
+    };
+    let now = blur_cache_tick();
+    BLUR_CACHE.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        cache.insert(
+            node,
+            BlurCacheEntry {
+                key,
+                image,
+                used: now,
+            },
+        );
+        if cache.len() > BLUR_CACHE_CAPACITY {
+            if let Some(oldest) = cache
+                .iter()
+                .min_by_key(|(_, entry)| entry.used)
+                .map(|(node, _)| *node)
+            {
+                cache.remove(&oldest);
+            }
+        }
+    });
+}
+
+/// Drop every cached blurred backdrop on this thread — for a render context
+/// that is being torn down, whose images must not outlive it.
+pub fn clear_blur_cache() {
+    BLUR_CACHE.with(|cache| cache.borrow_mut().clear());
+}
+
 // paint a single node in the provided canvas
 #[profiling::function]
 pub(crate) fn paint_node(
@@ -903,6 +1024,14 @@ pub(crate) fn paint_node(
                 canvas.clip_rrect(blur_bounds, skia_safe::ClipOp::Intersect, Some(true));
             }
             None => render_layer.clip_to_shape(canvas, skia_safe::ClipOp::Intersect, true),
+        }
+        // Where the layer's own content is opaque, nothing of the backdrop can
+        // be seen: it is covered the moment the content is drawn. Seeding,
+        // blurring or replaying the kept blur there is work for pixels that
+        // are painted over straight away — on a window whose listing covers
+        // most of it, most of the frost's cost. See `Layer::set_opaque_region`.
+        for opaque in &render_layer.opaque_region {
+            canvas.clip_rect(opaque, skia_safe::ClipOp::Difference, false);
         }
 
         // Cross-buffer vibrancy (render_subtree): when this layer lives in an
@@ -1004,7 +1133,36 @@ pub(crate) fn paint_node(
         // the shape edge and fade the rim, re-exposing the raw seed. Skip it and
         // rely on the caller's whole-image blur. For a raw backdrop (or an
         // in-scene BackgroundBlur with no external backdrop) do the real blur.
-        if !backdrop_preblurred {
+        // The blurred backdrop depends only on what lies beneath the shape, so
+        // it is kept between frames: a repaint caused by this layer's own
+        // content, or by anything above it, draws the pixels the blur produced
+        // last time instead of blurring again. The engine bumps
+        // `backdrop_generation` whenever damage lands beneath the shape, which
+        // is part of the key. Not inside a fade group or an offscreen cache,
+        // whose pixels are not on the surface a snapshot would read.
+        let blur_cache_key = (!backdrop_preblurred && !blur_fade_group && !offscreen)
+            .then(|| BlurCacheKey::new(canvas, render_layer, external_backdrop))
+            .flatten();
+        let cached = blur_cache_key
+            .as_ref()
+            .and_then(|key| blur_cache_get(node_ref, key));
+        let mut blurred_live = false;
+
+        if let (Some(image), Some(key)) = (cached.as_ref(), blur_cache_key.as_ref()) {
+            profiling::scope!("cached backdrop");
+            // Replace, not blend: the cached pixels already hold the seed and
+            // the blur composited together.
+            let restore = canvas.save();
+            canvas.reset_matrix();
+            let mut cached_paint = skia_safe::Paint::default();
+            cached_paint.set_blend_mode(skia_safe::BlendMode::Src);
+            canvas.draw_image(
+                image,
+                (key.device_rect.left, key.device_rect.top),
+                Some(&cached_paint),
+            );
+            canvas.restore_to_count(restore);
+        } else if !backdrop_preblurred {
             // The blur reads the canvas as far as its reach past the layer's
             // bounds, and out there this buffer is transparent wherever nothing
             // was painted (an isolated plane holds only its own subtree). A
@@ -1021,6 +1179,7 @@ pub(crate) fn paint_node(
                 save_layer_rec = save_layer_rec.backdrop(&blur);
                 set_backdrop_scale(&mut save_layer_rec, BACKGROUND_BLUR_SAVE_SCALE);
                 canvas.save_layer(&save_layer_rec);
+                blurred_live = true;
             }
         }
 
@@ -1030,6 +1189,21 @@ pub(crate) fn paint_node(
         // above and used to leave the clip active — no shadow on popups/panels
         // rendered through a plane's external backdrop.
         canvas.restore_to_count(before_backdrop);
+
+        // Keep what the blur just produced, but only from a repaint that
+        // covered the whole shape: anywhere a partial repaint did not reach,
+        // the surface still holds last frame's pixels — this layer's own
+        // content among them — and a snapshot of those would be wrong.
+        if let (true, Some(key)) = (blurred_live, blur_cache_key) {
+            let global: skia_safe::IRect = render_layer.global_transformed_bounds.round_out();
+            let whole_repaint = damage_region.map_or(true, |region| region.contains(&global))
+                && canvas
+                    .device_clip_bounds()
+                    .map_or(false, |clip| clip.contains(&key.device_rect));
+            if whole_repaint {
+                blur_cache_store(canvas, node_ref, key);
+            }
+        }
     }
     if node.is_picture_cached() && draw_cache.is_some() {
         let draw_cache = draw_cache.unwrap();
