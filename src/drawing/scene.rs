@@ -974,10 +974,16 @@ pub(crate) fn paint_node(
         return restore_transform;
     }
 
-    // Skip painting if the node's global bounds don't intersect the damage region
+    // Skip painting if nothing the node paints reaches the damage region.
+    // Its painted extent is more than its bounds: the drop shadow is drawn
+    // outside the shape, as far as the shadow reaches. Culling on the bare
+    // bounds skipped a layer whose shadow alone crossed into the region, and
+    // whatever was repainted beneath then showed through where the shadow
+    // had been — a dock with its shadow wiped along the edge of a partial
+    // repaint. The bounds with children cover the shadow reach.
     if let Some(region) = damage_region {
-        let global_bounds = render_layer.global_transformed_bounds;
-        let irect: skia_safe::IRect = global_bounds.round_out();
+        let painted = render_layer.global_transformed_bounds_with_children;
+        let irect: skia_safe::IRect = painted.round_out();
         if !region.intersects_rect(irect) {
             return restore_transform;
         }
