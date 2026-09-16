@@ -374,6 +374,13 @@ pub struct Engine {
     /// nodes are gone from the arena, so their damage can't be attributed to a
     /// subtree — `subtree_damage` joins this rect conservatively.
     pub(crate) removed_nodes_damage: Arc<RwLock<skia_safe::Rect>>,
+    /// The blur shapes repainted whole since the last `clear_damage`, by
+    /// blur node, so `damage_rects()` can list them beside the per-node
+    /// damage without growing with every frame that is not consumed.
+    pub(crate) blur_repaint_shapes: Arc<RwLock<HashMap<TreeStorageId, skia_safe::Rect>>>,
+    /// Damage handed in through `add_damage` since the last `clear_damage`,
+    /// kept apart for `damage_rects()`.
+    pub(crate) added_damage: Arc<RwLock<Vec<skia_safe::Rect>>>,
     /// The current pointer position
     pointer_position: RwLock<skia::Point>,
     /// The node that is currently hovered by the pointer
@@ -610,6 +617,8 @@ impl Engine {
             damage,
             per_node_damage: Arc::new(RwLock::new(HashMap::new())),
             removed_nodes_damage: Arc::new(RwLock::new(skia_safe::Rect::default())),
+            blur_repaint_shapes: Arc::new(RwLock::new(HashMap::new())),
+            added_damage: Arc::new(RwLock::new(Vec::new())),
             pointer_handlers: FlatStorage::new(),
             pointer_position: RwLock::new(skia::Point::default()),
             current_hover_node: RwLock::new(None),
@@ -1536,6 +1545,7 @@ impl Engine {
         // from the layer's own content, or from anything painted above it,
         // repaints only itself — see `blur_expansion`.
         let removed = *self.removed_nodes_damage.read().unwrap();
+        let mut blur_shapes: Vec<(TreeStorageId, skia_safe::Rect)> = Vec::new();
         if !per_node_damage.is_empty() || !removed.is_empty() {
             let damaged: Vec<(indextree::NodeId, skia_safe::Rect)> = per_node_damage
                 .iter()
@@ -1546,6 +1556,7 @@ impl Engine {
                 Self::blur_expansion(arena, &paint_order, &damaged, removed, None)
             });
             drop(paint_order);
+            blur_shapes.extend(shapes.iter().map(|(id, shape)| (*id, *shape)));
             if !shapes.is_empty() {
                 self.scene.with_arena_mut(|arena| {
                     for (blur_id, shape) in shapes.iter() {
@@ -1556,6 +1567,15 @@ impl Engine {
                         }
                     }
                 });
+            }
+        }
+
+        if !blur_shapes.is_empty() {
+            let mut kept = self.blur_repaint_shapes.write().unwrap();
+            for (blur_id, shape) in blur_shapes.iter() {
+                kept.entry(*blur_id)
+                    .and_modify(|r| r.join(*shape))
+                    .or_insert(*shape);
             }
         }
 
@@ -2373,6 +2393,37 @@ impl Engine {
     pub fn damage(&self) -> skia_safe::Rect {
         *self.damage.read().unwrap()
     }
+    /// The damage since the last `clear_damage` as separate rectangles: one
+    /// per damaged node, the area left by removed nodes, and each blur shape
+    /// repainted whole. `damage()` is their bounding box. A renderer that can
+    /// repaint several rectangles takes them apart from here, so two small
+    /// changes far from each other do not become one large repaint between
+    /// them; a rectangle may lie outside the scene, and none is clipped by
+    /// occlusion.
+    pub fn damage_rects(&self) -> Vec<skia_safe::Rect> {
+        let mut rects: Vec<skia_safe::Rect> = self
+            .per_node_damage
+            .read()
+            .unwrap()
+            .values()
+            .copied()
+            .filter(|r| !r.is_empty())
+            .collect();
+        let removed = *self.removed_nodes_damage.read().unwrap();
+        if !removed.is_empty() {
+            rects.push(removed);
+        }
+        rects.extend(
+            self.blur_repaint_shapes
+                .read()
+                .unwrap()
+                .values()
+                .copied()
+                .filter(|r| !r.is_empty()),
+        );
+        rects.extend(self.added_damage.read().unwrap().iter().copied());
+        rects
+    }
     /// Fold damage from removed nodes into the per-subtree damage map.
     /// `attributed` entries carry the removed node's nearest surviving
     /// ancestor, so `subtree_damage()` queries stay scoped to the subtree
@@ -2490,6 +2541,8 @@ impl Engine {
     pub fn clear_damage(&self) {
         let mut damage = self.damage.write().unwrap();
         *damage = skia_safe::Rect::default();
+        self.blur_repaint_shapes.write().unwrap().clear();
+        self.added_damage.write().unwrap().clear();
         self.per_node_damage.write().unwrap().clear();
         *self.removed_nodes_damage.write().unwrap() = skia_safe::Rect::default();
     }
@@ -2563,9 +2616,14 @@ impl Engine {
         removed: skia_safe::Rect,
         subtree: Option<indextree::NodeId>,
     ) -> Vec<(indextree::NodeId, skia_safe::Rect)> {
-        let reach = crate::drawing::scene::BACKGROUND_BLUR_SIGMA * 3.0;
+        // The blur reads only what lies inside the shape: its input is the
+        // layer's own bounds, mirrored past them (`backdrop_filter_within`),
+        // so damage outside the shape leaves the blurred backdrop as it was.
+        // Counting the kernel's reach past the shape here repainted the bar's
+        // corner label on every frame a window drew on the workspace scrolled
+        // off to its left — damage that never entered the blur.
         let within_reach = |damage: &skia_safe::Rect, shape: &skia_safe::Rect| {
-            !damage.is_empty() && damage.with_outset((reach, reach)).intersects(*shape)
+            !damage.is_empty() && damage.intersects(*shape)
         };
 
         let mut shapes = Vec::new();
@@ -2636,6 +2694,12 @@ impl Engine {
     pub fn add_damage(&self, rect: skia_safe::Rect) {
         let mut damage = self.damage.write().unwrap();
         damage.join(rect);
+        if !rect.is_empty() {
+            let mut added = self.added_damage.write().unwrap();
+            if !added.iter().any(|r| skia_safe::Contains::contains(r, rect)) {
+                added.push(rect);
+            }
+        }
     }
 
     /// Mark the hit test node list as dirty, requiring rebuild on next update.
