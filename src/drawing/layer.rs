@@ -41,6 +41,32 @@ fn get_noise_image(canvas: &Canvas, w: i32, h: i32) -> Option<Image> {
     })
 }
 
+/// How a `BackgroundBlur` layer's background colour meets the blurred backdrop.
+///
+/// A neutral material takes `Luminosity`: only its lightness lands, and the
+/// hue of whatever is behind carries through, which is what makes a frosted
+/// panel feel like glass rather than paint. A material that carries chroma of
+/// its own cannot go that way — `Luminosity` discards exactly the hue it was
+/// given, so a violet panel over an orange wallpaper comes back orange — and
+/// is composited over the backdrop instead, its alpha deciding how much of the
+/// desktop still shows.
+///
+/// `LAYERS_BLUR_TINT=color` picks Skia's `Color` for the tinted case instead:
+/// hue and saturation from the material, luminance from the backdrop, so the
+/// blurred content keeps its own light and shade under the tint.
+fn background_blur_blend_mode(color: &Color4f) -> skia_safe::BlendMode {
+    let max = color.r.max(color.g).max(color.b);
+    let min = color.r.min(color.g).min(color.b);
+    if max - min <= 1.0 / 255.0 {
+        return skia_safe::BlendMode::Luminosity;
+    }
+    match std::env::var("LAYERS_BLUR_TINT").as_deref() {
+        Ok("color") => skia_safe::BlendMode::Color,
+        Ok("luminosity") => skia_safe::BlendMode::Luminosity,
+        _ => skia_safe::BlendMode::SrcOver,
+    }
+}
+
 /// Draw a layer into a skia::Canvas.
 /// Returns the damage rect in the layer's coordinate space.
 #[profiling::function]
@@ -74,7 +100,7 @@ pub fn draw_layer(
             background_paint.set_anti_alias(true);
             background_paint.set_style(PaintStyle::Fill);
             if layer.blend_mode == crate::types::BlendMode::BackgroundBlur {
-                background_paint.set_blend_mode(skia_safe::BlendMode::Luminosity);
+                background_paint.set_blend_mode(background_blur_blend_mode(&background_color));
             }
             if background_color.a > 0.0 {
                 layer.draw_shape(canvas, &background_paint);
