@@ -1002,7 +1002,26 @@ pub(crate) fn paint_node(
     if blur_fade_group {
         let mut group_paint = skia_safe::Paint::default();
         group_paint.set_alpha_f(opacity);
-        let rec = skia_safe::canvas::SaveLayerRec::default().paint(&group_paint);
+        // The group covers the layer plus its shadow, in layer space.
+        let reach = (render_layer.shadow_radius * 3.0 + render_layer.shadow_spread).max(0.0);
+        let group_bounds = skia_safe::Rect::from_xywh(
+            render_layer.shadow_offset.x.min(0.0) - reach,
+            render_layer.shadow_offset.y.min(0.0) - reach,
+            render_layer.size.width + render_layer.shadow_offset.x.abs() + 2.0 * reach,
+            render_layer.size.height + render_layer.shadow_offset.y.abs() + 2.0 * reach,
+        );
+        let mut rec = skia_safe::canvas::SaveLayerRec::default()
+            .bounds(&group_bounds)
+            .paint(&group_paint);
+        // A fresh group is transparent, so the blur save_layer below would read
+        // nothing and the layer fades in unfrosted, frost popping in at 1.0.
+        // Start the group from what is already on the surface: the group then
+        // holds backdrop + blur + content, and compositing it at the group's
+        // opacity over that same backdrop is the crossfade wanted. An external
+        // backdrop seeds the group itself and does not need the copy.
+        if external_backdrop.is_none() {
+            rec = rec.flags(skia_safe::canvas::SaveLayerFlags::INIT_WITH_PREVIOUS);
+        }
         canvas.save_layer(&rec);
     }
     // Inside the group everything paints at full strength; without a group the

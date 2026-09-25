@@ -94,7 +94,16 @@ impl TimingFunction {
                 let ease = bezier_easing::bezier_easing(*x1, *y1, *x2, *y2).unwrap();
                 (ease(t), t)
             }
-            TimingFunction::Spring(solver) => (solver.update_at(elapsed), elapsed),
+            // A settled spring reports its target, not the last sample within
+            // tolerance: a layer left at 0.997 opacity is not the same as one at
+            // 1.0 (see the blur fade group in `drawing::scene`).
+            TimingFunction::Spring(solver) => {
+                if solver.done(elapsed) {
+                    (1.0, elapsed)
+                } else {
+                    (solver.update_at(elapsed), elapsed)
+                }
+            }
             TimingFunction::Keyframes(segments, total_duration) => {
                 let total_duration = *total_duration;
                 if total_duration <= 0.0 || segments.is_empty() {
