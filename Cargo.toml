@@ -10,13 +10,12 @@ name = "layers"
 crate-type = ["lib", "cdylib"] # Creates dynamic lib
 
 [package.metadata.docs.rs]
-features = ["default"]
+features = ["default", "vulkan"]
 rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
 parking_lot = "0.12"
 taffy = { version = "0.5", features = ["serde"] }
-gl-rs = { package = "gl", version = "0.14.0" }
 indexmap = { version = "1.9.1", features = ["rayon"] }
 indextree = { version = "4.9", features = ["par_iter", "deser"] }
 foreign-types-shared = "0.1.1"
@@ -73,6 +72,8 @@ criterion = { version = "0.5.1", features = [
 paste = "1.0"
 glutin = "0.29"
 winit = "0.28"
+gl-rs = { package = "gl", version = "0.14.0" }
+ash = "0.38"
 image-compare = "0.4.1"
 image = { version = ">=0.25, <0.25.10", default-features = false, features = [
     "png",
@@ -90,7 +91,11 @@ optional = true
 export-skia = []
 export-taffy = []
 profile-with-puffin = ["profiling/profile-with-puffin", "puffin_http"]
-default = ["export-skia", "export-taffy"]
+default = ["export-skia", "export-taffy", "gl"]
+# OpenGL framebuffer renderer (`renderer::skia_fbo`) and the C API built on it.
+gl = ["skia-safe/gl"]
+# Vulkan render target renderer (`renderer::skia_vk`).
+vulkan = ["skia-safe/vulkan"]
 debugger = ["layers-debug-server"]
 debug_cmd = ["layers_inspector"]
 layer_state = []
