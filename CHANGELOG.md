@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.18.1] - 2026-09-25
+
+### 🐛 Bug Fixes
+
+- *(blur)* Frost a layer that fades in without a backdrop
+
 ## [1.18.0] - 2026-09-25
 
 ### 🚀 Features
