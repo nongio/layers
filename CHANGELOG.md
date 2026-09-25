@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.18.0] - 2026-09-25
+
+### 🚀 Features
+
+- *(renderer)* Vulkan render target and test path (#29)
+
+### ⚡ Performance
+
+- *(blur)* Keep blurred backdrops, clip damage, opaque regions (#28)
+
 ## [1.17.0] - 2026-09-11
 
 ### 🐛 Bug Fixes
