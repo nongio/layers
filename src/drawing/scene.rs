@@ -1,7 +1,7 @@
 #![allow(warnings)]
 
 use indextree::{Arena, NodeId};
-use skia::{gpu::ganesh::gl::direct_contexts, FontStyle, Surface};
+use skia::{FontStyle, Surface};
 use skia_safe::Canvas;
 use skia_safe::Contains;
 use skia_safe::RoundOut;

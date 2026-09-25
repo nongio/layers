@@ -46,8 +46,9 @@
 //!
 //! - **Drawing Library**: Uses the Skia library.
 //! - **Supported Backends**:
-//!   - **OpenGL**: Using FBO (Framebuffer Objects)
+//!   - **OpenGL**: Using FBO (Framebuffer Objects), `gl` feature (default)
 //!   - **EGL**: For OpenGL ES contexts
+//!   - **Vulkan**: Rendering into a host-owned `VkImage`, `vulkan` feature
 //!   - **Image**: For testing purposes
 //!
 //! ## Taffy Layout
