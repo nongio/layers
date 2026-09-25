@@ -6,7 +6,13 @@ All notable changes to this project will be documented in this file.
 
 ### 🚀 Features
 
+- *(engine)* Expose damage as rectangles
 - *(renderer)* Vulkan render target and test path (#29)
+
+### 🐛 Bug Fixes
+
+- *(drawing)* Cull partial repaints on painted bounds
+- *(drawing)* Composite a tinted blur instead of draining its hue
 
 ### ⚡ Performance
 
