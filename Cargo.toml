@@ -30,7 +30,6 @@ derive_builder = "0.12.0"
 rand = "0.8.5"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0" }
-puffin_http = { version = "0.13", optional = true }
 profiling = { version = "1.0" }
 bezier_easing = "0.1.1"
 tokio = { version = "1", features = ["full"] }
@@ -90,7 +89,7 @@ optional = true
 [features]
 export-skia = []
 export-taffy = []
-profile-with-puffin = ["profiling/profile-with-puffin", "puffin_http"]
+profile-with-puffin = ["profiling/profile-with-puffin"]
 default = ["export-skia", "export-taffy", "gl"]
 # OpenGL framebuffer renderer (`renderer::skia_fbo`) and the C API built on it.
 gl = ["skia-safe/gl"]
