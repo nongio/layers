@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.18.2] - 2026-10-15
+
+### 🐛 Bug Fixes
+
+- *(deps)* Drop the unused puffin_http dependency (#30)
+
 ## [1.18.1] - 2026-09-25
 
 ### 🐛 Bug Fixes
