@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["clear_blur_cache","draw_layer","draw_scene","node_surfaces_stats","node_tree_list","node_tree_list_visible","paint_node_tree","print_scene","render_node_tree","vibrancy_color_filter"],"struct":["ExternalBackdrop"]};
