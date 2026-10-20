@@ -1019,8 +1019,17 @@ pub(crate) fn paint_node(
         // holds backdrop + blur + content, and compositing it at the group's
         // opacity over that same backdrop is the crossfade wanted. An external
         // backdrop seeds the group itself and does not need the copy.
+        //
+        // Started from the surface, the group is as opaque as the surface is,
+        // so text in it can keep the surface's subpixel layout. Skia drops a
+        // layer's text to greyscale unless told it may keep it — right for a
+        // transparent group, whose per-channel coverage would fringe once it
+        // is blended down. On a surface with no layout the flag changes nothing.
         if external_backdrop.is_none() {
-            rec = rec.flags(skia_safe::canvas::SaveLayerFlags::INIT_WITH_PREVIOUS);
+            rec = rec.flags(
+                skia_safe::canvas::SaveLayerFlags::INIT_WITH_PREVIOUS
+                    | skia_safe::canvas::SaveLayerFlags::PRESERVE_LCD_TEXT,
+            );
         }
         canvas.save_layer(&rec);
     }
