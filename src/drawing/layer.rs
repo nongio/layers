@@ -69,15 +69,19 @@ fn background_blur_blend_mode(color: &Color4f) -> skia_safe::BlendMode {
 
 /// Draw a layer into a skia::Canvas.
 /// Returns the damage rect in the layer's coordinate space.
+///
+/// `opacity` is what the layer is drawn at, its own opacity included: the
+/// direct path passes the layer's opacity times its ancestors', and a picture
+/// is recorded at 1.0 and given the layer's opacity when it is played back.
+/// Multiplying the layer's own in again here faded a layer at 0.5 to 0.25.
 #[profiling::function]
 pub fn draw_layer(
     canvas: &Canvas,
     layer: &RenderLayer,
-    context_opacity: f32,
+    opacity: f32,
     renderable: &SceneNodeRenderable,
 ) -> skia_safe::Rect {
     let mut draw_damage = skia_safe::Rect::default();
-    let opacity = layer.opacity * context_opacity;
     // if the layer is completely transparent, we don't need to draw anything
     if layer.premultiplied_opacity <= 0.0 {
         return draw_damage;
@@ -87,7 +91,7 @@ pub fn draw_layer(
     let bounds = layer.bounds;
     let background_color = match layer.background_color {
         PaintColor::Solid { color } => Color4f::from(color),
-        _ => Color4f::new(1.0, 1.0, 1.0, opacity),
+        _ => Color4f::new(1.0, 1.0, 1.0, 1.0),
     };
     {
         if (background_color.a * opacity) > 0.0 {
@@ -97,6 +101,7 @@ pub fn draw_layer(
             // Draw the background color.
 
             let mut background_paint = Paint::new(background_color, None);
+            background_paint.set_alpha_f(background_color.a * opacity);
             background_paint.set_anti_alias(true);
             background_paint.set_style(PaintStyle::Fill);
             if layer.blend_mode == crate::types::BlendMode::BackgroundBlur {
@@ -210,7 +215,7 @@ pub fn draw_layer(
     if layer.border_width > 0.0 {
         let mut border_color = match layer.border_color {
             PaintColor::Solid { color } => Color4f::from(color),
-            _ => Color4f::new(1.0, 1.0, 1.0, opacity),
+            _ => Color4f::new(1.0, 1.0, 1.0, 1.0),
         };
         border_color.a *= opacity;
         let mut border_paint = Paint::new(border_color, None);

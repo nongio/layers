@@ -516,8 +516,11 @@ pub fn paint_node_tree(
         }
     }
     let mut context_opacity = render_layer.opacity * context_opacity;
+    // An image-cached subtree is drawn into its cache at full strength and
+    // faded once, as a whole, when the cache is drawn: its children start
+    // from 1.0 in there, or they would be faded by this node twice.
     if (offscreen) {
-        context_opacity = render_layer.opacity;
+        context_opacity = 1.0;
     }
     // TODO: clip bounds only if the layer is set to clip children
     let restore_point = render_canvas.save();
