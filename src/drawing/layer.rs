@@ -67,6 +67,32 @@ fn background_blur_blend_mode(color: &Color4f) -> skia_safe::BlendMode {
     }
 }
 
+/// Start a group that what is drawn next is faded in, to `opacity`, when it
+/// is restored.
+///
+/// On a target with a subpixel layout the group starts from what the target
+/// already holds and keeps the layout, so text faded in it stays subpixel
+/// rather than dropping to greyscale for the length of the fade. A target
+/// declaring a layout is taken to be opaque — per-channel coverage means
+/// nothing on one that is blended down afterwards — and over what is there,
+/// a group faded back onto the pixels it started from is the same fade as a
+/// transparent group faded onto them, for anything drawn source-over.
+/// Elsewhere the group is the plain transparent one.
+pub(crate) fn save_fade(canvas: &Canvas, bounds: Option<&Rect>, opacity: f32) {
+    let mut paint = Paint::default();
+    paint.set_alpha_f(opacity);
+    let mut rec = canvas::SaveLayerRec::default().paint(&paint);
+    if let Some(bounds) = bounds {
+        rec = rec.bounds(bounds);
+    }
+    if canvas.top_props().pixel_geometry() != PixelGeometry::Unknown {
+        rec = rec.flags(
+            canvas::SaveLayerFlags::INIT_WITH_PREVIOUS | canvas::SaveLayerFlags::PRESERVE_LCD_TEXT,
+        );
+    }
+    canvas.save_layer(&rec);
+}
+
 /// Draw a layer into a skia::Canvas.
 /// Returns the damage rect in the layer's coordinate space.
 ///
@@ -186,7 +212,7 @@ pub fn draw_layer(
     // and then disappears the instant it is hidden.
     let fade_content = |canvas: &Canvas| {
         if opacity < 1.0 {
-            canvas.save_layer_alpha_f(layer.bounds, opacity);
+            save_fade(canvas, Some(&layer.bounds), opacity);
         }
     };
     if let Some(content) = cached_content {

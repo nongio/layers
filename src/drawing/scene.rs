@@ -1244,12 +1244,22 @@ pub(crate) fn paint_node(
     }
     if node.is_picture_cached() && draw_cache.is_some() {
         let draw_cache = draw_cache.unwrap();
-        // Only pass paint when opacity is not 1.0: passing Some(paint) forces Skia
-        // to create an intermediate offscreen layer even when alpha is a no-op.
-        let p = (draw_opacity != 1.0).then_some(&paint);
-        // passing a None for paint is important to optimise
-        // skia creates a new layer when painting a picture with a paint
-        draw_cache.draw(canvas, p);
+        // A picture is faded as a group, which costs an offscreen layer, so
+        // only when there is a fade at all. The group is ours rather than the
+        // one Skia makes for a picture drawn with a paint, which always drops
+        // text to greyscale: see `save_fade`.
+        if draw_opacity != 1.0 {
+            let fade = canvas.save();
+            crate::drawing::layer::save_fade(
+                canvas,
+                Some(&draw_cache.picture().cull_rect()),
+                draw_opacity,
+            );
+            draw_cache.draw(canvas, None);
+            canvas.restore_to_count(fade);
+        } else {
+            draw_cache.draw(canvas, None);
+        }
     } else {
         draw_layer(canvas, &render_layer, draw_opacity, node_renderable);
     }
