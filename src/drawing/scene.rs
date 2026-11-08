@@ -1389,8 +1389,8 @@ pub fn render_subtree_to_buffer(
 ) -> Option<SubtreeBuffer> {
     let nodes_arc = scene.nodes.data();
     let renderables_arc = scene.renderables.data();
-    let scene_arena = nodes_arc.read().unwrap_or_else(|e| e.into_inner());
-    let renderables_arena = renderables_arc.read().unwrap_or_else(|e| e.into_inner());
+    let scene_arena = crate::engine::storage::read_shared(&nodes_arc);
+    let renderables_arena = crate::engine::storage::read_shared(&renderables_arc);
 
     let node_id: TreeStorageId = root.into();
     let node = scene_arena.get(node_id)?;
