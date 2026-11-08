@@ -296,12 +296,17 @@ pub(crate) fn update_node_single(
             let mut repaint_damage = skia_safe::Rect::default();
             // Re-record only when the picture can actually be stale:
             //   * an explicit NEEDS_PAINT (content, colors, shadow, damage...)
-            //   * a size change (the picture is recorded at the layer's size)
+            //   * a size change (the picture is recorded at the layer's size);
+            //     the render-layer update raises NEEDS_PAINT for it
             //   * no cache yet (first paint, or the layer was skipped at opacity 0)
-            // Deliberately NOT on a pure position change, a parent transform
-            // change or an opacity change: the picture is local-space and
-            // opacity is applied by the paint at replay time.
-            if scene_node.needs_repaint() || layout_changed || renderable.draw_cache.is_none() {
+            // Deliberately NOT on a pure position change, a scale or other
+            // transform change (own or an ancestor's) or an opacity change: the
+            // picture is local-space and opacity is applied by the paint at
+            // replay time. `layout_changed` compares *transformed* bounds, so
+            // it moves under any scale; re-recording on it ran the content
+            // closure on every frame of a scale animation, and a mirror's
+            // closure replays its leader's whole subtree.
+            if scene_node.needs_repaint() || renderable.draw_cache.is_none() {
                 let new_renderable = do_repaint(&renderable, scene_node, pending_damage);
                 repaint_damage = new_renderable.repaint_damage;
                 updated_renderable = Some(new_renderable);
