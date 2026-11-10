@@ -939,6 +939,26 @@ fn blur_cache_store(canvas: &skia_safe::Canvas, node: NodeRef, key: BlurCacheKey
     });
 }
 
+/// Where on the surface this thread keeps a blurred backdrop for `node`, if
+/// it was blurred at the layer's current `generation` — the pixels a repaint
+/// covering only part of the shape draws again instead of blurring.
+///
+/// A renderer that splits its damage into passes has to know this rather than
+/// assume it: the blur is kept only from a pass whose clip covered the whole
+/// of the rect returned here, which is rounded out from the canvas matrix and
+/// can differ by a pixel from the layer's bounds at a fractional scale. A
+/// partial pass over a shape with no kept blur blurs only that part of it and
+/// leaves a seam where the pass stopped.
+pub fn kept_blur_rect(node: NodeRef, generation: u64) -> Option<skia_safe::IRect> {
+    BLUR_CACHE.with(|cache| {
+        cache
+            .borrow()
+            .get(&node)
+            .filter(|entry| entry.key.generation == generation)
+            .map(|entry| entry.key.device_rect)
+    })
+}
+
 /// Drop every cached blurred backdrop on this thread — for a render context
 /// that is being torn down, whose images must not outlive it.
 pub fn clear_blur_cache() {
@@ -1389,8 +1409,8 @@ pub fn render_subtree_to_buffer(
 ) -> Option<SubtreeBuffer> {
     let nodes_arc = scene.nodes.data();
     let renderables_arc = scene.renderables.data();
-    let scene_arena = nodes_arc.read().unwrap_or_else(|e| e.into_inner());
-    let renderables_arena = renderables_arc.read().unwrap_or_else(|e| e.into_inner());
+    let scene_arena = crate::engine::storage::read_shared(&nodes_arc);
+    let renderables_arena = crate::engine::storage::read_shared(&renderables_arc);
 
     let node_id: TreeStorageId = root.into();
     let node = scene_arena.get(node_id)?;

@@ -6,7 +6,7 @@
 
 use crate::{
     engine::occlusion::OcclusionMap,
-    engine::storage::{FlatStorage, FlatStorageData},
+    engine::storage::{read_shared, try_read_shared, FlatStorage, FlatStorageData},
     layers::layer::render_layer::RenderLayer,
     prelude::Point,
 };
@@ -197,7 +197,7 @@ impl Scene {
         let id = id.into();
 
         let nodes = self.nodes.data();
-        let nodes = nodes.read().unwrap();
+        let nodes = read_shared(&nodes);
 
         // Use NodeId::is_removed which compares the stamp, preventing ABA false-negatives
         // when a freed slot is reused for a new node at the same index.
@@ -233,7 +233,7 @@ impl Scene {
 
     pub fn with_arena<T: Send + Sync>(&self, f: impl FnOnce(&Arena<SceneNode>) -> T) -> T {
         let arena_guard = self.nodes.data();
-        let arena = arena_guard.read().unwrap_or_else(|e| e.into_inner());
+        let arena = read_shared(&arena_guard);
         f(&arena)
     }
 
@@ -243,7 +243,7 @@ impl Scene {
         f: impl FnOnce(&Arena<SceneNode>) -> T,
     ) -> Option<T> {
         let arena_guard = self.nodes.data();
-        let arena = arena_guard.try_read().ok()?;
+        let arena = try_read_shared(&arena_guard)?;
         Some(f(&arena))
     }
 
@@ -281,11 +281,8 @@ impl Scene {
         &self,
         f: impl FnOnce(&FlatStorageData<SceneNodeRenderable>) -> T,
     ) -> Option<T> {
-        self.renderables
-            .data()
-            .try_read()
-            .ok()
-            .map(|arena| f(&arena))
+        let arena_guard = self.renderables.data();
+        try_read_shared(&arena_guard).map(|arena| f(&arena))
     }
 
     pub(crate) fn with_renderable_arena_mut<T>(
