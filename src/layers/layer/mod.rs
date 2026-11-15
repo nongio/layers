@@ -110,6 +110,27 @@ impl Layer {
                 node.set_hidden(hidden);
                 node.insert_flags(RenderableFlags::NEEDS_LAYOUT | RenderableFlags::NEEDS_PAINT);
             }
+            if !hidden {
+                // A mirror in a hidden subtree is not told when its leader
+                // changes (see `mark_image_cached_ancestors_for_repaint`), so
+                // what it recorded may be stale by now — a window that got
+                // its first buffer after its exposé preview was recorded
+                // shows up as a bare titlebar. Repaint the mirrors once on
+                // the way back in.
+                let mirrors: Vec<indextree::NodeId> = id
+                    .descendants(arena)
+                    .filter(|d| {
+                        arena
+                            .get(*d)
+                            .is_some_and(|n| !n.is_removed() && n.get().following.is_some())
+                    })
+                    .collect();
+                for mirror in mirrors {
+                    if let Some(node) = arena.get_mut(mirror) {
+                        node.get_mut().insert_flags(RenderableFlags::NEEDS_PAINT);
+                    }
+                }
+            }
             let mut iter = id.ancestors(arena);
             iter.next(); // skip self
             if let Some(parent_id) = iter.next() {
