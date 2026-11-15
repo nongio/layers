@@ -2383,7 +2383,10 @@ impl Engine {
             let renderables = scene.renderables.data();
 
             // Try-lock to avoid blocking while a writer holds (or waits on) the arenas.
-            if let (Ok(nodes), Ok(renderables)) = (nodes.try_read(), renderables.try_read()) {
+            if let (Some(nodes), Some(renderables)) = (
+                storage::try_read_shared(&nodes),
+                storage::try_read_shared(&renderables),
+            ) {
                 render_node_tree(layer_id, &nodes, &renderables, c, 1.0, None, None, None);
             }
             skia::Rect::from_xywh(0.0, 0.0, w, h)
