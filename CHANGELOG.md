@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.19.0] - 2026-11-15
+
+### 🐛 Bug Fixes
+
+- *(mirrors)* Repaint on change only; refresh when shown (#33)
+- *(text)* Keep subpixel text through fades; opacity applied once (#34)
+
+### ⚡ Performance
+
+- *(engine)* Keep pictures across scale changes; fix nested arena reads (#32)
+
 ## [1.18.2] - 2026-10-15
 
 ### 🐛 Bug Fixes
