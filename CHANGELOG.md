@@ -13,7 +13,6 @@ All notable changes to this project will be documented in this file.
 
 - *(engine)* Keep pictures across scale changes; fix nested arena reads (#32)
 
-
 ## [1.18.2] - 2026-10-15
 
 ### 🐛 Bug Fixes
