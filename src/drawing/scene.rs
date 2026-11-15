@@ -628,23 +628,16 @@ pub fn render_node_tree(
                     // draw into the offscreen surface
                     let current_frame = scene_node.frame_number;
 
-                    // If this node is following another node (replicate_node),
-                    // we need to check BOTH:
-                    // 1. Has the follower itself changed? (its own frame)
-                    // 2. Has the followed node's content changed? (source frame)
-                    let needs_repaint = if let Some(following_ref) = scene_node.following {
-                        // Guard against a freed leader node — indextree's Node::get() panics
-                        // on freed slots, so we must check is_removed() first.
-                        let followed_frame = scene_arena
-                            .get(following_ref.0)
-                            .filter(|n| !n.is_removed())
-                            .map(|n| n.get().frame_number)
-                            .unwrap_or(0);
-                        // Repaint if either the follower or the followed node changed
-                        current_frame != recorded_frame || followed_frame != recorded_frame
-                    } else {
-                        current_frame != recorded_frame
-                    };
+                    // A follower (replicate_node) repaints when its own
+                    // frame moves, like any other node: the engine marks the
+                    // followers of a node, and of every ancestor of a node,
+                    // whose pixels changed, so the follower's frame number
+                    // already covers its leader's subtree. Comparing the
+                    // leader's frame number with the one recorded here would
+                    // compare two unrelated counters — they are per node —
+                    // and repaint the offscreen surface on every frame, at
+                    // the leader's full size, for as long as it is visible.
+                    let needs_repaint = current_frame != recorded_frame;
 
                     if needs_repaint || dbg_info.is_some() {
                         let surface_bounds = skia::Rect::from_wh(
