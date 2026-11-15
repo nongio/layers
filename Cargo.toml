@@ -1,6 +1,6 @@
 [package]
 name = "laye-rs"
-version = "1.18.2"
+version = "1.19.0"
 edition = "2021"
 build = "build.rs"
 rust-version = "1.85.0"
