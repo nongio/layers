@@ -209,3 +209,46 @@ fn a_changed_backdrop_blurs_again() {
             .set_background_color(Color::new_rgba(0.0, 1.0, 0.0, 1.0), None);
     });
 }
+
+/// The kept pixels were snapshotted after the blur was composited under the
+/// shape's anti-aliased clip, so along a rounded rim they already hold the
+/// edge coverage. Replayed, they must come out as a fresh blur does, not with
+/// the coverage applied twice: a buffer holding a replay next to one holding
+/// a fresh blur would show a different outline, and the rim would shimmer as
+/// a swapchain alternates them.
+#[test]
+fn a_replayed_blur_keeps_the_rim_of_a_fresh_one() {
+    clear_blur_cache();
+    let engine = Engine::create(W as f32, H as f32);
+    let root = abs_layer(&engine, 0.0, 0.0, W as f32, H as f32);
+    engine.add_layer(&root).unwrap();
+    let left = abs_layer(&engine, 0.0, 0.0, 200.0, H as f32);
+    left.set_background_color(Color::new_rgba(1.0, 0.0, 0.0, 1.0), None);
+    engine.append_layer(&left, root.id).unwrap();
+    let right = abs_layer(&engine, 200.0, 0.0, 200.0, H as f32);
+    right.set_background_color(Color::new_rgba(0.0, 0.0, 1.0, 1.0), None);
+    engine.append_layer(&right, root.id).unwrap();
+    // Rounded and off the pixel grid: a rim of partly covered pixels all
+    // round.
+    let frosted = abs_layer(&engine, 50.5, 50.5, 300.0, 200.0);
+    frosted.set_background_color(Color::new_rgba(1.0, 1.0, 1.0, 0.2), None);
+    frosted.set_blend_mode(BlendMode::BackgroundBlur);
+    frosted.set_border_corner_radius(BorderRadius::new_single(24.0), None);
+    engine.append_layer(&frosted, root.id).unwrap();
+    engine.update(0.016);
+    engine.update(0.016);
+
+    // The first render blurs and keeps the blur; the second, of the same
+    // scene, replays it.
+    let mut screen = surface();
+    render(&engine, &mut screen, None);
+    render(&engine, &mut screen, None);
+    let replayed = pixels(&mut screen);
+
+    let expected = reference(&engine);
+    let (diff, x, y) = worst_difference(&replayed, &expected);
+    assert!(
+        diff <= 2,
+        "a replayed blur differs from a fresh one by {diff} at ({x}, {y})"
+    );
+}
