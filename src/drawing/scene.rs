@@ -1202,7 +1202,23 @@ pub(crate) fn paint_node(
             profiling::scope!("cached backdrop");
             // Replace, not blend: the cached pixels already hold the seed and
             // the blur composited together.
+            //
+            // And not under the shape's anti-aliased clip: the kept pixels
+            // were snapshotted after the blur was composited under that clip,
+            // so along the rim they already hold the edge coverage, blended
+            // with what lay beneath. Replaying them under the same clip
+            // applies the coverage a second time and the rim comes out
+            // different from a fresh blur — a shimmer wherever buffers
+            // holding one and the other alternate. Everywhere in the kept
+            // rect outside the shape they hold what lies beneath, which has
+            // not changed while the generation holds, so the whole rect is
+            // replayed as it was kept. Only the opaque region stays out, as
+            // it was left out of the blur.
+            canvas.restore_to_count(before_backdrop);
             let restore = canvas.save();
+            for opaque in &render_layer.opaque_region {
+                canvas.clip_rect(opaque, skia_safe::ClipOp::Difference, false);
+            }
             canvas.reset_matrix();
             let mut cached_paint = skia_safe::Paint::default();
             cached_paint.set_blend_mode(skia_safe::BlendMode::Src);

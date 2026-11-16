@@ -2649,15 +2649,19 @@ impl Engine {
             }
 
             let shape = layer.global_transformed_bounds;
+            // Whole pixels: a kept blur holds every pixel the bounds touch,
+            // its rim among them, and replays them all, so damage that only
+            // shares an edge pixel with the shape makes it stale too.
+            let reach: skia_safe::Rect = skia_safe::RoundOut::round_out(&shape);
             let kept = layer.premultiplied_opacity >= 1.0
                 && !blur_id.ancestors(arena).skip(1).any(|ancestor| {
                     arena
                         .get(ancestor)
                         .is_some_and(|n| !n.is_removed() && n.get().is_image_cached())
                 });
-            let beneath = within_reach(&removed, &shape)
+            let beneath = within_reach(&removed, &reach)
                 || damaged.iter().any(|(id, damage)| {
-                    if !within_reach(damage, &shape) {
+                    if !within_reach(damage, &reach) {
                         return false;
                     }
                     if !kept {
