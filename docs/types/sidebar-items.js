@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["BlendMode","BorderStyle","PaintColor"],"struct":["BorderRadius","BorderRadiusDiff","Color","GradientLinear","GradientRadial","M44","Matrix","Point","Point3d","Rectangle","Size","V3"],"type":["Image","Picture"]};
