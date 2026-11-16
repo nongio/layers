@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.19.1] - 2026-11-16
+
+### 🐛 Bug Fixes
+
+- *(drawing)* Replay a kept blur's rim as kept: a kept blur is drawn without the shape clip, so a frosted shape's anti-aliased rim matches a fresh blur, and damage touching the rounded-out edge pixels counts as beneath the shape (#36)
+
 ## [1.19.0] - 2026-11-15
 
 ### 🐛 Bug Fixes
